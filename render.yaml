@@ -81,11 +81,11 @@ services:
         # Pode listar várias separadas por vírgula:
         #   https://medpag.vercel.app,https://medpag-app.vercel.app
         value: "https://medpag.vercel.app,http://localhost:5173"
-      # Admin inicial (Thiago/Felício) — criado automaticamente no primeiro boot
+      # Admin inicial — criado automaticamente no primeiro boot
       - key: ADMIN_EMAIL
-        value: thiago@medpag.com.br
+        value: expo@atombrasildigital.com
       - key: ADMIN_NOME
-        value: Thiago
+        value: Felicio
       - key: ADMIN_SENHA
         sync: false  # defina no dashboard ao subir (use senha forte)
       # Liga o seed de demonstração no primeiro boot (Hospital Santa Casa + Clínica Vida Nova)
