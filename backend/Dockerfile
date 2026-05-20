@@ -32,4 +32,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 
 # Em produção (Render), o entrypoint roda migrations + create_admin + uvicorn.
 # Em dev (docker-compose), o comando é sobrescrito para `uvicorn ... --reload`.
+# Build tag para invalidar cache do Render (alterar manualmente quando precisar).
+LABEL build="20260520-1930"
 CMD ["/app/startup.sh"]
