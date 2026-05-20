@@ -21,13 +21,14 @@ from sqlalchemy.orm import selectinload
 
 from app.core.deps import get_db, require_admin
 from app.core.exceptions import (
+    LoteNaoEncontradoError,
     UsuarioJaExisteError,
     UsuarioNaoEncontradoError,
     ValidacaoError,
 )
 from app.core.security import hash_password
 from app.models.cliente import Cliente
-from app.models.lote import Lote
+from app.models.lote import Lote, StatusLote
 from app.models.pagamento import Pagamento, StatusPagamento
 from app.models.user import User, UserRole
 from app.schemas.admin import (
@@ -44,6 +45,8 @@ from app.schemas.admin import (
     UserAdminOut,
 )
 from app.services.cnab_parser import CODIGOS_OCORRENCIA
+from app.services.importacao import importar_planilha
+from app.services.processamento import processar_lote
 
 log = structlog.get_logger()
 
@@ -161,6 +164,89 @@ async def atualizar_usuario(
         ativo=user.ativo,
     )
     return user
+
+
+# ============================================================
+# Reprocessamento de lote (recurso operacional pra ADMIN)
+# ============================================================
+
+
+@router.post("/lotes/{lote_id}/reprocessar")
+async def reprocessar_lote(
+    lote_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> dict[str, object]:
+    """Reprocessa um lote que ficou parado em RECEBIDO ou ERRO.
+
+    Cenários típicos:
+    - Worker Celery indisponível no momento do upload (lote ficou em
+      RECEBIDO sem processar).
+    - Bug no validador foi corrigido e quer rodar de novo.
+    - Lote em ERRO que pode ser recuperado.
+
+    Recarrega a planilha do disco e roda o processamento síncrono.
+    Idempotente: pagamentos antigos do lote são apagados antes.
+    """
+    from pathlib import Path
+
+    from sqlalchemy import delete
+
+    result = await db.execute(select(Lote).where(Lote.id == lote_id))
+    lote = result.scalar_one_or_none()
+    if lote is None:
+        raise LoteNaoEncontradoError(f"Lote {lote_id} não encontrado")
+
+    if lote.status not in (StatusLote.RECEBIDO, StatusLote.ERRO):
+        raise ValidacaoError(
+            f"Lote em status {lote.status.value} não pode ser reprocessado. "
+            f"Só RECEBIDO ou ERRO."
+        )
+
+    if not lote.caminho_arquivo_original:
+        raise ValidacaoError("Lote sem arquivo original salvo. Faça upload novamente.")
+
+    caminho = Path(lote.caminho_arquivo_original)
+    if not caminho.exists():
+        raise ValidacaoError(
+            f"Arquivo original não encontrado em disco: {caminho.name}. "
+            f"Faça upload novamente."
+        )
+
+    conteudo = caminho.read_bytes()
+    importacao = importar_planilha(conteudo, lote.nome_arquivo)
+
+    # Limpa pagamentos antigos pra evitar duplicação
+    await db.execute(delete(Pagamento).where(Pagamento.lote_id == lote_id))
+    lote.status = StatusLote.RECEBIDO
+    lote.mensagem_erro = None
+    lote.total_validos = 0
+    lote.total_corrigiveis = 0
+    lote.total_bloqueados = 0
+    await db.flush()
+
+    resultado = await processar_lote(db, lote, importacao.linhas)
+    await db.flush()
+
+    log.info(
+        "admin.lote_reprocessado",
+        admin=admin.email,
+        lote_id=str(lote_id),
+        total=resultado.total,
+        validos=resultado.validos,
+        corrigiveis=resultado.corrigiveis,
+        bloqueados=resultado.bloqueados,
+    )
+
+    return {
+        "success": True,
+        "lote_id": str(lote_id),
+        "status": lote.status.value,
+        "total": resultado.total,
+        "validos": resultado.validos,
+        "corrigiveis": resultado.corrigiveis,
+        "bloqueados": resultado.bloqueados,
+    }
 
 
 @router.post("/users/{user_id}/reset-senha", response_model=UserAdminOut)

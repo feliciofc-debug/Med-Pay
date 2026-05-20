@@ -95,7 +95,17 @@ async def upload_lote(
         enviado_por=current_user,
     )
 
-    # Dispara processamento em background
+    # Estratégia de processamento:
+    # 1) Tenta enfileirar via Celery (worker em background — bom pra lotes
+    #    muito grandes em produção).
+    # 2) Se Celery não estiver disponível (broker fora do ar, TLS do Redis
+    #    quebrado, etc.), processa INLINE na própria request. Pra os
+    #    volumes típicos (até alguns milhares de linhas) isso é rápido.
+    #
+    # Decisão consciente: garantir que o usuário sempre veja o resultado,
+    # mesmo que o worker esteja com problema. Em produção real, religar
+    # o Celery e remover o fallback inline.
+    celery_ok = False
     try:
         from app.workers.tasks import processar_lote_task
 
@@ -112,10 +122,23 @@ async def upload_lote(
             for linha in importacao.linhas
         ]
         processar_lote_task.delay(str(lote.id), linhas_dict)
+        celery_ok = True
     except Exception:
-        # Worker fora do ar não deve impedir upload — o lote fica em RECEBIDO
-        # e pode ser reprocessado depois.
-        pass
+        celery_ok = False
+
+    if not celery_ok:
+        # Fallback síncrono — processa antes de devolver
+        from app.services.processamento import processar_lote
+
+        try:
+            await processar_lote(db, lote, importacao.linhas)
+            await db.flush()
+        except Exception as exc:  # pragma: no cover
+            # Se até o fallback falhou, mantém o lote em RECEBIDO pra retry manual
+            from app.models.lote import StatusLote
+
+            lote.status = StatusLote.ERRO
+            lote.mensagem_erro = f"Falha no processamento: {exc}"
 
     return UploadLoteResponse(
         lote_id=lote.id,
