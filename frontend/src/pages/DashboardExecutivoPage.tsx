@@ -148,7 +148,7 @@ function KpiHeroCard({
 }: {
   label: string;
   value: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: React.ElementType;
   delta: number | null;
   deltaLabel?: string;
   primary?: boolean;

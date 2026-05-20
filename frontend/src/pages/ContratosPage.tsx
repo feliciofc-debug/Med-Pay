@@ -619,7 +619,7 @@ function Section({
 }: {
   title: string;
   subtitle?: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: React.ElementType;
   children: React.ReactNode;
 }) {
   return (
@@ -714,7 +714,7 @@ function PreviewCard({
 }: {
   label: string;
   value: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: React.ElementType;
   detail?: string;
   variant?: "default" | "primary" | "gold" | "green" | "amber" | "red";
 }) {
