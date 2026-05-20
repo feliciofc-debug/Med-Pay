@@ -26,26 +26,49 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Cria o ENUM no Postgres
-    modalidade_enum = sa.Enum(
-        "PIX",
-        "TED",
-        "TRANSF_UNICRED",
-        name="modalidade_pagamento",
-    )
-    modalidade_enum.create(op.get_bind(), checkfirst=True)
+    bind = op.get_bind()
 
+    # 1) Cria o ENUM no Postgres SOMENTE se ainda não existe.
+    #    `IF NOT EXISTS` torna a migration idempotente — necessário porque
+    #    o Render pode rerodar o startup.sh múltiplas vezes durante o
+    #    primeiro deploy com schema novo.
+    bind.execute(
+        sa.text(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_type WHERE typname = 'modalidade_pagamento'
+                ) THEN
+                    CREATE TYPE modalidade_pagamento AS ENUM
+                        ('PIX', 'TED', 'TRANSF_UNICRED');
+                END IF;
+            END $$;
+            """
+        )
+    )
+
+    # 2) Adiciona a coluna sem auto-criar o tipo (já criado acima).
     op.add_column(
         "pagamentos",
         sa.Column(
             "modalidade",
-            modalidade_enum,
+            sa.Enum(
+                "PIX",
+                "TED",
+                "TRANSF_UNICRED",
+                name="modalidade_pagamento",
+                create_type=False,
+            ),
             nullable=False,
             server_default="TED",
         ),
     )
     op.create_index(
-        "ix_pagamentos_modalidade", "pagamentos", ["modalidade"], unique=False
+        "ix_pagamentos_modalidade",
+        "pagamentos",
+        ["modalidade"],
+        unique=False,
     )
 
     op.add_column(
@@ -59,5 +82,5 @@ def downgrade() -> None:
     op.drop_index("ix_pagamentos_modalidade", table_name="pagamentos")
     op.drop_column("pagamentos", "modalidade")
 
-    modalidade_enum = sa.Enum(name="modalidade_pagamento")
-    modalidade_enum.drop(op.get_bind(), checkfirst=True)
+    bind = op.get_bind()
+    bind.execute(sa.text("DROP TYPE IF EXISTS modalidade_pagamento"))
