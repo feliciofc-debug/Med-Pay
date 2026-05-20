@@ -45,7 +45,7 @@ from app.schemas.admin import (
     UserAdminOut,
 )
 from app.services.cnab_parser import CODIGOS_OCORRENCIA
-from app.services.importacao import importar_planilha
+from app.services.importacao import LinhaPlanilha, importar_planilha
 from app.services.processamento import processar_lote
 
 log = structlog.get_logger()
@@ -225,44 +225,95 @@ async def reprocessar_lote(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ) -> dict[str, object]:
-    """Reprocessa um lote que ficou parado em RECEBIDO ou ERRO.
+    """Reprocessa um lote rodando o validador atual de novo.
+
+    Estratégia:
+    1. Se tiver o arquivo original em disco → reimporta da planilha.
+    2. Senão → reconstrói as linhas a partir dos pagamentos já no banco
+       (descriptografa CPF/agência/conta). Útil quando o container do
+       Render foi reiniciado e o filesystem efêmero perdeu o arquivo.
 
     Cenários típicos:
-    - Worker Celery indisponível no momento do upload (lote ficou em
-      RECEBIDO sem processar).
+    - Worker Celery indisponível no momento do upload.
     - Bug no validador foi corrigido e quer rodar de novo.
     - Lote em ERRO que pode ser recuperado.
+    - Regras de banco mudaram (novos bancos suportados).
 
-    Recarrega a planilha do disco e roda o processamento síncrono.
+    Bloqueia apenas lotes que já entraram no ciclo de pagamento real.
     Idempotente: pagamentos antigos do lote são apagados antes.
     """
     from pathlib import Path
 
     from sqlalchemy import delete
 
+    from app.core.crypto import decrypt
+
     result = await db.execute(select(Lote).where(Lote.id == lote_id))
     lote = result.scalar_one_or_none()
     if lote is None:
         raise LoteNaoEncontradoError(f"Lote {lote_id} não encontrado")
 
-    if lote.status not in (StatusLote.RECEBIDO, StatusLote.ERRO):
+    if lote.status in (
+        StatusLote.APROVADO,
+        StatusLote.ENVIADO_BANCO,
+        StatusLote.CONCILIADO,
+    ):
         raise ValidacaoError(
-            f"Lote em status {lote.status.value} não pode ser reprocessado. "
-            f"Só RECEBIDO ou ERRO."
+            f"Lote em status {lote.status.value} não pode ser reprocessado "
+            f"(já entrou no ciclo de pagamento)."
         )
 
-    if not lote.caminho_arquivo_original:
-        raise ValidacaoError("Lote sem arquivo original salvo. Faça upload novamente.")
+    linhas: list[LinhaPlanilha] = []
+    origem_reproc = "desconhecida"
 
-    caminho = Path(lote.caminho_arquivo_original)
-    if not caminho.exists():
-        raise ValidacaoError(
-            f"Arquivo original não encontrado em disco: {caminho.name}. "
-            f"Faça upload novamente."
+    caminho = (
+        Path(lote.caminho_arquivo_original) if lote.caminho_arquivo_original else None
+    )
+    if caminho is not None and caminho.exists():
+        conteudo = caminho.read_bytes()
+        importacao = importar_planilha(conteudo, lote.nome_arquivo)
+        linhas = importacao.linhas
+        origem_reproc = "arquivo"
+    else:
+        # Reconstrói a partir dos pagamentos no banco (descriptografando)
+        result_pgs = await db.execute(
+            select(Pagamento)
+            .where(Pagamento.lote_id == lote_id)
+            .order_by(Pagamento.linha_planilha.asc())
         )
-
-    conteudo = caminho.read_bytes()
-    importacao = importar_planilha(conteudo, lote.nome_arquivo)
+        pagamentos_antigos = list(result_pgs.scalars().all())
+        if not pagamentos_antigos:
+            raise ValidacaoError(
+                "Lote sem arquivo original e sem pagamentos no banco. "
+                "Não dá pra reprocessar — faça upload de novo."
+            )
+        for p in pagamentos_antigos:
+            try:
+                cpf_raw = decrypt(p.cpf_encrypted) if p.cpf_encrypted else None
+            except Exception:
+                cpf_raw = p.cpf_original or p.cpf_mascarado
+            try:
+                agencia_raw = (
+                    decrypt(p.agencia_encrypted) if p.agencia_encrypted else None
+                )
+            except Exception:
+                agencia_raw = None
+            try:
+                conta_raw = decrypt(p.conta_encrypted) if p.conta_encrypted else None
+            except Exception:
+                conta_raw = None
+            linhas.append(
+                LinhaPlanilha(
+                    numero_linha=p.linha_planilha,
+                    cpf_raw=cpf_raw,
+                    nome_raw=p.nome,
+                    banco_raw=p.banco_codigo,
+                    agencia_raw=agencia_raw,
+                    conta_raw=conta_raw,
+                    valor_raw=p.valor_centavos / 100,
+                )
+            )
+        origem_reproc = "banco"
 
     # Limpa pagamentos antigos pra evitar duplicação
     await db.execute(delete(Pagamento).where(Pagamento.lote_id == lote_id))
@@ -273,13 +324,14 @@ async def reprocessar_lote(
     lote.total_bloqueados = 0
     await db.flush()
 
-    resultado = await processar_lote(db, lote, importacao.linhas)
+    resultado = await processar_lote(db, lote, linhas)
     await db.flush()
 
     log.info(
         "admin.lote_reprocessado",
         admin=admin.email,
         lote_id=str(lote_id),
+        origem=origem_reproc,
         total=resultado.total,
         validos=resultado.validos,
         corrigiveis=resultado.corrigiveis,
@@ -290,6 +342,7 @@ async def reprocessar_lote(
         "success": True,
         "lote_id": str(lote_id),
         "status": lote.status.value,
+        "origem": origem_reproc,
         "total": resultado.total,
         "validos": resultado.validos,
         "corrigiveis": resultado.corrigiveis,
