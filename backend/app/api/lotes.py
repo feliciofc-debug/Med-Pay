@@ -92,6 +92,7 @@ async def upload_lote(
         conteudo=conteudo,
         nome_arquivo=arquivo.filename,
         cliente=cliente,
+        enviado_por=current_user,
     )
 
     # Dispara processamento em background

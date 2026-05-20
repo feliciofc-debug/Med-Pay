@@ -78,6 +78,11 @@ class Lote(Base):
     hash_arquivo_cnab: Mapped[str | None] = mapped_column(String(64), nullable=True)
     caminho_arquivo_retorno: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # ===== Quem subiu (operador) =====
+    enviado_por_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True
+    )
+
     # ===== Aprovação =====
     aprovado_por_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=True
@@ -98,6 +103,9 @@ class Lote(Base):
 
     # ===== Relacionamentos =====
     cliente: Mapped["Cliente"] = relationship("Cliente", back_populates="lotes")
+    enviado_por: Mapped["User | None"] = relationship(
+        "User", back_populates="lotes_enviados", foreign_keys=[enviado_por_id]
+    )
     aprovado_por: Mapped["User | None"] = relationship(
         "User", back_populates="lotes_aprovados", foreign_keys=[aprovado_por_id]
     )

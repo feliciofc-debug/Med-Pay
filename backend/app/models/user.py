@@ -58,6 +58,9 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relacionamentos
+    lotes_enviados: Mapped[list["Lote"]] = relationship(
+        "Lote", back_populates="enviado_por", foreign_keys="Lote.enviado_por_id"
+    )
     lotes_aprovados: Mapped[list["Lote"]] = relationship(
         "Lote", back_populates="aprovado_por", foreign_keys="Lote.aprovado_por_id"
     )

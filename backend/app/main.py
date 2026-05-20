@@ -112,9 +112,10 @@ def create_app() -> FastAPI:
         return {"status": "ok", "version": "0.1.0"}
 
     # Routers da API
-    from app.api import auth, clientes, lotes, pagamentos
+    from app.api import admin, auth, clientes, lotes, pagamentos
 
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+    app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
     app.include_router(clientes.router, prefix="/api/clientes", tags=["clientes"])
     app.include_router(lotes.router, prefix="/api/lotes", tags=["lotes"])
     app.include_router(pagamentos.router, prefix="/api/pagamentos", tags=["pagamentos"])

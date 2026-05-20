@@ -184,6 +184,111 @@ export interface ContratoConfig {
   ativo: boolean;
 }
 
+// =============================================================================
+// Admin — gestão de usuários e relatórios estratégicos
+// =============================================================================
+
+export interface UserAdmin {
+  id: string;
+  email: string;
+  nome: string;
+  role: UserRole;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+  last_login_at: string | null;
+}
+
+export interface CriarUsuarioPayload {
+  email: string;
+  nome: string;
+  role: UserRole;
+  senha: string;
+}
+
+export interface AtualizarUsuarioPayload {
+  nome?: string;
+  role?: UserRole;
+  ativo?: boolean;
+}
+
+export interface ErrosPorOperador {
+  operador_id: string | null;
+  operador_nome: string;
+  operador_email: string | null;
+  total_lotes: number;
+  total_pagamentos: number;
+  total_bloqueados: number;
+  total_corrigiveis: number;
+  taxa_erro_pct: number;
+  valor_bloqueado_centavos: number;
+}
+
+export interface ErrosPorTipo {
+  codigo: string;
+  descricao: string;
+  quantidade: number;
+  valor_centavos: number;
+}
+
+export interface ErrosPorHospital {
+  cliente_id: string;
+  cliente_nome: string;
+  total_lotes: number;
+  total_pagamentos: number;
+  total_bloqueados: number;
+  taxa_erro_pct: number;
+}
+
+export interface RelatorioErros {
+  periodo_inicio: string;
+  periodo_fim: string;
+  total_lotes_processados: number;
+  total_pagamentos: number;
+  total_bloqueados: number;
+  total_corrigiveis: number;
+  valor_total_centavos: number;
+  valor_bloqueado_centavos: number;
+  taxa_erro_pct: number;
+  por_operador: ErrosPorOperador[];
+  por_tipo_erro: ErrosPorTipo[];
+  por_hospital: ErrosPorHospital[];
+}
+
+export interface DevolucaoBanco {
+  pagamento_id: string;
+  lote_id: string;
+  lote_nome: string;
+  cliente_nome: string;
+  linha_planilha: number;
+  nome_beneficiario: string;
+  cpf_mascarado: string;
+  valor_centavos: number;
+  retorno_codigo: string | null;
+  retorno_descricao: string | null;
+  motivo_conhecido: boolean;
+  pago_at: string | null;
+  operador_nome: string | null;
+}
+
+export interface DevolucoesPorMotivo {
+  codigo: string;
+  descricao: string;
+  quantidade: number;
+  valor_centavos: number;
+}
+
+export interface RelatorioDevolucoes {
+  periodo_inicio: string;
+  periodo_fim: string;
+  total_devolucoes: number;
+  total_motivo_conhecido: number;
+  total_motivo_desconhecido: number;
+  valor_total_devolvido_centavos: number;
+  por_motivo: DevolucoesPorMotivo[];
+  devolucoes: DevolucaoBanco[];
+}
+
 export interface DashboardExecutivo {
   periodo: string; // ex.: "Junho/2026"
   receita_mes_centavos: number;

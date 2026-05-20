@@ -139,6 +139,23 @@ class UsuarioInativoError(MedPagException):
 
 
 # ============================================================
+# Exceções de Usuário (gestão admin)
+# ============================================================
+
+
+class UsuarioJaExisteError(MedPagException):
+    """E-mail já cadastrado no sistema."""
+
+    code = "USUARIO_JA_EXISTE"
+    status_code = 409
+
+
+class UsuarioNaoEncontradoError(MedPagException):
+    code = "USUARIO_NAO_ENCONTRADO"
+    status_code = 404
+
+
+# ============================================================
 # Exceções de Configuração
 # ============================================================
 
@@ -175,5 +192,7 @@ __all__ = [
     "TokenExpiradoError",
     "TokenInvalidoError",
     "UsuarioInativoError",
+    "UsuarioJaExisteError",
+    "UsuarioNaoEncontradoError",
     "ValidacaoError",
 ]

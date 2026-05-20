@@ -10,6 +10,9 @@ import { ContratosPage } from "@/pages/ContratosPage";
 import { UploadPage } from "@/pages/UploadPage";
 import { LoteDetalhePage } from "@/pages/LoteDetalhePage";
 import { LotesListPage } from "@/pages/LotesListPage";
+import { AdminUsuariosPage } from "@/pages/AdminUsuariosPage";
+import { AdminRelatorioErrosPage } from "@/pages/AdminRelatorioErrosPage";
+import { AdminDevolucoesPage } from "@/pages/AdminDevolucoesPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -22,6 +25,24 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+  return <Layout>{children}</Layout>;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-slate-500">
+        Carregando...
+      </div>
+    );
+  }
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  if (user.role !== "ADMIN") {
+    return <Navigate to="/app" replace />;
   }
   return <Layout>{children}</Layout>;
 }
@@ -80,6 +101,32 @@ export default function App() {
           <ProtectedRoute>
             <LoteDetalhePage />
           </ProtectedRoute>
+        }
+      />
+
+      {/* Área Admin (gestão do BPO) — restrita a role=ADMIN */}
+      <Route
+        path="/app/admin/usuarios"
+        element={
+          <AdminRoute>
+            <AdminUsuariosPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/app/admin/relatorio-erros"
+        element={
+          <AdminRoute>
+            <AdminRelatorioErrosPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/app/admin/devolucoes"
+        element={
+          <AdminRoute>
+            <AdminDevolucoesPage />
+          </AdminRoute>
         }
       />
 

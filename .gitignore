@@ -57,3 +57,7 @@ frontend/.env.local
 *.rem
 *.ret
 
+# Build artifacts do TypeScript / Vite (são regenerados a cada build)
+*.tsbuildinfo
+frontend/vite.config.d.ts
+frontend/vite.config.js

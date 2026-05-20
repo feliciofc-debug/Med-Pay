@@ -1,6 +1,16 @@
 import { type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { LogOut, FileSpreadsheet, Home, Upload, BarChart3, Briefcase } from "lucide-react";
+import {
+  ArrowLeftRight,
+  BarChart3,
+  Briefcase,
+  FileSpreadsheet,
+  Home,
+  LogOut,
+  TrendingUp,
+  Upload,
+  UserCog,
+} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
@@ -12,9 +22,16 @@ const NAV_ITEMS = [
   { to: "/app/lotes", label: "Lotes", icon: FileSpreadsheet },
 ];
 
+const ADMIN_ITEMS = [
+  { to: "/app/admin/usuarios", label: "Equipe", icon: UserCog },
+  { to: "/app/admin/relatorio-erros", label: "Erros", icon: TrendingUp },
+  { to: "/app/admin/devolucoes", label: "Devoluções", icon: ArrowLeftRight },
+];
+
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const isAdmin = user?.role === "ADMIN";
 
   return (
     <div className="min-h-screen flex bg-brand-50/30">
@@ -38,7 +55,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </p>
         </Link>
 
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = item.exact
@@ -60,6 +77,36 @@ export function Layout({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
+
+          {isAdmin && (
+            <div className="pt-4 mt-4 border-t border-brand-900/60">
+              <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-accent-400/70">
+                Administração
+              </p>
+              {ADMIN_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const active = location.pathname.startsWith(item.to);
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors relative",
+                      active
+                        ? "bg-brand-800 text-white border-l-2 border-accent-400"
+                        : "text-brand-100/70 hover:bg-brand-900 hover:text-white",
+                    )}
+                  >
+                    <Icon
+                      size={18}
+                      className={active ? "text-accent-300" : ""}
+                    />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </nav>
 
         <div className="p-4 border-t border-brand-900">

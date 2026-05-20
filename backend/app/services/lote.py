@@ -60,6 +60,7 @@ class LoteService:
         conteudo: bytes,
         nome_arquivo: str,
         cliente: Cliente,
+        enviado_por: User | None = None,
     ) -> tuple[Lote, ResultadoImportacao]:
         """Recebe bytes de planilha, valida, persiste o Lote em RECEBIDO.
 
@@ -101,6 +102,7 @@ class LoteService:
             status=StatusLote.RECEBIDO,
             total_pagamentos=importacao.total_linhas,
             caminho_arquivo_original=str(caminho),
+            enviado_por_id=enviado_por.id if enviado_por else None,
         )
         self.db.add(lote)
         await self.db.flush()
