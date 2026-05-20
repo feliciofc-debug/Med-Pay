@@ -26,11 +26,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crypto import encrypt, hash_for_lookup, mask_conta, mask_cpf
 from app.models.lote import Lote, StatusLote
-from app.models.pagamento import Pagamento, StatusPagamento
+from app.models.pagamento import ModalidadePagamento, Pagamento, StatusPagamento
 from app.services.importacao import LinhaPlanilha
 from app.validators.banco import StatusBanco, validar_dados_bancarios
 from app.validators.cpf import CPFStatus, limpar_cpf, validar_cpf
 from app.validators.valor import ValorStatus, validar_valor
+
+# Código FEBRABAN da Unicred (banco pagador). Se o favorecido também é
+# Unicred, a transferência é interna (forma_lanc 41) ao invés de TED.
+_CODIGO_UNICRED = "136"
 
 
 @dataclass(slots=True)
@@ -49,6 +53,8 @@ class ResumoLinha:
     banco_codigo: str | None
     agencia_limpa: str | None
     conta_limpa: str | None
+    modalidade: ModalidadePagamento = ModalidadePagamento.TED
+    chave_pix: str | None = None
 
 
 @dataclass(slots=True)
@@ -65,6 +71,28 @@ class ResultadoProcessamento:
 # ============================================================
 # Validação de uma única linha (orquestra validators)
 # ============================================================
+
+
+def _decidir_modalidade(
+    banco_codigo: str | None,
+    chave_pix: str | None,
+) -> ModalidadePagamento:
+    """Decide a modalidade de envio do pagamento.
+
+    Regras (alinhadas com o template Unicred do Thiago):
+    1. Se tem chave PIX → PIX (mais rápido e barato)
+    2. Senão se banco destino é Unicred (136) → TRANSF_UNICRED (intra-banco)
+    3. Senão → TED (default, sempre funciona)
+
+    Hoje a planilha do hospital não traz chave PIX, então o default vai
+    cair em TRANSF_UNICRED ou TED. Quando integrarmos cadastro de
+    beneficiários (Sprint 2), passa a fazer PIX por chave automaticamente.
+    """
+    if chave_pix:
+        return ModalidadePagamento.PIX
+    if banco_codigo == _CODIGO_UNICRED:
+        return ModalidadePagamento.TRANSF_UNICRED
+    return ModalidadePagamento.TED
 
 
 def _validar_linha(linha: LinhaPlanilha) -> ResumoLinha:
@@ -113,6 +141,8 @@ def _validar_linha(linha: LinhaPlanilha) -> ResumoLinha:
         mensagens.append("Nome do beneficiário não informado")
         status = StatusPagamento.BLOQUEADO
 
+    modalidade = _decidir_modalidade(res_banco.banco_codigo, chave_pix=None)
+
     return ResumoLinha(
         linha=linha,
         status=status,
@@ -126,6 +156,8 @@ def _validar_linha(linha: LinhaPlanilha) -> ResumoLinha:
         banco_codigo=res_banco.banco_codigo,
         agencia_limpa=res_banco.agencia_limpa,
         conta_limpa=res_banco.conta_limpa,
+        modalidade=modalidade,
+        chave_pix=None,
     )
 
 
@@ -185,6 +217,8 @@ def _construir_pagamento(lote: Lote, resumo: ResumoLinha) -> Pagamento:
         conta_encrypted=conta_encrypted,
         conta_mascarada=conta_mascarada,
         valor_centavos=resumo.valor_centavos,
+        modalidade=resumo.modalidade,
+        chave_pix=resumo.chave_pix,
         status=resumo.status,
         codigos_erro=",".join(resumo.codigos_erro) if resumo.codigos_erro else None,
         mensagens_validacao=(

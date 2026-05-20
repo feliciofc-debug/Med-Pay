@@ -13,6 +13,7 @@ import { LotesListPage } from "@/pages/LotesListPage";
 import { AdminUsuariosPage } from "@/pages/AdminUsuariosPage";
 import { AdminRelatorioErrosPage } from "@/pages/AdminRelatorioErrosPage";
 import { AdminDevolucoesPage } from "@/pages/AdminDevolucoesPage";
+import { AdminEmpresaPagadoraPage } from "@/pages/AdminEmpresaPagadoraPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -126,6 +127,14 @@ export default function App() {
         element={
           <AdminRoute>
             <AdminDevolucoesPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/app/admin/empresa-pagadora"
+        element={
+          <AdminRoute>
+            <AdminEmpresaPagadoraPage />
           </AdminRoute>
         }
       />

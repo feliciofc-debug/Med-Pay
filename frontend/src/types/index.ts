@@ -31,6 +31,8 @@ export type StatusPagamento =
   | "PAGO"
   | "NAO_PAGO";
 
+export type ModalidadePagamento = "PIX" | "TED" | "TRANSF_UNICRED";
+
 export interface ClienteResumo {
   id: string;
   nome: string;
@@ -67,6 +69,8 @@ export interface Pagamento {
   banco_codigo: string | null;
   conta_mascarada: string | null;
   valor_centavos: number;
+  modalidade: ModalidadePagamento;
+  chave_pix: string | null;
   status: StatusPagamento;
   codigos_erro: string | null;
   mensagens_validacao: string | null;
@@ -287,6 +291,62 @@ export interface RelatorioDevolucoes {
   valor_total_devolvido_centavos: number;
   por_motivo: DevolucoesPorMotivo[];
   devolucoes: DevolucaoBanco[];
+}
+
+// =============================================================================
+// Empresa Pagadora — dados que vão no Header do CNAB 240
+// =============================================================================
+
+export type TipoInscricao = "CPF" | "CNPJ";
+
+export interface EmpresaPagadora {
+  id: string;
+  razao_social: string;
+  nome_fantasia: string | null;
+  tipo_inscricao: TipoInscricao;
+  cnpj_cpf: string;
+
+  banco_codigo: string;
+  agencia: string;
+  agencia_dv: string | null;
+  conta_mascarada: string;
+  conta_dv: string;
+  codigo_convenio: string;
+
+  endereco_logradouro: string;
+  endereco_numero: string;
+  endereco_complemento: string | null;
+  endereco_cidade: string;
+  endereco_cep: string;
+  endereco_uf: string;
+
+  proximo_numero_sequencial: number;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmpresaPagadoraPayload {
+  razao_social: string;
+  nome_fantasia?: string | null;
+  tipo_inscricao: TipoInscricao;
+  cnpj_cpf: string;
+
+  banco_codigo: string;
+  agencia: string;
+  agencia_dv?: string | null;
+  conta: string;
+  conta_dv: string;
+  codigo_convenio: string;
+
+  endereco_logradouro: string;
+  endereco_numero: string;
+  endereco_complemento?: string | null;
+  endereco_cidade: string;
+  endereco_cep: string;
+  endereco_uf: string;
+
+  proximo_numero_sequencial: number;
 }
 
 export interface DashboardExecutivo {

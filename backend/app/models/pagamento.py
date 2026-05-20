@@ -32,6 +32,26 @@ class StatusPagamento(str, Enum):
     NAO_PAGO = "NAO_PAGO"       # Banco rejeitou (motivo no campo retorno_*)
 
 
+class ModalidadePagamento(str, Enum):
+    """Modalidade de envio do pagamento no CNAB 240.
+
+    Espelha as abas do template Unicred do Thiago:
+    - PIX (tipo_servico=98, forma_lanc=45) — favorecido tem chave PIX
+    - TED (tipo_servico=30, forma_lanc=01) — favorecido em outro banco
+    - TRANSF_UNICRED (tipo_servico=98, forma_lanc=41) — favorecido na Unicred
+
+    Default ao processar uma planilha: o sistema decide
+    automaticamente (regra em `_decidir_modalidade`):
+    - banco destino == 136 → TRANSF_UNICRED
+    - tem chave PIX cadastrada → PIX
+    - senão → TED
+    """
+
+    PIX = "PIX"
+    TED = "TED"
+    TRANSF_UNICRED = "TRANSF_UNICRED"
+
+
 class Pagamento(Base):
     """Pagamento individual dentro de um lote.
 
@@ -73,6 +93,18 @@ class Pagamento(Base):
 
     # ===== Valor (sempre em centavos!) =====
     valor_centavos: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # ===== Modalidade de envio (alinhado com template Unicred do Thiago) =====
+    modalidade: Mapped[ModalidadePagamento] = mapped_column(
+        SAEnum(ModalidadePagamento, name="modalidade_pagamento"),
+        nullable=False,
+        default=ModalidadePagamento.TED,
+        index=True,
+    )
+    # Chave PIX (opcional): se preenchida, o pagamento vira PIX por chave
+    # em vez de PIX por agência/conta. Tipos aceitos: CPF, CNPJ, email,
+    # telefone, EVP (chave aleatória).
+    chave_pix: Mapped[str | None] = mapped_column(String(77), nullable=True)
 
     # ===== Status e validação =====
     status: Mapped[StatusPagamento] = mapped_column(

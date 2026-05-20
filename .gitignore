@@ -49,6 +49,10 @@ redis_data/
 # Planilhas geradas pelo simulador / scripts de demo (NÃO COMITAR)
 planilhas-demo/
 
+# Dados reais de clientes (CNPJ, contas, planilhas reais — NÃO COMITAR)
+data/
+*.xlsm
+
 # Frontend produção
 frontend/.env.production
 frontend/.env.local

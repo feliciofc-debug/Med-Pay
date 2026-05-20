@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.lote import StatusLote
-from app.models.pagamento import StatusPagamento
+from app.models.pagamento import ModalidadePagamento, StatusPagamento
 
 
 class ClienteResumo(BaseModel):
@@ -52,6 +52,8 @@ class PagamentoOut(BaseModel):
     banco_codigo: str | None
     conta_mascarada: str | None
     valor_centavos: int
+    modalidade: ModalidadePagamento = ModalidadePagamento.TED
+    chave_pix: str | None = None
     status: StatusPagamento
     codigos_erro: str | None
     mensagens_validacao: str | None

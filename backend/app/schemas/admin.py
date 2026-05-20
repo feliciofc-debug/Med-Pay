@@ -20,6 +20,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.models.empresa_config import TipoInscricao
 from app.models.user import UserRole
 
 
@@ -181,3 +182,81 @@ class RelatorioDevolucoesResponse(BaseModel):
 
     por_motivo: list[DevolucoesPorMotivo]
     devolucoes: list[DevolucaoBanco] = Field(description="Detalhe paginado")
+
+
+# ============================================================
+# Empresa pagadora (dados da Unicred do Thiago)
+# ============================================================
+#
+# Singleton: existe no máximo um registro ativo no sistema. Esses dados
+# entram no Header do CNAB 240 — qualquer pagamento gerado pelo MedPag
+# carrega a identidade dessa empresa. Mudar isso DEPOIS de um arquivo
+# gerado pode causar inconsistência de conciliação no banco, então a
+# edição é protegida por ADMIN e logada em auditoria.
+
+
+class EmpresaPagadoraOut(BaseModel):
+    """Dados da empresa pagadora, conta mascarada para exibição."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    razao_social: str
+    nome_fantasia: str | None
+    tipo_inscricao: TipoInscricao
+    cnpj_cpf: str
+
+    banco_codigo: str
+    agencia: str
+    agencia_dv: str | None
+    conta_mascarada: str
+    conta_dv: str
+    codigo_convenio: str
+
+    endereco_logradouro: str
+    endereco_numero: str
+    endereco_complemento: str | None
+    endereco_cidade: str
+    endereco_cep: str
+    endereco_uf: str
+
+    proximo_numero_sequencial: int
+    ativo: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class EmpresaPagadoraRequest(BaseModel):
+    """Payload pra criar ou substituir os dados da empresa pagadora.
+
+    PUT idempotente: se já existir registro ativo, substitui; senão cria.
+    Os campos são todos obrigatórios — não dá pra fazer PATCH parcial
+    porque o CNAB exige todos preenchidos pra ser válido.
+    """
+
+    razao_social: str = Field(min_length=2, max_length=255)
+    nome_fantasia: str | None = Field(default=None, max_length=255)
+    tipo_inscricao: TipoInscricao = TipoInscricao.CNPJ
+    cnpj_cpf: str = Field(
+        min_length=11,
+        max_length=18,
+        description="CPF (11) ou CNPJ (14) sem formatação — pode vir com pontos",
+    )
+
+    banco_codigo: str = Field(default="136", min_length=3, max_length=3)
+    agencia: str = Field(min_length=1, max_length=5)
+    agencia_dv: str | None = Field(default=None, max_length=1)
+    conta: str = Field(
+        min_length=1, max_length=20, description="Conta sem dígito (DV vai separado)"
+    )
+    conta_dv: str = Field(min_length=1, max_length=1)
+    codigo_convenio: str = Field(min_length=1, max_length=20)
+
+    endereco_logradouro: str = Field(min_length=2, max_length=30)
+    endereco_numero: str = Field(min_length=1, max_length=5)
+    endereco_complemento: str | None = Field(default=None, max_length=15)
+    endereco_cidade: str = Field(min_length=2, max_length=20)
+    endereco_cep: str = Field(min_length=8, max_length=9)
+    endereco_uf: str = Field(min_length=2, max_length=2)
+
+    proximo_numero_sequencial: int = Field(default=1, ge=1)

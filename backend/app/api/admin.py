@@ -28,6 +28,7 @@ from app.core.exceptions import (
 )
 from app.core.security import hash_password
 from app.models.cliente import Cliente
+from app.models.empresa_config import EmpresaConfig
 from app.models.lote import Lote, StatusLote
 from app.models.pagamento import Pagamento, StatusPagamento
 from app.models.user import User, UserRole
@@ -36,6 +37,8 @@ from app.schemas.admin import (
     CriarUsuarioRequest,
     DevolucaoBanco,
     DevolucoesPorMotivo,
+    EmpresaPagadoraOut,
+    EmpresaPagadoraRequest,
     ErrosPorHospital,
     ErrosPorOperador,
     ErrosPorTipo,
@@ -736,3 +739,153 @@ async def relatorio_devolucoes(
         por_motivo=por_motivo,
         devolucoes=devolucoes,
     )
+
+
+# ============================================================
+# Empresa Pagadora — dados que vão no Header CNAB 240
+# ============================================================
+#
+# Singleton: existe no máximo uma empresa pagadora ativa por instalação.
+# É o equivalente à aba INICIO do template Excel do Thiago: razão social,
+# CNPJ, conta Unicred (Ag 1214-7 / CC 21390-0), endereço e sequencial.
+#
+# GET retorna 404 se ainda não foi configurada (estado inicial pós-deploy).
+# PUT é idempotente: se já existir, atualiza; senão, cria. Sempre só um
+# registro ativo — quando muda, o anterior vira inativo (auditável).
+
+
+def _so_digitos(valor: str) -> str:
+    return "".join(c for c in valor if c.isdigit())
+
+
+@router.get("/empresa-pagadora", response_model=EmpresaPagadoraOut)
+async def obter_empresa_pagadora(
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
+) -> EmpresaConfig:
+    """Retorna a empresa pagadora ativa.
+
+    Se ainda não foi cadastrada, retorna 404 — o frontend deve mostrar
+    a tela de cadastro vazia nesse caso.
+    """
+    result = await db.execute(
+        select(EmpresaConfig).where(EmpresaConfig.ativo.is_(True)).limit(1)
+    )
+    empresa = result.scalar_one_or_none()
+    if empresa is None:
+        raise LoteNaoEncontradoError(
+            "Empresa pagadora ainda não cadastrada. "
+            "Use PUT /api/admin/empresa-pagadora para criar."
+        )
+    return empresa
+
+
+@router.put("/empresa-pagadora", response_model=EmpresaPagadoraOut)
+async def salvar_empresa_pagadora(
+    payload: EmpresaPagadoraRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> EmpresaConfig:
+    """Cria ou atualiza a empresa pagadora ativa (idempotente).
+
+    Regra de negócio:
+    - Limpa caracteres não-numéricos do CNPJ/CPF e CEP antes de gravar
+    - Conta é criptografada com Fernet (dado bancário sensível)
+    - Conta mascarada é gerada automaticamente pra exibição em telas
+    - Se já existir registro ativo, atualiza os campos; senão cria novo
+
+    O `proximo_numero_sequencial` é preservado se já existia (não dá pra
+    pular sequencial pra trás — banco vai recusar arquivo CNAB).
+    """
+    from app.core.crypto import encrypt, mask_conta
+
+    cnpj_limpo = _so_digitos(payload.cnpj_cpf)
+    if payload.tipo_inscricao == TipoInscricao.CNPJ and len(cnpj_limpo) != 14:
+        raise ValidacaoError(
+            f"CNPJ inválido: esperado 14 dígitos, recebido {len(cnpj_limpo)}"
+        )
+    if payload.tipo_inscricao == TipoInscricao.CPF and len(cnpj_limpo) != 11:
+        raise ValidacaoError(
+            f"CPF inválido: esperado 11 dígitos, recebido {len(cnpj_limpo)}"
+        )
+
+    cep_limpo = _so_digitos(payload.endereco_cep)
+    if len(cep_limpo) != 8:
+        raise ValidacaoError(
+            f"CEP inválido: esperado 8 dígitos, recebido {len(cep_limpo)}"
+        )
+
+    conta_limpa = "".join(c for c in payload.conta.upper() if c.isdigit() or c == "X")
+    if not conta_limpa:
+        raise ValidacaoError("Conta não pode ser vazia")
+
+    # Busca registro ativo existente (se houver)
+    result = await db.execute(
+        select(EmpresaConfig).where(EmpresaConfig.ativo.is_(True)).limit(1)
+    )
+    empresa = result.scalar_one_or_none()
+
+    conta_encrypted = encrypt(conta_limpa)
+    conta_mascarada = mask_conta(conta_limpa)
+
+    if empresa is None:
+        empresa = EmpresaConfig(
+            razao_social=payload.razao_social.strip(),
+            nome_fantasia=(payload.nome_fantasia or None),
+            tipo_inscricao=payload.tipo_inscricao,
+            cnpj_cpf=cnpj_limpo,
+            banco_codigo=payload.banco_codigo,
+            agencia=payload.agencia,
+            agencia_dv=payload.agencia_dv,
+            conta_encrypted=conta_encrypted,
+            conta_dv=payload.conta_dv,
+            conta_mascarada=conta_mascarada,
+            codigo_convenio=payload.codigo_convenio,
+            endereco_logradouro=payload.endereco_logradouro,
+            endereco_numero=payload.endereco_numero,
+            endereco_complemento=(payload.endereco_complemento or None),
+            endereco_cidade=payload.endereco_cidade,
+            endereco_cep=cep_limpo,
+            endereco_uf=payload.endereco_uf.upper(),
+            proximo_numero_sequencial=payload.proximo_numero_sequencial,
+            ativo=True,
+        )
+        db.add(empresa)
+        acao = "criada"
+    else:
+        empresa.razao_social = payload.razao_social.strip()
+        empresa.nome_fantasia = payload.nome_fantasia or None
+        empresa.tipo_inscricao = payload.tipo_inscricao
+        empresa.cnpj_cpf = cnpj_limpo
+        empresa.banco_codigo = payload.banco_codigo
+        empresa.agencia = payload.agencia
+        empresa.agencia_dv = payload.agencia_dv
+        empresa.conta_encrypted = conta_encrypted
+        empresa.conta_dv = payload.conta_dv
+        empresa.conta_mascarada = conta_mascarada
+        empresa.codigo_convenio = payload.codigo_convenio
+        empresa.endereco_logradouro = payload.endereco_logradouro
+        empresa.endereco_numero = payload.endereco_numero
+        empresa.endereco_complemento = payload.endereco_complemento or None
+        empresa.endereco_cidade = payload.endereco_cidade
+        empresa.endereco_cep = cep_limpo
+        empresa.endereco_uf = payload.endereco_uf.upper()
+        # Sequencial: só aceita se for >= ao atual (não regredir)
+        if payload.proximo_numero_sequencial >= empresa.proximo_numero_sequencial:
+            empresa.proximo_numero_sequencial = payload.proximo_numero_sequencial
+        acao = "atualizada"
+
+    await db.flush()
+
+    log.warning(
+        "admin.empresa_pagadora_salva",
+        admin=admin.email,
+        acao=acao,
+        razao_social=empresa.razao_social,
+        cnpj_cpf=empresa.cnpj_cpf,
+        banco=empresa.banco_codigo,
+        agencia=empresa.agencia,
+        conta_mascarada=empresa.conta_mascarada,
+    )
+
+    return empresa

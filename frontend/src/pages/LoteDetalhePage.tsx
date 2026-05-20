@@ -14,6 +14,7 @@ import { api, getErrorMessage } from "@/lib/api";
 import { formatBRL, formatDateTime } from "@/lib/utils";
 import {
   StatusBadgeLote,
+  ModalidadeBadge,
   StatusBadgePagamento,
 } from "@/components/StatusBadge";
 import { AprovacaoModal } from "@/components/AprovacaoModal";
@@ -230,6 +231,7 @@ export function LoteDetalhePage() {
               <th className="text-left p-3">Nome</th>
               <th className="text-left p-3">CPF</th>
               <th className="text-right p-3">Valor</th>
+              <th className="text-left p-3">Envio</th>
               <th className="text-left p-3">Status</th>
               <th className="text-left p-3">Ações</th>
             </tr>
@@ -305,6 +307,9 @@ function PagamentoRow({
       </td>
       <td className="p-3 text-right font-medium">
         {formatBRL(pagamento.valor_centavos)}
+      </td>
+      <td className="p-3">
+        <ModalidadeBadge modalidade={pagamento.modalidade} />
       </td>
       <td className="p-3">
         <StatusBadgePagamento status={pagamento.status} />
