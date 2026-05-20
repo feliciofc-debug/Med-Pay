@@ -114,24 +114,36 @@ _ALIASES_CAMPO: dict[str, list[str]] = {
     ],
     "valor": [
         "valor",
+        "valorr",
+        "valorrs",
+        "valorreais",
         "valorpagamento",
         "valorbruto",
         "valorliquido",
         "valorpagar",
         "valorrepasse",
-        "valorrs",
         "vlr",
     ],
 }
 
 
 def _normalizar_chave(s: str) -> str:
-    """Remove acentos, espaços, _, deixa lowercase. Ex: 'Razão Social' → 'razaosocial'."""
+    """Remove acentos e tudo que não é letra/dígito; lowercase.
+
+    Ex: 'Razão Social' → 'razaosocial', 'Valor R$' → 'valorr',
+        'C/C' → 'cc', 'Cód Banco' → 'codbanco'.
+
+    Antes a normalização só removia uma lista pequena de separadores
+    (`\\s _ - . / ( )`), o que deixava de fora caracteres como `$`,
+    `#`, `*` etc. Agora qualquer coisa que não seja letra ou número é
+    removida, deixando o matching com aliases mais resiliente a
+    cabeçalhos "criativos" das planilhas dos hospitais.
+    """
     if not s:
         return ""
     nfkd = unicodedata.normalize("NFKD", s)
     sem_acento = "".join(c for c in nfkd if not unicodedata.combining(c))
-    return re.sub(r"[\s_\-./()]+", "", sem_acento).lower()
+    return re.sub(r"[^A-Za-z0-9]+", "", sem_acento).lower()
 
 
 def _detectar_mapeamento(
