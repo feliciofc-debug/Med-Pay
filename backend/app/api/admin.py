@@ -171,6 +171,54 @@ async def atualizar_usuario(
 # ============================================================
 
 
+@router.delete("/lotes/{lote_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def deletar_lote(
+    lote_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> None:
+    """Deleta um lote (e todos os pagamentos por cascade).
+
+    Uso recomendado:
+    - Lote em RECEBIDO sem arquivo em disco (reset do container)
+    - Lote de teste que ficou bagunçado
+    - Não use em lote APROVADO/ENVIADO_BANCO sem entender o impacto.
+
+    REGRA: hash_conteudo é único, então deletar libera o hash pra
+    upload da mesma planilha de novo (recomendado pra recuperar de
+    falhas de processamento).
+    """
+    from sqlalchemy import delete
+
+    result = await db.execute(select(Lote).where(Lote.id == lote_id))
+    lote = result.scalar_one_or_none()
+    if lote is None:
+        raise LoteNaoEncontradoError(f"Lote {lote_id} não encontrado")
+
+    if lote.status in (
+        StatusLote.APROVADO,
+        StatusLote.ENVIADO_BANCO,
+        StatusLote.CONCILIADO,
+    ):
+        raise ValidacaoError(
+            f"Lote em status {lote.status.value} não pode ser deletado "
+            f"(já entrou no ciclo de pagamento). Cancele primeiro."
+        )
+
+    # Cascade delete: SQLAlchemy apaga os pagamentos junto
+    await db.delete(lote)
+    await db.flush()
+
+    log.warning(
+        "admin.lote_deletado",
+        admin=admin.email,
+        lote_id=str(lote_id),
+        cliente_id=str(lote.cliente_id),
+        status_antes=lote.status.value,
+    )
+    return None
+
+
 @router.post("/lotes/{lote_id}/reprocessar")
 async def reprocessar_lote(
     lote_id: UUID,
