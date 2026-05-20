@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type ComponentType, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   ArrowLeftRight,
@@ -14,13 +14,59 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import type { UserRole } from "@/types";
 
-const NAV_ITEMS = [
-  { to: "/app", label: "Dashboard", icon: Home, exact: true },
-  { to: "/app/executivo", label: "Executivo", icon: BarChart3 },
-  { to: "/app/contratos", label: "Contratos", icon: Briefcase },
-  { to: "/app/upload", label: "Novo Lote", icon: Upload },
-  { to: "/app/lotes", label: "Lotes", icon: FileSpreadsheet },
+interface NavItem {
+  to: string;
+  label: string;
+  icon: ComponentType<{ size?: number; className?: string }>;
+  exact?: boolean;
+  roles: UserRole[];
+}
+
+// Visibilidade do menu por role.
+//
+// OPERADOR (Maria sobe planilha, corrige, NÃO aprova nem vê dados
+// financeiros do BPO): só Novo Lote + Lotes.
+//
+// APROVADOR (Thiago e irmão diretores: aprovam, geram CNAB, inserem
+// token na Unicred): dashboards operacionais + Novo Lote + Lotes.
+// NÃO veem Contratos comerciais nem área Admin.
+//
+// ADMIN (você, Felício, dono do BPO): tudo, incluindo configuração
+// comercial, equipe, empresa pagadora e relatórios estratégicos.
+const NAV_ITEMS: NavItem[] = [
+  {
+    to: "/app",
+    label: "Dashboard",
+    icon: Home,
+    exact: true,
+    roles: ["ADMIN", "APROVADOR"],
+  },
+  {
+    to: "/app/executivo",
+    label: "Executivo",
+    icon: BarChart3,
+    roles: ["ADMIN"],
+  },
+  {
+    to: "/app/contratos",
+    label: "Contratos",
+    icon: Briefcase,
+    roles: ["ADMIN"],
+  },
+  {
+    to: "/app/upload",
+    label: "Novo Lote",
+    icon: Upload,
+    roles: ["ADMIN", "APROVADOR", "OPERADOR"],
+  },
+  {
+    to: "/app/lotes",
+    label: "Lotes",
+    icon: FileSpreadsheet,
+    roles: ["ADMIN", "APROVADOR", "OPERADOR"],
+  },
 ];
 
 const ADMIN_ITEMS = [
@@ -34,6 +80,10 @@ export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const isAdmin = user?.role === "ADMIN";
+  const role = user?.role;
+  const navVisible = role
+    ? NAV_ITEMS.filter((item) => item.roles.includes(role))
+    : [];
 
   return (
     <div className="min-h-screen flex bg-brand-50/30">
@@ -58,7 +108,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </Link>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
+          {navVisible.map((item) => {
             const Icon = item.icon;
             const active = item.exact
               ? location.pathname === item.to

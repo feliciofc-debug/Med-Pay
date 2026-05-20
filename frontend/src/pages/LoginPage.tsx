@@ -19,8 +19,9 @@ export function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      await login(email, password);
-      navigate("/app");
+      const me = await login(email, password);
+      // OPERADOR não tem Dashboard — mandamos direto pra tela de upload.
+      navigate(me.role === "OPERADOR" ? "/app/upload" : "/app");
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

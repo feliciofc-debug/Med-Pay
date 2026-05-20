@@ -14,8 +14,22 @@ import { AdminUsuariosPage } from "@/pages/AdminUsuariosPage";
 import { AdminRelatorioErrosPage } from "@/pages/AdminRelatorioErrosPage";
 import { AdminDevolucoesPage } from "@/pages/AdminDevolucoesPage";
 import { AdminEmpresaPagadoraPage } from "@/pages/AdminEmpresaPagadoraPage";
+import type { UserRole } from "@/types";
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+// Pra qual rota mandar o usuário quando ele cai em alguma sem permissão.
+// Operador não tem Dashboard, então vai direto pra tela de upload.
+function rotaInicial(role: UserRole | undefined): string {
+  if (role === "OPERADOR") return "/app/upload";
+  return "/app";
+}
+
+function ProtectedRoute({
+  children,
+  roles,
+}: {
+  children: React.ReactNode;
+  roles?: UserRole[];
+}) {
   const { user, loading } = useAuth();
   if (loading) {
     return (
@@ -26,26 +40,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+  if (roles && !roles.includes(user.role)) {
+    return <Navigate to={rotaInicial(user.role)} replace />;
   }
   return <Layout>{children}</Layout>;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-slate-500">
-        Carregando...
-      </div>
-    );
-  }
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  if (user.role !== "ADMIN") {
-    return <Navigate to="/app" replace />;
-  }
-  return <Layout>{children}</Layout>;
+  return <ProtectedRoute roles={["ADMIN"]}>{children}</ProtectedRoute>;
 }
 
 export default function App() {
@@ -59,7 +62,7 @@ export default function App() {
       <Route
         path="/app"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute roles={["ADMIN", "APROVADOR"]}>
             <DashboardPage />
           </ProtectedRoute>
         }
@@ -67,7 +70,7 @@ export default function App() {
       <Route
         path="/app/executivo"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute roles={["ADMIN"]}>
             <DashboardExecutivoPage />
           </ProtectedRoute>
         }
@@ -75,7 +78,7 @@ export default function App() {
       <Route
         path="/app/contratos"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute roles={["ADMIN"]}>
             <ContratosPage />
           </ProtectedRoute>
         }
