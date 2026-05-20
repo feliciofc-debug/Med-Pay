@@ -77,10 +77,9 @@ services:
       - key: JWT_REFRESH_EXPIRE_DAYS
         value: "7"
       - key: CORS_ORIGINS
-        # Atualize com a URL real do Vercel depois do primeiro deploy do frontend.
-        # Pode listar várias separadas por vírgula:
-        #   https://medpag.vercel.app,https://medpag-app.vercel.app
-        value: "https://medpag.vercel.app,http://localhost:5173"
+        # URLs autorizadas a chamar a API. Liste o domínio real do Vercel
+        # e qualquer alias usado em deploys de preview.
+        value: "https://med-pay-91t6.vercel.app,http://localhost:5173"
       # Admin inicial — criado automaticamente no primeiro boot
       - key: ADMIN_EMAIL
         value: expo@atombrasildigital.com
@@ -128,6 +127,6 @@ services:
       - key: JWT_ALGORITHM
         value: HS256
       - key: CORS_ORIGINS
-        value: "https://medpag.vercel.app"
+        value: "https://med-pay-91t6.vercel.app"
       - key: SEED_DEMO
         value: "false"  # worker não roda seed
