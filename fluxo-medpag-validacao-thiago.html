@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MedPag — Validação do Fluxo com Thiago</title>
+<style>
+  :root {
+    --moss-50:#f5f7ef; --moss-100:#e8eed6; --moss-200:#d2daad; --moss-300:#b6c283;
+    --moss-400:#9cab63; --moss-500:#82924b; --moss-600:#687839; --moss-700:#525f30;
+    --moss-800:#424c2a; --moss-900:#353d24; --moss-950:#1f2412;
+    --gold-50:#fdf8e7; --gold-100:#fbedb8; --gold-200:#f6dc83; --gold-300:#f0c64a;
+    --gold-400:#e9b22a; --gold-500:#d29215; --gold-600:#b27512; --gold-700:#8e5a13;
+    --gold-800:#744817;
+    --green:#5b8138; --green-bg:#e7f0d8;
+    --amber:#d29215; --amber-bg:#fdf8e7;
+    --red:#b91c1c; --red-bg:#fde8e8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--moss-100); color: var(--moss-950); line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  body { padding: 40px 20px; }
+  .deck { max-width: 1200px; margin: 0 auto; }
+
+  .nav {
+    background: white; padding: 16px 24px; border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(31,36,18,0.1); margin-bottom: 32px;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    border-top: 3px solid var(--gold-400);
+  }
+  .nav h1 { font-size: 16px; color: var(--moss-700); font-weight: 600; }
+  .nav button {
+    background: var(--gold-500); color: var(--moss-950); border: none;
+    padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 700;
+    cursor: pointer; transition: background .2s;
+  }
+  .nav button:hover { background: var(--gold-400); }
+
+  .slide {
+    width: 100%; aspect-ratio: 16/9; background: white; border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(31,36,18,0.15); margin-bottom: 32px;
+    overflow: hidden; position: relative; page-break-after: always;
+  }
+  .slide-content { width: 100%; height: 100%; padding: 44px 56px; display: flex; flex-direction: column; }
+  .slide-number {
+    position: absolute; bottom: 18px; right: 28px; font-size: 11px;
+    color: #94a3b8; font-weight: 500; letter-spacing: 0.1em;
+  }
+  .slide-brand {
+    position: absolute; bottom: 18px; left: 28px; font-size: 11px;
+    color: var(--moss-600); font-weight: 700; letter-spacing: 0.15em;
+  }
+
+  /* Cover */
+  .cover { background: linear-gradient(135deg, var(--moss-950), var(--moss-900) 50%, var(--moss-800)); color: white; }
+  .cover::before { content:''; position: absolute; top:0; left:0; right:0; height:1px; background: linear-gradient(90deg, transparent, var(--gold-400), transparent); }
+  .cover .pattern { position: absolute; bottom:-120px; right:-120px; width:480px; height:480px; background: radial-gradient(circle, rgba(210,146,21,0.25), transparent 70%); border-radius: 50%; }
+  .cover .slide-content { justify-content: center; padding: 56px 72px; }
+  .cover .badge {
+    position: absolute; top: 32px; right: 56px;
+    background: rgba(210,146,21,0.15); backdrop-filter: blur(10px);
+    padding: 8px 16px; border-radius: 20px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.1em; color: var(--gold-200); border: 1px solid rgba(210,146,21,0.4);
+  }
+  .cover .logo { display: flex; align-items: center; gap: 14px; margin-bottom: 36px; }
+  .cover .logo-mark {
+    width: 56px; height: 56px; background: var(--moss-900);
+    border: 1px solid var(--gold-400); border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--gold-300); font-weight: 800; font-size: 24px;
+  }
+  .cover .logo-text { font-size: 24px; font-weight: 800; letter-spacing: 0.15em; }
+  .cover h1 { font-size: 50px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; margin-bottom: 18px; }
+  .cover h1 .gold {
+    background: linear-gradient(135deg, var(--gold-300), var(--gold-400), var(--gold-200));
+    -webkit-background-clip: text; background-clip: text; color: transparent; font-style: italic;
+  }
+  .cover .subtitle { font-size: 18px; color: var(--moss-100); max-width: 760px; margin-bottom: 36px; line-height: 1.5; }
+  .cover .meta { display: flex; gap: 48px; color: var(--moss-200); font-size: 12px; letter-spacing: 0.05em; }
+  .cover .meta strong { display: block; color: white; font-size: 15px; margin-top: 4px; font-weight: 600; letter-spacing: 0; }
+
+  /* Headers */
+  .slide-header { margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--moss-100); position: relative; }
+  .slide-header::after { content:''; position: absolute; bottom:-1px; left:0; width:80px; height:2px; background: var(--gold-500); }
+  .slide-eyebrow { font-size: 11px; font-weight: 700; color: var(--gold-600); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 6px; }
+  .slide-title { font-size: 30px; font-weight: 800; color: var(--moss-950); letter-spacing: -0.02em; line-height: 1.15; }
+  .slide-subtitle { font-size: 14px; color: var(--moss-700); margin-top: 6px; max-width: 860px; }
+  .slide-body { flex: 1; display: flex; flex-direction: column; }
+
+  /* Personagens */
+  .chars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; flex: 1; }
+  .char-card {
+    background: linear-gradient(135deg, white, var(--moss-50));
+    border: 1.5px solid var(--moss-200); border-radius: 16px; padding: 26px;
+    display: flex; flex-direction: column; gap: 14px; position: relative; overflow: hidden;
+  }
+  .char-card::before { content:''; position: absolute; top:0; left:0; right:0; height:4px; background: linear-gradient(90deg, var(--gold-400), var(--gold-500)); }
+  .char-card.highlight { border-color: var(--gold-500); }
+  .char-card .avatar {
+    width: 64px; height: 64px; background: var(--moss-900);
+    border: 2px solid var(--gold-400); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+  }
+  .char-card .role { font-size: 11px; font-weight: 800; color: var(--gold-700); text-transform: uppercase; letter-spacing: 0.12em; }
+  .char-card h3 { font-size: 22px; font-weight: 800; color: var(--moss-950); }
+  .char-card .desc { font-size: 13px; color: var(--moss-700); line-height: 1.55; }
+  .char-card ul { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+  .char-card li { font-size: 12px; color: var(--moss-700); padding-left: 16px; position: relative; line-height: 1.5; }
+  .char-card li::before { content:'•'; position: absolute; left: 4px; color: var(--gold-500); font-weight: 800; }
+
+  /* Steps */
+  .steps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1; align-content: start; }
+  .step {
+    display: grid; grid-template-columns: 48px 1fr; gap: 16px; align-items: start;
+    padding: 14px 18px; background: var(--moss-50);
+    border-radius: 12px; border-left: 4px solid var(--gold-500); position: relative;
+  }
+  .step-num {
+    width: 40px; height: 40px; background: var(--moss-950); color: var(--gold-300);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 800; border: 2px solid var(--gold-400); flex-shrink: 0;
+  }
+  .step h4 { font-size: 14px; font-weight: 800; color: var(--moss-950); margin-bottom: 4px; }
+  .step h4 .who {
+    display: inline-block; font-size: 9px; font-weight: 700; padding: 2px 7px;
+    border-radius: 6px; margin-right: 6px; letter-spacing: 0.05em; vertical-align: middle;
+  }
+  .step h4 .who.hospital { background: var(--moss-200); color: var(--moss-900); }
+  .step h4 .who.thiago { background: var(--gold-200); color: var(--gold-800); }
+  .step h4 .who.medpag { background: var(--moss-900); color: var(--gold-200); }
+  .step h4 .who.banco { background: var(--red-bg); color: var(--red); }
+  .step p { font-size: 12px; color: var(--moss-700); line-height: 1.55; }
+  .step .ex {
+    font-size: 11px; color: var(--moss-600); font-style: italic; margin-top: 6px;
+    padding-left: 10px; border-left: 2px solid var(--moss-200);
+  }
+
+  /* Big visual flow */
+  .flow-vert { display: flex; flex-direction: column; gap: 8px; flex: 1; justify-content: center; }
+  .flow-row { display: grid; grid-template-columns: 90px 1fr; gap: 18px; align-items: center; }
+  .flow-row .badge-step {
+    background: var(--moss-950); color: var(--gold-300); border: 2px solid var(--gold-400);
+    border-radius: 10px; padding: 8px 4px; text-align: center;
+  }
+  .flow-row .badge-step .n { font-size: 18px; font-weight: 800; display: block; line-height: 1; }
+  .flow-row .badge-step .l { font-size: 8px; font-weight: 700; letter-spacing: 0.1em; margin-top: 2px; display: block; color: var(--gold-200); }
+  .flow-row .card {
+    background: white; border: 1px solid var(--moss-200); border-radius: 10px;
+    padding: 10px 14px; border-left: 4px solid var(--gold-500);
+  }
+  .flow-row .card h4 { font-size: 13px; font-weight: 800; color: var(--moss-950); }
+  .flow-row .card p { font-size: 11.5px; color: var(--moss-700); line-height: 1.4; margin-top: 1px; }
+
+  /* Semáforo */
+  .semaforo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 6px; }
+  .sema-card {
+    background: white; border: 2px solid; border-radius: 12px; padding: 16px 18px;
+  }
+  .sema-card.green { border-color: var(--green); background: var(--green-bg); }
+  .sema-card.amber { border-color: var(--amber); background: var(--amber-bg); }
+  .sema-card.red { border-color: var(--red); background: var(--red-bg); }
+  .sema-card .dot {
+    width: 24px; height: 24px; border-radius: 50%; display: inline-block; margin-bottom: 8px;
+  }
+  .sema-card.green .dot { background: var(--green); }
+  .sema-card.amber .dot { background: var(--amber); }
+  .sema-card.red .dot { background: var(--red); }
+  .sema-card h4 { font-size: 14px; font-weight: 800; color: var(--moss-950); margin-bottom: 4px; }
+  .sema-card p { font-size: 11.5px; color: var(--moss-700); line-height: 1.5; }
+  .sema-card .ex { font-size: 10.5px; color: var(--moss-800); font-style: italic; margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); }
+
+  /* Decisão */
+  .decision { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; flex: 1; }
+  .decision-card {
+    background: white; border: 2px solid var(--moss-200); border-radius: 14px;
+    padding: 22px 24px; display: flex; flex-direction: column; gap: 12px; position: relative;
+  }
+  .decision-card.recommended {
+    border-color: var(--gold-500); background: linear-gradient(135deg, var(--gold-50), white);
+    box-shadow: 0 6px 18px rgba(210,146,21,0.15);
+  }
+  .decision-card.recommended::before {
+    content: 'RECOMENDADO'; position: absolute; top: -12px; right: 20px;
+    background: var(--gold-500); color: var(--moss-950); padding: 4px 12px;
+    border-radius: 10px; font-size: 10px; font-weight: 800; letter-spacing: 0.1em;
+  }
+  .decision-card .opt {
+    font-size: 11px; font-weight: 800; color: var(--gold-700);
+    text-transform: uppercase; letter-spacing: 0.12em;
+  }
+  .decision-card h3 { font-size: 19px; font-weight: 800; color: var(--moss-950); letter-spacing: -0.01em; }
+  .decision-card .desc { font-size: 13px; color: var(--moss-700); line-height: 1.55; }
+  .decision-card .pros, .decision-card .cons {
+    background: var(--moss-50); border-radius: 8px; padding: 10px 14px;
+    border-left: 3px solid var(--green);
+  }
+  .decision-card .cons { border-left-color: var(--red); }
+  .decision-card .pros h5, .decision-card .cons h5 {
+    font-size: 10px; font-weight: 800; color: var(--moss-950); text-transform: uppercase;
+    letter-spacing: 0.1em; margin-bottom: 4px;
+  }
+  .decision-card .pros li, .decision-card .cons li {
+    font-size: 11.5px; color: var(--moss-700); line-height: 1.5;
+    padding-left: 14px; position: relative; list-style: none;
+  }
+  .decision-card .pros li::before { content:'✓'; position: absolute; left: 0; color: var(--green); font-weight: 800; }
+  .decision-card .cons li::before { content:'✗'; position: absolute; left: 0; color: var(--red); font-weight: 800; }
+
+  /* Aprovação Thiago box */
+  .approval-block {
+    margin-top: auto; padding: 20px 24px;
+    background: linear-gradient(135deg, var(--moss-950), var(--moss-800));
+    color: white; border-radius: 14px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 28px;
+  }
+  .approval-block::before { content:''; }
+  .approval-col h4 {
+    font-size: 11px; font-weight: 800; color: var(--gold-300);
+    text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 10px;
+  }
+  .approval-col .line {
+    border-bottom: 1.5px solid var(--gold-400); margin-top: 32px;
+  }
+  .approval-col .l-name { font-size: 11px; color: var(--moss-200); margin-top: 6px; }
+
+  /* Resumo */
+  .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; flex: 1; }
+  .sum-section h3 {
+    font-size: 13px; font-weight: 800; color: var(--gold-700); text-transform: uppercase;
+    letter-spacing: 0.12em; margin-bottom: 12px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--moss-200);
+  }
+  .sum-list { display: flex; flex-direction: column; gap: 9px; }
+  .sum-item {
+    display: grid; grid-template-columns: 32px 1fr; gap: 12px; align-items: start;
+    padding: 10px 14px; background: var(--moss-50); border-radius: 10px;
+    border-left: 3px solid var(--gold-500);
+  }
+  .sum-item .ic { font-size: 18px; }
+  .sum-item h4 { font-size: 13px; font-weight: 800; color: var(--moss-950); margin-bottom: 2px; }
+  .sum-item p { font-size: 11px; color: var(--moss-700); line-height: 1.45; }
+
+  /* Real example block */
+  .example-banner {
+    background: var(--gold-100); border-left: 4px solid var(--gold-500);
+    padding: 12px 18px; border-radius: 8px; margin-top: auto;
+  }
+  .example-banner .lbl { font-size: 10px; font-weight: 800; color: var(--gold-700); letter-spacing: 0.1em; }
+  .example-banner .txt { font-size: 12px; color: var(--moss-800); margin-top: 3px; line-height: 1.5; }
+
+  /* Print */
+  @media print {
+    body { padding: 0; background: white; }
+    .nav { display: none; }
+    .deck { max-width: 100%; }
+    .slide { box-shadow: none; margin-bottom: 0; border-radius: 0; width: 100vw; height: 100vh; aspect-ratio: unset; }
+    @page { size: landscape; margin: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="nav">
+    <h1>MedPag · Validação do Fluxo com Thiago — use Ctrl+P para exportar como PDF (orientação Paisagem)</h1>
+    <button onclick="window.print()">Imprimir / Salvar PDF</button>
+  </div>
+
+  <!-- SLIDE 1 — CAPA -->
+  <section class="slide cover">
+    <div class="pattern"></div>
+    <span class="badge">PARA APROVAÇÃO DO THIAGO</span>
+    <div class="slide-content">
+      <div class="logo">
+        <div class="logo-mark">M</div>
+        <div class="logo-text">MEDPAG</div>
+      </div>
+      <h1>Como o sistema vai<br/><span class="gold">funcionar na prática</span></h1>
+      <div class="subtitle">
+        Um fluxo simples, do momento em que o hospital sobe a planilha
+        até o médico receber o dinheiro na conta dele. Sem termos técnicos —
+        só o caminho que o dinheiro percorre, passo a passo.
+      </div>
+      <div class="meta">
+        <div>
+          <span>Para</span>
+          <strong>Thiago — sócio operador</strong>
+        </div>
+        <div>
+          <span>Objetivo</span>
+          <strong>Validar o fluxo antes de programar</strong>
+        </div>
+        <div>
+          <span>Tempo de leitura</span>
+          <strong>10 minutos</strong>
+        </div>
+      </div>
+    </div>
+    <span class="slide-brand">MEDPAG · FLUXO REAL</span>
+    <span class="slide-number">01</span>
+  </section>
+
+  <!-- SLIDE 2 — QUEM É QUEM -->
+  <section class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Personagens da história</div>
+        <h2 class="slide-title">Quem é quem nessa operação</h2>
+        <p class="slide-subtitle">Três personagens. Cada um tem um papel claro. Ninguém faz o trabalho do outro.</p>
+      </div>
+      <div class="slide-body">
+        <div class="chars">
+          <div class="char-card">
+            <div class="avatar">🏥</div>
+            <div class="role">Cliente</div>
+            <h3>O Hospital</h3>
+            <p class="desc">Tem a folha de pagamento dos médicos no fim do mês. Tem conta na Unicred. Quer pagar todo mundo certo, na hora certa, sem trabalho manual.</p>
+            <ul>
+              <li>Recebe login do MedPag</li>
+              <li>Sobe a planilha do mês</li>
+              <li>Confere os erros e corrige</li>
+              <li>Manda pra Thiago aprovar</li>
+            </ul>
+          </div>
+          <div class="char-card highlight">
+            <div class="avatar">👨‍💼</div>
+            <div class="role">Operador / Aprovador</div>
+            <h3>Thiago</h3>
+            <p class="desc">Dono da plataforma MedPag. Cuida pra que tudo saia certo. É o segundo par de olhos que confere antes do dinheiro sair.</p>
+            <ul>
+              <li>Cria a conta dos hospitais</li>
+              <li>Recebe as remessas pra aprovação final</li>
+              <li>Faz a conferência dos 4 olhos</li>
+              <li>Garante a qualidade do serviço</li>
+            </ul>
+          </div>
+          <div class="char-card">
+            <div class="avatar">🩺</div>
+            <div class="role">Beneficiários</div>
+            <h3>Os Médicos</h3>
+            <p class="desc">Trabalham no hospital, atendem plantões. No fim do mês esperam o dinheiro na conta — certo, no valor combinado, no dia combinado.</p>
+            <ul>
+              <li>Não precisam fazer nada</li>
+              <li>Recebem na conta deles</li>
+              <li>Podem receber aviso por e-mail</li>
+              <li>Histórico fica registrado</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <span class="slide-brand">MEDPAG · PERSONAGENS</span>
+    <span class="slide-number">02</span>
+  </section>
+
+  <!-- SLIDE 3 — VISÃO GERAL DO FLUXO -->
+  <section class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Visão geral</div>
+        <h2 class="slide-title">Resumo em 4 grandes momentos</h2>
+        <p class="slide-subtitle">O ciclo completo, do início ao fim, contado em quatro etapas.</p>
+      </div>
+      <div class="slide-body">
+        <div class="flow-vert">
+          <div class="flow-row">
+            <div class="badge-step"><span class="n">1</span><span class="l">HOSPITAL</span></div>
+            <div class="card">
+              <h4>O hospital sobe a planilha do mês no MedPag</h4>
+              <p>O financeiro do hospital entra no sistema, anexa a planilha de pagamentos do mês e clica em enviar. Como anexar um arquivo num e-mail — só que aqui o sistema já confere tudo automaticamente.</p>
+            </div>
+          </div>
+          <div class="flow-row">
+            <div class="badge-step"><span class="n">2</span><span class="l">MEDPAG</span></div>
+            <div class="card">
+              <h4>O sistema confere e mostra um semáforo de problemas</h4>
+              <p>Em segundos, o MedPag analisa cada linha — CPF dos médicos, contas bancárias, valores — e mostra três cores: verde (ok), amarelo (atenção) e vermelho (problema). O hospital ajusta o que precisar.</p>
+            </div>
+          </div>
+          <div class="flow-row">
+            <div class="badge-step"><span class="n">3</span><span class="l">THIAGO</span></div>
+            <div class="card">
+              <h4>Thiago faz a conferência final e aprova</h4>
+              <p>Você recebe um aviso no painel: "Hospital Santa Casa tem remessa esperando aprovação". Olha o resumo, confere, e clica em aprovar. É o segundo par de olhos antes do dinheiro sair.</p>
+            </div>
+          </div>
+          <div class="flow-row">
+            <div class="badge-step"><span class="n">4</span><span class="l">BANCO</span></div>
+            <div class="card">
+              <h4>A Unicred processa e os médicos recebem</h4>
+              <p>O sistema gera o arquivo oficial de pagamentos em lote da Unicred, alguém sobe no internet banking, o banco processa, devolve o comprovante, e o MedPag fecha o ciclo automaticamente.</p>
+            </div>
+          </div>
+        </div>
+        <div class="example-banner">
+          <div class="lbl">Exemplo prático</div>
+          <div class="txt">Hospital Santa Casa precisa pagar 45 médicos em novembro, total de R$ 248.500. Hoje isso leva 4 horas de digitação manual no internet banking. Com o MedPag, vira 5 minutos de revisão + 1 clique de aprovação.</div>
+        </div>
+      </div>
+    </div>
+    <span class="slide-brand">MEDPAG · VISÃO GERAL</span>
+    <span class="slide-number">03</span>
+  </section>
+
+  <!-- SLIDE 4 — PASSOS DETALHADOS 1-4 -->
+  <section class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Passo a passo · primeira metade</div>
+        <h2 class="slide-title">O que o hospital faz</h2>
+        <p class="slide-subtitle">Do login até mandar a remessa pra sua aprovação. Tudo dentro do MedPag, sem complicação.</p>
+      </div>
+      <div class="slide-body">
+        <div class="steps-grid">
+
+          <div class="step">
+            <div class="step-num">1</div>
+            <div>
+              <h4><span class="who hospital">HOSPITAL</span>Faz login no MedPag</h4>
+              <p>O financeiro do hospital acessa o site do MedPag com o login e senha que o Thiago criou pra eles.</p>
+              <div class="ex">Igual ao acesso do internet banking, mas pra preparar pagamentos antes do envio.</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">2</div>
+            <div>
+              <h4><span class="who hospital">HOSPITAL</span>Sobe a planilha do mês</h4>
+              <p>Anexa o arquivo Excel ou CSV — exatamente como fariam pra mandar por e-mail. Pode ser a mesma planilha que eles já usam hoje.</p>
+              <div class="ex">"Pagamentos médicos — Novembro 2026.xlsx" — 45 linhas, R$ 248.500.</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">3</div>
+            <div>
+              <h4><span class="who medpag">MEDPAG</span>Confere tudo e mostra o semáforo</h4>
+              <p>Em segundos o sistema analisa cada linha. CPF, banco, agência, conta, valor. Mostra três cores: o que está ok, o que precisa de atenção e o que está com problema.</p>
+              <div class="ex">"42 médicos verdes, 2 amarelos (CPF sem o zero da frente), 1 vermelho (conta inválida)."</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">4</div>
+            <div>
+              <h4><span class="who hospital">HOSPITAL</span>Revisa e envia pra aprovação</h4>
+              <p>O hospital olha as marcações, aceita as sugestões automáticas (ex: corrigir CPF), corrige os erros vermelhos manualmente, e clica em "Enviar para aprovação".</p>
+              <div class="ex">Quem revisa é o próprio hospital — eles é que conhecem os médicos deles.</div>
+            </div>
+          </div>
+
+        </div>
+        <div class="example-banner">
+          <div class="lbl">Por que é importante</div>
+          <div class="txt">O hospital corrige antes do dinheiro sair. Não tem "estorno depois". Não tem retrabalho. Não tem médico bravo ligando porque não recebeu.</div>
+        </div>
+      </div>
+    </div>
+    <span class="slide-brand">MEDPAG · PASSO A PASSO</span>
+    <span class="slide-number">04</span>
+  </section>
+
+  <!-- SLIDE 5 — Semáforo detalhado -->
+  <section class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Semáforo de conferência</div>
+        <h2 class="slide-title">As três cores que o sistema mostra</h2>
+        <p class="slide-subtitle">Toda linha da planilha cai em uma das três categorias. O hospital sabe na hora o que fazer.</p>
+      </div>
+      <div class="slide-body">
+        <div class="semaforo">
+
+          <div class="sema-card green">
+            <span class="dot"></span>
+            <h4>VERDE — tudo certo</h4>
+            <p>Linha completa, CPF válido, banco/agência/conta corretos, valor dentro do esperado. Pode pagar sem preocupação.</p>
+            <div class="ex">Exemplo: Dr. João Silva, CPF 123.456.789-09, Unicred ag 0042 cc 987654-3, R$ 4.800,00 ✓</div>
+          </div>
+
+          <div class="sema-card amber">
+            <span class="dot"></span>
+            <h4>AMARELO — atenção</h4>
+            <p>Tem alguma coisa estranha mas o sistema tem uma sugestão. Geralmente é o zero da frente do CPF que o Excel comeu, ou um valor um pouco fora do padrão do médico.</p>
+            <div class="ex">Ex: "CPF 12345678909 só tem 10 dígitos — você quis dizer 01234567890? [Aceitar] [Corrigir]"</div>
+          </div>
+
+          <div class="sema-card red">
+            <span class="dot"></span>
+            <h4>VERMELHO — bloqueado</h4>
+            <p>O sistema não consegue garantir que o pagamento vai dar certo. Pode ser banco inexistente, conta com dígito errado, CPF falso. O hospital precisa corrigir manualmente.</p>
+            <div class="ex">Ex: "Banco 999 não existe na tabela da Federação Brasileira de Bancos. Verifique com o médico."</div>
+          </div>
+
+        </div>
+        <div class="example-banner">
+          <div class="lbl">A grande diferença vs. hoje</div>
+          <div class="txt">Hoje o Thiago descobre o erro depois que tentou pagar e o banco devolveu. No MedPag, descobre antes de qualquer dinheiro sair — economiza tempo, telefonema do médico e a vergonha do "ué, mas eu não recebi".</div>
+        </div>
+      </div>
+    </div>
+    <span class="slide-brand">MEDPAG · SEMÁFORO</span>
+    <span class="slide-number">05</span>
+  </section>
+
+  <!-- SLIDE 6 — PASSOS 5-7 (Thiago entra) -->
+  <section class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Passo a passo · segunda metade</div>
+        <h2 class="slide-title">O que o Thiago faz</h2>
+        <p class="slide-subtitle">Você entra no fluxo só quando a remessa está pronta. Faz a conferência dos 4 olhos e aprova.</p>
+      </div>
+      <div class="slide-body">
+        <div class="steps-grid">
+
+          <div class="step">
+            <div class="step-num">5</div>
+            <div>
+              <h4><span class="who thiago">THIAGO</span>Recebe a notificação no painel</h4>
+              <p>Quando o hospital manda a remessa, aparece um aviso no seu painel e também chega no seu celular/e-mail.</p>
+              <div class="ex">"Hospital Santa Casa tem uma remessa de 44 médicos / R$ 244.700 esperando aprovação."</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">6</div>
+            <div>
+              <h4><span class="who thiago">THIAGO</span>Faz a conferência final (4 olhos)</h4>
+              <p>Você vê um resumo: quantos médicos, valor total, quem entrou novo, valores fora do padrão. Pode devolver pra o hospital ajustar, ou aprovar.</p>
+              <div class="ex">Confirmação dupla: digita "APROVAR" e confirma com o resumo financeiro na frente.</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">7</div>
+            <div>
+              <h4><span class="who medpag">MEDPAG</span>Gera o arquivo pra Unicred</h4>
+              <p>O sistema cria o arquivo oficial de pagamento em lote da Unicred com os dados da conta <strong>do hospital</strong> — não da sua conta. O hospital é quem paga.</p>
+              <div class="ex">Arquivo gerado no formato oficial da Unicred, pronto pra ser enviado pro banco.</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">8</div>
+            <div>
+              <h4><span class="who banco">BANCO</span>Alguém sobe no internet banking Unicred</h4>
+              <p>Aqui tem uma decisão importante a tomar — se é o hospital ou se é você quem sobe o arquivo no internet banking. Vamos ver isso na próxima página.</p>
+              <div class="ex">⚠️ <strong>Atenção:</strong> ponto que precisa ser decidido com você agora.</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    <span class="slide-brand">MEDPAG · APROVAÇÃO</span>
+    <span class="slide-number">06</span>
+  </section>
+
+  <!-- SLIDE 7 — DECISÃO 1 (Quem sobe no IB) -->
+  <section class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">⚠️ Decisão importante #1</div>
+        <h2 class="slide-title">Quem sobe o arquivo no internet banking da Unicred?</h2>
+        <p class="slide-subtitle">Depois que o MedPag gera o arquivo, alguém precisa entrar no internet banking da Unicred do hospital e fazer o envio. Quem faz isso?</p>
+      </div>
+      <div class="slide-body">
+        <div class="decision">
+
+          <div class="decision-card">
+            <div class="opt">Opção A</div>
+            <h3>O próprio hospital sobe no banco dele</h3>
+            <div class="desc">O hospital baixa o arquivo pronto do MedPag, entra no internet banking da Unicred deles, faz o upload do arquivo e digita o token deles.</div>
+            <div class="pros">
+              <h5>Pontos positivos</h5>
+              <ul>
+                <li>Hospital mantém controle total do próprio dinheiro</li>
+                <li>Token e senha bancária ficam só com o hospital</li>
+                <li>Você não tem responsabilidade técnica pelo envio</li>
+                <li>Modelo mais limpo juridicamente</li>
+              </ul>
+            </div>
+            <div class="cons">
+              <h5>Pontos negativos</h5>
+              <ul>
+                <li>Hospital precisa fazer mais uma ação</li>
+                <li>Você não tem visibilidade do momento exato do envio</li>
+                <li>Se hospital atrasar, médico atrasa</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="decision-card recommended">
+            <div class="opt">Opção B</div>
+            <h3>Você sobe pelo internet banking do hospital</h3>
+            <div class="desc">O hospital te dá acesso ao internet banking deles (com poderes delegados). Você faz o upload do arquivo e digita o token (do hospital, recebido por SMS/app do hospital).</div>
+            <div class="pros">
+              <h5>Pontos positivos</h5>
+              <ul>
+                <li>Hospital tem trabalho zero — só revisa e aprova</li>
+                <li>Você controla o timing do envio</li>
+                <li>É o que o Thiago já faz hoje (provavelmente)</li>
+                <li>Maior valor agregado pelo serviço prestado</li>
+              </ul>
+            </div>
+            <div class="cons">
+              <h5>Pontos negativos</h5>
+              <ul>
+                <li>Precisa de procuração / poderes delegados formalizados</li>
+                <li>Mais responsabilidade pra você</li>
+                <li>Termo de uso do banco precisa ser revisado</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+        <div class="approval-block">
+          <div class="approval-col">
+            <h4>Resposta do Thiago</h4>
+            <p style="color:#e8eed6;font-size:12px;line-height:1.5;">
+              Marcar a opção escolhida e descrever em poucas palavras como funciona hoje:<br/>
+              ☐ Opção A (hospital sobe)<br/>
+              ☐ Opção B (Thiago sobe)<br/>
+              ☐ Mistura — depende do cliente
+            </p>
+          </div>
+          <div class="approval-col">
+            <h4>Como funciona hoje (preencher)</h4>
+            <div class="line"></div>
+            <div class="line"></div>
+            <div class="line"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <span class="slide-brand">MEDPAG · DECISÃO #1</span>
+    <span class="slide-number">07</span>
+  </section>
+
+  <!-- SLIDE 8 — PASSOS 9-12 + DECISÃO 2 (Retorno) -->
+  <section class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Passo a passo · final</div>
+        <h2 class="slide-title">Banco processa, MedPag fecha o ciclo</h2>
+        <p class="slide-subtitle">Depois que o arquivo sobe no internet banking, o banco devolve um comprovante. Esse comprovante volta pro MedPag e tudo fica registrado.</p>
+      </div>
+      <div class="slide-body">
+        <div class="steps-grid">
+
+          <div class="step">
+            <div class="step-num">9</div>
+            <div>
+              <h4><span class="who banco">BANCO</span>A Unicred processa os pagamentos</h4>
+              <p>O banco recebe o arquivo, debita a conta do hospital e credita a conta de cada médico. Pode ser no mesmo dia ou no dia seguinte, depende do horário.</p>
+              <div class="ex">Cada médico recebe na conta dele exatamente o valor combinado.</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">10</div>
+            <div>
+              <h4><span class="who banco">BANCO</span>Devolve um comprovante de retorno</h4>
+              <p>A Unicred gera um arquivo de "retorno" listando: quem foi pago, quem não foi pago e o motivo (saldo insuficiente, conta encerrada, etc).</p>
+              <div class="ex">"42 pagamentos confirmados. 2 não foram pagos: 1 por saldo insuficiente, 1 por conta encerrada."</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">11</div>
+            <div>
+              <h4><span class="who medpag">MEDPAG</span>Concilia automaticamente</h4>
+              <p>Quem subir o comprovante de retorno no MedPag (mesma decisão da Opção A ou B), o sistema lê linha por linha e atualiza o status de cada médico — pago, ou não pago e por quê.</p>
+              <div class="ex">Sem trabalho manual de cruzar planilha — o sistema casa tudo sozinho.</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">12</div>
+            <div>
+              <h4><span class="who hospital">HOSPITAL</span>Vê o resultado no painel</h4>
+              <p>O hospital abre o sistema e vê: "Remessa novembro/2026: 42 médicos pagos, 2 pendentes". Pode até receber um e-mail automático com o resumo.</p>
+              <div class="ex">Auditoria completa: quem aprovou, quando, valor exato, comprovante digital.</div>
+            </div>
+          </div>
+
+        </div>
+        <div class="example-banner">
+          <div class="lbl">Decisão #2 — quem sobe o arquivo de retorno?</div>
+          <div class="txt">Mesma lógica da Decisão #1: se foi o hospital que subiu o arquivo de envio, o hospital baixa o retorno e sobe no MedPag. Se foi você, você baixa e sobe. <strong>Costuma ser a mesma pessoa nas duas pontas.</strong></div>
+        </div>
+      </div>
+    </div>
+    <span class="slide-brand">MEDPAG · FECHAMENTO</span>
+    <span class="slide-number">08</span>
+  </section>
+
+  <!-- SLIDE 9 — RESUMO E APROVAÇÃO -->
+  <section class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Resumo final · aprovação</div>
+        <h2 class="slide-title">Tudo numa página só</h2>
+        <p class="slide-subtitle">O que o MedPag entrega, o que cada um faz, e o que precisamos decidir antes de programar.</p>
+      </div>
+      <div class="slide-body">
+        <div class="summary-grid">
+
+          <div class="sum-section">
+            <h3>O que o MedPag entrega</h3>
+            <div class="sum-list">
+              <div class="sum-item">
+                <span class="ic">🏥</span>
+                <div>
+                  <h4>Portal pro hospital</h4>
+                  <p>Cada hospital tem o login dele e sobe a planilha sozinho.</p>
+                </div>
+              </div>
+              <div class="sum-item">
+                <span class="ic">🚦</span>
+                <div>
+                  <h4>Semáforo de conferência</h4>
+                  <p>Em segundos: o que está ok, o que precisa atenção, o que tem problema.</p>
+                </div>
+              </div>
+              <div class="sum-item">
+                <span class="ic">👥</span>
+                <div>
+                  <h4>Aprovação 4 olhos</h4>
+                  <p>Hospital revisa, Thiago aprova. Ninguém faz nada sozinho.</p>
+                </div>
+              </div>
+              <div class="sum-item">
+                <span class="ic">📄</span>
+                <div>
+                  <h4>Arquivo Unicred pronto</h4>
+                  <p>Gerado no formato oficial da Unicred, com a conta do hospital.</p>
+                </div>
+              </div>
+              <div class="sum-item">
+                <span class="ic">✅</span>
+                <div>
+                  <h4>Conciliação automática</h4>
+                  <p>Sobe o comprovante do banco e o sistema fecha o ciclo sozinho.</p>
+                </div>
+              </div>
+              <div class="sum-item">
+                <span class="ic">📋</span>
+                <div>
+                  <h4>Auditoria completa</h4>
+                  <p>Quem aprovou, quando, com qual valor. Tudo registrado.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sum-section">
+            <h3>Decisões pendentes — para o Thiago</h3>
+            <div class="sum-list">
+              <div class="sum-item">
+                <span class="ic">①</span>
+                <div>
+                  <h4>Quem sobe o arquivo no internet banking?</h4>
+                  <p><strong>Opção A:</strong> hospital sobe sozinho.<br/><strong>Opção B:</strong> Thiago sobe pelo IB do hospital.</p>
+                </div>
+              </div>
+              <div class="sum-item">
+                <span class="ic">②</span>
+                <div>
+                  <h4>Quem sobe o comprovante de retorno?</h4>
+                  <p>Geralmente é a mesma pessoa da decisão #1. Confirmar.</p>
+                </div>
+              </div>
+              <div class="sum-item">
+                <span class="ic">③</span>
+                <div>
+                  <h4>Como Thiago se remunera?</h4>
+                  <p>Mensalidade por hospital? Taxa por pagamento? Mix? Definir.</p>
+                </div>
+              </div>
+              <div class="sum-item">
+                <span class="ic">④</span>
+                <div>
+                  <h4>Hospital aprova antes do Thiago, ou só Thiago aprova?</h4>
+                  <p>Validar se a aprovação dupla (hospital + Thiago) faz sentido.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="approval-block" style="margin-top: 18px;">
+              <div class="approval-col">
+                <h4>Aprovação do fluxo</h4>
+                <div class="line"></div>
+                <div class="l-name">Thiago — assinatura</div>
+              </div>
+              <div class="approval-col">
+                <h4>Data</h4>
+                <div class="line"></div>
+                <div class="l-name">__/__/____</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    <span class="slide-brand">MEDPAG · RESUMO</span>
+    <span class="slide-number">09</span>
+  </section>
+
+</div>
+</body>
+</html>

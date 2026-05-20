@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MedPag — Análise Competitiva Consolidada</title>
+<style>
+  :root {
+    --moss-50:#f5f7ef; --moss-100:#e8eed6; --moss-200:#d2daad; --moss-300:#b6c283;
+    --moss-400:#9cab63; --moss-500:#82924b; --moss-600:#687839; --moss-700:#525f30;
+    --moss-800:#424c2a; --moss-900:#353d24; --moss-950:#1f2412;
+    --gold-50:#fdf8e7; --gold-100:#fbedb8; --gold-200:#f6dc83; --gold-300:#f0c64a;
+    --gold-400:#e9b22a; --gold-500:#d29215; --gold-600:#b27512; --gold-700:#8e5a13;
+    --gold-800:#744817;
+    --red-50:#fef2f2; --red-100:#fee2e2; --red-500:#ef4444; --red-700:#b91c1c;
+    --green-50:#ecfdf5; --green-100:#d1fae5; --green-600:#059669; --green-700:#047857;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--moss-50);
+    color: var(--moss-950);
+    font-size: 15px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  body { padding: 24px 16px 60px; }
+
+  .doc { max-width: 920px; margin: 0 auto; }
+
+  /* Toolbar */
+  .toolbar {
+    background: white;
+    padding: 14px 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(31,36,18,0.08);
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 3px solid var(--gold-500);
+  }
+  .toolbar h1 { font-size: 14px; color: var(--moss-700); font-weight: 600; }
+  .toolbar button {
+    background: var(--gold-500);
+    color: var(--moss-950);
+    border: none;
+    padding: 9px 18px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .toolbar button:hover { background: var(--gold-400); }
+
+  /* Page (cada bloco vira uma "página" no print) */
+  .page {
+    background: white;
+    border-radius: 12px;
+    padding: 56px 64px;
+    margin-bottom: 24px;
+    box-shadow: 0 6px 20px rgba(31,36,18,0.08);
+    page-break-after: always;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  /* Cover */
+  .cover {
+    background: linear-gradient(135deg, var(--moss-950), var(--moss-900) 50%, var(--moss-800));
+    color: white;
+    border-radius: 12px;
+    padding: 80px 64px;
+    margin-bottom: 24px;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before { content:''; position: absolute; top:0; left:0; right:0; height:1px; background: linear-gradient(90deg, transparent, var(--gold-400), transparent); }
+  .cover .pattern {
+    position: absolute; bottom:-120px; right:-120px; width:400px; height:400px;
+    background: radial-gradient(circle, rgba(210,146,21,0.25), transparent 70%);
+    border-radius: 50%;
+  }
+  .cover .badge {
+    display: inline-block;
+    background: rgba(210,146,21,0.15);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--gold-200);
+    border: 1px solid rgba(210,146,21,0.4);
+    margin-bottom: 32px;
+  }
+  .cover h1 {
+    font-size: 44px;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 20px;
+  }
+  .cover h1 em { color: var(--gold-300); font-style: italic; }
+  .cover .lead {
+    font-size: 17px;
+    color: var(--moss-100);
+    max-width: 600px;
+    margin-bottom: 48px;
+    line-height: 1.6;
+  }
+  .cover .meta {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+    border-top: 1px solid rgba(210,146,21,0.3);
+    padding-top: 24px;
+    color: var(--moss-200);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+  }
+  .cover .meta strong {
+    display: block;
+    color: white;
+    font-size: 14px;
+    margin-top: 4px;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+
+  /* Headings */
+  h1.section-title {
+    font-size: 30px;
+    font-weight: 800;
+    color: var(--moss-950);
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin-bottom: 8px;
+  }
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gold-700);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .section-lead {
+    font-size: 15px;
+    color: var(--moss-700);
+    margin-bottom: 32px;
+    border-bottom: 1px solid var(--moss-100);
+    padding-bottom: 18px;
+    position: relative;
+  }
+  .section-lead::after {
+    content:''; position: absolute; bottom:-1px; left:0; width:80px; height:2px;
+    background: var(--gold-500);
+  }
+
+  h2 {
+    font-size: 21px;
+    font-weight: 800;
+    color: var(--moss-950);
+    margin: 28px 0 12px;
+    letter-spacing: -0.01em;
+  }
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--moss-900);
+    margin: 18px 0 8px;
+  }
+
+  p { margin-bottom: 14px; color: var(--moss-800); }
+  p:last-child { margin-bottom: 0; }
+
+  ul, ol { margin: 8px 0 16px 22px; }
+  ul li, ol li { margin-bottom: 6px; color: var(--moss-800); }
+
+  strong { color: var(--moss-950); font-weight: 700; }
+  em { font-style: italic; }
+
+  a { color: var(--gold-700); text-decoration: none; border-bottom: 1px dotted var(--gold-500); }
+  a:hover { color: var(--gold-600); }
+
+  /* Callouts */
+  .callout {
+    border-left: 4px solid var(--gold-500);
+    background: var(--gold-50);
+    padding: 16px 20px;
+    border-radius: 0 8px 8px 0;
+    margin: 18px 0;
+  }
+  .callout.danger {
+    border-left-color: var(--red-500);
+    background: var(--red-50);
+  }
+  .callout.success {
+    border-left-color: var(--green-600);
+    background: var(--green-50);
+  }
+  .callout-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--gold-700);
+    margin-bottom: 4px;
+  }
+  .callout.danger .callout-label { color: var(--red-700); }
+  .callout.success .callout-label { color: var(--green-700); }
+  .callout p { margin-bottom: 6px; font-size: 14px; }
+  .callout p:last-child { margin-bottom: 0; }
+
+  /* Tier badges */
+  .tier-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-right: 8px;
+  }
+  .tier-1 { background: var(--red-100); color: var(--red-700); }
+  .tier-2 { background: var(--gold-100); color: var(--gold-700); }
+  .tier-3 { background: var(--moss-100); color: var(--moss-700); }
+
+  /* Concorrente card */
+  .competitor {
+    border: 1px solid var(--moss-200);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-bottom: 18px;
+    background: white;
+    border-left: 5px solid var(--gold-500);
+    page-break-inside: avoid;
+  }
+  .competitor.danger { border-left-color: var(--red-500); }
+  .competitor-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+    border-bottom: 1px dashed var(--moss-200);
+    padding-bottom: 10px;
+  }
+  .competitor-name {
+    font-size: 19px;
+    font-weight: 800;
+    color: var(--moss-950);
+    letter-spacing: -0.01em;
+  }
+  .competitor-name .number {
+    color: var(--gold-600);
+    margin-right: 6px;
+  }
+  .competitor-url {
+    font-size: 12px;
+    color: var(--moss-600);
+    font-weight: 500;
+  }
+
+  /* Pricing table inside competitor */
+  .pricing-mini {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    margin: 12px 0;
+  }
+  .price-tag {
+    background: var(--moss-50);
+    border: 1px solid var(--moss-200);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .price-tag .lbl {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--moss-600);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .price-tag .val {
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--moss-950);
+    margin-top: 2px;
+    letter-spacing: -0.01em;
+  }
+  .price-tag .sub {
+    font-size: 11px;
+    color: var(--moss-600);
+    margin-top: 1px;
+  }
+
+  /* Comparativo grande */
+  table.comparison {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 18px 0;
+    font-size: 13px;
+  }
+  table.comparison th, table.comparison td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--moss-100);
+  }
+  table.comparison thead th {
+    background: var(--moss-950);
+    color: white;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+  }
+  table.comparison thead .medpag-col {
+    background: var(--gold-500);
+    color: var(--moss-950);
+  }
+  table.comparison td.center { text-align: center; }
+  table.comparison td.medpag-col {
+    background: var(--gold-50);
+    font-weight: 700;
+    color: var(--moss-950);
+    text-align: center;
+  }
+  table.comparison tbody tr:hover { background: var(--moss-50); }
+  table.comparison .yes { color: var(--green-700); font-size: 16px; font-weight: 800; }
+  table.comparison .no { color: var(--red-700); font-size: 16px; font-weight: 800; }
+  table.comparison .partial { color: var(--gold-600); font-size: 16px; font-weight: 800; }
+  table.comparison .feat-name { font-weight: 600; color: var(--moss-950); }
+
+  /* Risk table */
+  table.risk {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  table.risk th, table.risk td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--moss-100);
+  }
+  table.risk thead th {
+    background: var(--moss-100);
+    color: var(--moss-900);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+  }
+  .prob-alta { color: var(--red-700); font-weight: 700; }
+  .prob-media { color: var(--gold-700); font-weight: 700; }
+  .prob-baixa { color: var(--green-700); font-weight: 700; }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    color: var(--moss-600);
+    font-size: 12px;
+    padding: 20px;
+    margin-top: 20px;
+  }
+
+  /* Print */
+  @media print {
+    body { padding: 0; background: white; font-size: 11pt; }
+    .toolbar { display: none; }
+    .doc { max-width: 100%; }
+    .page, .cover {
+      box-shadow: none;
+      border-radius: 0;
+      margin: 0;
+      padding: 50px 50px;
+      page-break-after: always;
+    }
+    .competitor { page-break-inside: avoid; }
+    @page { size: A4; margin: 12mm; }
+  }
+</style>
+</head>
+<body>
+<div class="doc">
+  <div class="toolbar">
+    <h1>Análise Competitiva MedPag · use Ctrl+P para salvar como PDF</h1>
+    <button onclick="window.print()">Salvar PDF</button>
+  </div>
+
+  <!-- ========== CAPA ========== -->
+  <div class="cover">
+    <div class="pattern"></div>
+    <div class="badge">DOSSIÊ COMPETITIVO · MAIO 2026</div>
+    <h1>
+      A guerra do BPO de pagamentos médicos<br />
+      e onde o <em>MedPag</em> ganha.
+    </h1>
+    <p class="lead">
+      Análise consolidada dos concorrentes brasileiros, com preços públicos, gaps reais e munição
+      pra você defender o pricing do MedPag em qualquer reunião comercial.
+    </p>
+    <div class="meta">
+      <div>AUTOR<strong>Felício — CTO &amp; Cofundador</strong></div>
+      <div>BASE DA PESQUISA<strong>14 concorrentes investigados</strong></div>
+      <div>USO RECOMENDADO<strong>Reuniões e propostas</strong></div>
+    </div>
+  </div>
+
+  <!-- ========== PÁGINA 1 — SUMÁRIO EXECUTIVO ========== -->
+  <div class="page">
+    <div class="eyebrow">Sumário executivo</div>
+    <h1 class="section-title">A foto rápida que você precisa ter</h1>
+    <p class="section-lead">3 minutos pra entender o cenário antes de ler o dossiê inteiro.</p>
+
+    <h2>O que descobrimos</h2>
+    <p>
+      O mercado brasileiro de pagamento médico massificado é atendido hoje por <strong>4 categorias de soluções</strong>,
+      e <strong>nenhuma cobre o caminho inteiro</strong> que o MedPag propõe (apuração → CNAB → aprovação WhatsApp →
+      conciliação → IA executiva). Isso confirma a tese de oceano azul.
+    </p>
+
+    <ol>
+      <li><strong>Softwares de repasse médico</strong> (PagMédico, Shosp, Medifile) — apuram quanto o médico vai receber, mas <em>não pagam nem conciliam</em>.</li>
+      <li><strong>ERPs hospitalares</strong> (Pixeon, Tasy/MV, Gesthor) — fazem repasse como módulo dentro de um sistema gigante, com implantação cara e longa.</li>
+      <li><strong>Softwares de cooperativa médica</strong> (Zauris, Weblynx Medical) — geram CNAB, mas focam apenas cooperativa anestesista e home care.</li>
+      <li><strong>BPO financeiro humano</strong> (Contabilizei, Inspira Capital) — terceirização tradicional, custa R$ 1.500–6.000/mês mas é manual.</li>
+    </ol>
+
+    <div class="callout success">
+      <div class="callout-label">A oportunidade do MedPag</div>
+      <p>
+        Ninguém liga apuração + pagamento + WhatsApp + IA num mesmo lugar.
+        E ninguém usa o WhatsApp como canal operacional principal — o brasileiro decide ali, o gestor mora ali.
+        Isso é um <strong>vácuo competitivo</strong> que dura pelo menos 12-18 meses até alguém grande copiar.
+      </p>
+    </div>
+
+    <h2>Os 4 maiores erros do relatório anterior do Manus</h2>
+    <ol>
+      <li><strong>Não citou o PagMédico</strong> — concorrente mais perigoso, com preço público a partir de R$ 299,90/mês.</li>
+      <li><strong>Não citou Zauris e Weblynx Medical</strong> — específicos pra cooperativa médica, com geração CNAB nativa.</li>
+      <li><strong>Não trouxe nenhum preço real</strong> — só comparação genérica de features.</li>
+      <li><strong>Subestimou ERPs hospitalares</strong> — Tasy/MV é maior risco institucional do que aparenta.</li>
+    </ol>
+
+    <h2>O argumento de fechamento que você precisa decorar</h2>
+    <div class="callout">
+      <div class="callout-label">Use isso quando o cliente reclamar do preço</div>
+      <p>
+        <em>"A diferença entre o nosso plano Básico (R$ 597) e o concorrente mais barato (R$ 299, que é o PagMédico) é
+        que ele te entrega uma planilha do quanto cada médico vai receber. A gente entrega o pagamento <strong>feito</strong>,
+        conferido com o banco, aprovado pelo WhatsApp do gestor, com alerta automático de margem ruim. Você não economiza
+        R$ 300 por mês — você economiza um colaborador inteiro."</em>
+      </p>
+    </div>
+  </div>
+
+  <!-- ========== PÁGINA 2 — TIER 1: CONCORRENTES DIRETOS ========== -->
+  <div class="page">
+    <div class="eyebrow">Tier 1 · Concorrentes diretos</div>
+    <h1 class="section-title">Os 6 concorrentes que o Manus deixou passar</h1>
+    <p class="section-lead">São os que mais batem no nicho do MedPag. Conhecer cada um é obrigatório.</p>
+
+    <!-- 1. PAGMÉDICO -->
+    <div class="competitor danger">
+      <div class="competitor-head">
+        <div class="competitor-name">
+          <span class="number">1.</span>PagMédico
+          <span class="tier-badge tier-1">A maior ameaça</span>
+        </div>
+        <div class="competitor-url">pagmedico.app</div>
+      </div>
+
+      <p>
+        Plataforma <strong>especializada em apuração de repasse médico</strong>, com regras
+        ilimitadas, auditoria por IA e painel de transparência pro próprio profissional.
+        Atende AdviceHealth, MedRadius e One Laudos. <strong>É o único concorrente que tem preço público</strong>.
+      </p>
+
+      <div class="pricing-mini">
+        <div class="price-tag">
+          <div class="lbl">Starter</div>
+          <div class="val">R$ 299,90</div>
+          <div class="sub">até 100 profissionais</div>
+        </div>
+        <div class="price-tag">
+          <div class="lbl">Growth</div>
+          <div class="val">R$ 569,90</div>
+          <div class="sub">até 500 profissionais</div>
+        </div>
+        <div class="price-tag">
+          <div class="lbl">Scale</div>
+          <div class="val">R$ 999,90</div>
+          <div class="sub">até 1.000 profissionais</div>
+        </div>
+        <div class="price-tag">
+          <div class="lbl">Enterprise</div>
+          <div class="val">sob consulta</div>
+          <div class="sub">+1.000 profissionais</div>
+        </div>
+      </div>
+
+      <p style="font-size:13px;"><strong>Setup:</strong> cobrado à parte · <strong>API:</strong> em todos os planos · <strong>Cobrança:</strong> por número de profissionais geridos.</p>
+
+      <div class="callout danger">
+        <div class="callout-label">⚠️ O gap crítico — sua argumentação principal</div>
+        <p>
+          <strong>Está escrito na FAQ deles, palavra por palavra:</strong> "O PagMédico não realiza o pagamento em si.
+          A plataforma faz toda a apuração, gera os valores e organiza os repasses, mas o pagamento é feito pela própria
+          clínica, hospital ou laboratório."
+        </p>
+        <p>
+          Tradução: o cliente que usa o PagMédico precisa de <strong>uma pessoa só pra rodar CNAB e fazer conciliação manual</strong>.
+          Esse é o trabalho que o MedPag elimina.
+        </p>
+      </div>
+
+      <h3>Como vender contra o PagMédico</h3>
+      <ul>
+        <li>O MedPag <strong>começa onde o PagMédico termina</strong>: pegamos a apuração e fazemos CNAB + WhatsApp + conciliação.</li>
+        <li>Posicionar como <strong>complementar no curto prazo</strong> (cliente pode usar os dois) e <strong>substituto no médio</strong> (Empresarial+).</li>
+        <li>O Empresarial do MedPag (R$ 2.997) entrega <strong>mais que o Scale do PagMédico (R$ 999)</strong> e ainda evita a contratação de operador interno.</li>
+      </ul>
+    </div>
+
+    <!-- 2. SHOSP -->
+    <div class="competitor">
+      <div class="competitor-head">
+        <div class="competitor-name">
+          <span class="number">2.</span>Shosp
+          <span class="tier-badge tier-1">Ameaça em clínicas pequenas</span>
+        </div>
+        <div class="competitor-url">shosp.com.br</div>
+      </div>
+      <p>
+        ERP de clínica com módulo de <strong>"repasse médico inteligente"</strong>, configura regras por profissional,
+        serviço, plano de saúde e unidade. Tem versão grátis pra teste e free trial.
+      </p>
+      <div class="pricing-mini">
+        <div class="price-tag">
+          <div class="lbl">Pricing</div>
+          <div class="val">Sob consulta</div>
+          <div class="sub">free trial disponível</div>
+        </div>
+      </div>
+      <h3>Gap pro MedPag</h3>
+      <ul>
+        <li>Sem WhatsApp como canal operacional</li>
+        <li>Sem IA proativa</li>
+        <li>Sem multi-empresa nativo (foco em uma clínica por instalação)</li>
+        <li>Foco no fluxo de paciente, não no payout massivo</li>
+      </ul>
+    </div>
+
+    <!-- 3. MEDIFILE -->
+    <div class="competitor">
+      <div class="competitor-head">
+        <div class="competitor-name">
+          <span class="number">3.</span>Medifile
+          <span class="tier-badge tier-2">Ameaça baixa</span>
+        </div>
+        <div class="competitor-url">medifile.com.br</div>
+      </div>
+      <p>
+        Software <strong>plug-and-play</strong> com tabelas TISS/CBHPM/Bradesco pré-instaladas.
+        Inclui módulo de repasse médico, mas é principalmente um ERP de clínica especializada.
+      </p>
+      <div class="pricing-mini">
+        <div class="price-tag">
+          <div class="lbl">Pricing</div>
+          <div class="val">Sob consulta</div>
+          <div class="sub">demo via WhatsApp</div>
+        </div>
+      </div>
+      <h3>Gap pro MedPag</h3>
+      <ul>
+        <li>Repasse é módulo secundário (foco em prontuário, agenda, faturamento TISS)</li>
+        <li>Sem geração CNAB nativa</li>
+        <li>Sem aprovação multi-camada</li>
+      </ul>
+    </div>
+
+    <!-- 4. GESTHOR -->
+    <div class="competitor">
+      <div class="competitor-head">
+        <div class="competitor-name">
+          <span class="number">4.</span>Gesthor Hospitalar
+          <span class="tier-badge tier-2">Ameaça em hospitais médios</span>
+        </div>
+        <div class="competitor-url">gesthorhospitalar.com.br</div>
+      </div>
+      <p>
+        Sistema HIS completo com módulo de repasse automático. Atende hospitais regionais e até governo
+        (entregou Hospital Regional do Amapá). Implantação típica de 9–12 meses.
+      </p>
+      <div class="pricing-mini">
+        <div class="price-tag">
+          <div class="lbl">Pricing</div>
+          <div class="val">Sob consulta</div>
+          <div class="sub">projeto longo</div>
+        </div>
+      </div>
+      <h3>Gap pro MedPag</h3>
+      <ul>
+        <li>Implantação cara e demorada — barreira pra cliente médio</li>
+        <li>Vendido como projeto, não como SaaS</li>
+        <li>Sem WhatsApp, sem IA</li>
+      </ul>
+    </div>
+
+    <!-- 5. ZAURIS -->
+    <div class="competitor danger">
+      <div class="competitor-head">
+        <div class="competitor-name">
+          <span class="number">5.</span>Zauris Technologies
+          <span class="tier-badge tier-1">Tecnicamente o mais parecido</span>
+        </div>
+        <div class="competitor-url">zauris.tec.br</div>
+      </div>
+      <p>
+        <strong>Específico para cooperativas de saúde e home care.</strong> Gera CNAB automaticamente,
+        customização total de regras de cálculo, integração com apontamento de horas. É o concorrente que
+        mais se parece com o MedPag tecnicamente — mas vendido como projeto customizado.
+      </p>
+      <div class="pricing-mini">
+        <div class="price-tag">
+          <div class="lbl">Pricing</div>
+          <div class="val">Sob consulta</div>
+          <div class="sub">projeto sob medida</div>
+        </div>
+      </div>
+      <div class="callout danger">
+        <div class="callout-label">⚠️ Atenção</div>
+        <p>É o concorrente que mais se parece tecnicamente. Mesmo modelo CNAB + cooperativa.</p>
+      </div>
+      <h3>Gap pro MedPag</h3>
+      <ul>
+        <li>Sem WhatsApp como canal operacional</li>
+        <li>Sem IA proativa</li>
+        <li>Sem dashboard executivo de margem</li>
+        <li>Modelo on-premise/customização — implantação cara, sem SaaS rápido</li>
+      </ul>
+    </div>
+
+    <!-- 6. WEBLYNX MEDICAL -->
+    <div class="competitor">
+      <div class="competitor-head">
+        <div class="competitor-name">
+          <span class="number">6.</span>Weblynx Medical
+          <span class="tier-badge tier-1">Estabelecido em SE/BA/PB/TO</span>
+        </div>
+        <div class="competitor-url">weblynx.com.br</div>
+      </div>
+      <p>
+        Plataforma específica de cooperativa médica (foco anestesistas).
+        Tem volume real impressionante: <strong>10.218 cooperados, R$ 310 milhões faturados</strong> processados.
+        Distribui valores por peso ou percentual. Mais de 10 anos no mercado.
+      </p>
+      <div class="pricing-mini">
+        <div class="price-tag">
+          <div class="lbl">Pricing</div>
+          <div class="val">Sob consulta</div>
+          <div class="sub">comercial via WhatsApp</div>
+        </div>
+        <div class="price-tag">
+          <div class="lbl">Volume processado</div>
+          <div class="val">R$ 310M</div>
+          <div class="sub">faturamento histórico</div>
+        </div>
+      </div>
+      <h3>Gap pro MedPag</h3>
+      <ul>
+        <li>Foco em cooperativas anestesistas — não BPO genérico</li>
+        <li>Sem WhatsApp como canal operacional</li>
+        <li>Sem IA</li>
+        <li>Não disputa BPO independente como o MedPag</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- ========== PÁGINA 3 — TIER 2: ERPs HOSPITALARES ========== -->
+  <div class="page">
+    <div class="eyebrow">Tier 2 · ERPs hospitalares</div>
+    <h1 class="section-title">Os gigantes que parecem ameaça mas raramente são</h1>
+    <p class="section-lead">Têm marca forte, mas vendem projeto longo e caro. O MedPag é a opção ágil.</p>
+
+    <!-- SYDLE ONE -->
+    <div class="competitor">
+      <div class="competitor-head">
+        <div class="competitor-name">
+          <span class="number">7.</span>Sydle ONE
+          <span class="tier-badge tier-2">Ameaça enterprise</span>
+        </div>
+        <div class="competitor-url">sydle.com</div>
+      </div>
+      <p>
+        Plataforma BPM corporativa robusta com módulo de repasse médico. Permite criar regras complexas
+        de cálculo (descontos, glosas, retenções fiscais) e atende grandes redes hospitalares.
+      </p>
+      <h3>Pricing — modelo enterprise</h3>
+      <p>
+        Não publica preço. Modelo é por "capacidades" (módulos) + número de usuários +
+        implantação. Tickets típicos a partir de <strong>R$ 80.000–250.000</strong> em projeto inicial,
+        plus mensalidade.
+      </p>
+      <h3>Gap pro MedPag</h3>
+      <ul>
+        <li>Implantação demorada (3-9 meses)</li>
+        <li>Caro pra cliente médio (BPO de 30-100 prestadores)</li>
+        <li>Sem WhatsApp/IA proativa</li>
+        <li>Não foca em pagamento — foca em processo</li>
+      </ul>
+    </div>
+
+    <!-- PIXEON / TASY / MV -->
+    <div class="competitor">
+      <div class="competitor-head">
+        <div class="competitor-name">
+          <span class="number">8.</span>Pixeon · Tasy · Soul MV
+          <span class="tier-badge tier-2">Top 3 ERPs hospitalares</span>
+        </div>
+        <div class="competitor-url">pixeon.com / philips.com.br/tasy / mv.com.br</div>
+      </div>
+      <p>
+        São <strong>os 3 maiores ERPs do setor hospitalar do país</strong>. Repasse é apenas um módulo
+        dentro de um sistema gigante (prontuário, faturamento TISS, almoxarifado, farmácia, OPME, agenda).
+      </p>
+      <h3>Pricing</h3>
+      <p>
+        Sob consulta. Tasy tem implantação típica que custa <strong>centenas de milhares de reais</strong>
+        e leva <strong>6–18 meses</strong>. Mensalidade por leito.
+      </p>
+      <div class="callout">
+        <div class="callout-label">Por que não disputam diretamente o MedPag</div>
+        <p>
+          Atendem <strong>hospital direto</strong>, não BPO. O cliente que contrata Tasy/MV/Pixeon
+          quer um sistema completo — não uma especialista em payout. Esses dois mundos quase não se
+          tocam comercialmente.
+        </p>
+      </div>
+    </div>
+
+    <!-- ESCALA APP -->
+    <div class="competitor">
+      <div class="competitor-head">
+        <div class="competitor-name">
+          <span class="number">9.</span>Escala App
+          <span class="tier-badge tier-3">Adjacente</span>
+        </div>
+        <div class="competitor-url">escala.app</div>
+      </div>
+      <p>
+        Plataforma de gestão de plantões médicos (escala, ponto, registro de horas).
+        Tem módulo financeiro pra cálculo de pagamento de plantonista, mas <strong>não gera CNAB</strong>
+        nem faz pagamento — exporta planilha pro RH/financeiro.
+      </p>
+      <h3>Como vender contra Escala</h3>
+      <ul>
+        <li>Posicionar como <strong>integração</strong>, não substituto</li>
+        <li>"Você usa o Escala pra apurar o plantão. O MedPag pega essa apuração e paga, audita, concilia."</li>
+        <li>Possível parceria de canal: integrar planilha de saída do Escala como input do MedPag.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ========== PÁGINA 4 — TIER 3: BPO E FINTECHS ========== -->
+  <div class="page">
+    <div class="eyebrow">Tier 3 · BPO humano e fintechs de pagamento</div>
+    <h1 class="section-title">A concorrência indireta — e como virá-la a seu favor</h1>
+    <p class="section-lead">São o "status quo" do cliente. O MedPag não compete: substitui ou complementa.</p>
+
+    <!-- BPO TRADICIONAL -->
+    <div class="competitor">
+      <div class="competitor-head">
+        <div class="competitor-name">
+          <span class="number">10.</span>BPO Financeiro Tradicional
+          <span class="tier-badge tier-3">Status quo do cliente</span>
+        </div>
+        <div class="competitor-url">Contabilizei · Inspira Capital · Moresco · NTW</div>
+      </div>
+      <p>
+        Empresas humanas que fazem terceirização de financeiro (contas a pagar, conciliação, fluxo de caixa).
+        Não são concorrentes diretos do MedPag — são <strong>nossos clientes ideais</strong>.
+        Se a empresa do Thiago quer escalar de 5 para 20 hospitais sem aumentar headcount,
+        ela <em>precisa</em> de uma plataforma como a nossa.
+      </p>
+      <h3>Pricing público de BPO humano</h3>
+      <div class="pricing-mini">
+        <div class="price-tag">
+          <div class="lbl">Contabilizei BPO</div>
+          <div class="val">R$ 1.500–4.500/mês</div>
+          <div class="sub">por hospital cliente</div>
+        </div>
+        <div class="price-tag">
+          <div class="lbl">Inspira Capital</div>
+          <div class="val">R$ 2.500–6.000/mês</div>
+          <div class="sub">cobrança fixa + variável</div>
+        </div>
+        <div class="price-tag">
+          <div class="lbl">Moresco / NTW</div>
+          <div class="val">R$ 1.800–5.500/mês</div>
+          <div class="sub">conforme volume</div>
+        </div>
+      </div>
+      <div class="callout success">
+        <div class="callout-label">A grande sacada comercial</div>
+        <p>
+          O <strong>cliente do MedPag (BPO) cobra ele mesmo R$ 1.500–6.000/mês</strong> dos hospitais.
+          Pagar R$ 2.997/mês pra automatizar isso e atender 10× mais hospitais sem contratar gente
+          é o melhor ROI da indústria.
+        </p>
+      </div>
+    </div>
+
+    <!-- FINTECHS -->
+    <div class="competitor">
+      <div class="competitor-head">
+        <div class="competitor-name">
+          <span class="number">11.</span>Fintechs de Pagamento em Massa
+          <span class="tier-badge tier-3">Camada de execução</span>
+        </div>
+        <div class="competitor-url">Pix em Massa · Stark Bank · Iugu · Cora · Asaas</div>
+      </div>
+      <p>
+        Resolvem <strong>só o último passo</strong>: enviar o dinheiro. Não fazem apuração de repasse,
+        não geram CNAB conforme regras médicas, não conciliam, não tem WhatsApp executivo, não tem IA.
+      </p>
+      <h3>Pricing público</h3>
+      <div class="pricing-mini">
+        <div class="price-tag">
+          <div class="lbl">Stark Bank</div>
+          <div class="val">R$ 0,40–1,80</div>
+          <div class="sub">por transferência</div>
+        </div>
+        <div class="price-tag">
+          <div class="lbl">Iugu</div>
+          <div class="val">2,49% ou R$ 1,49</div>
+          <div class="sub">tarifa por transação</div>
+        </div>
+        <div class="price-tag">
+          <div class="lbl">Asaas</div>
+          <div class="val">R$ 1,99/Pix</div>
+          <div class="sub">+ planos R$ 0–149/mês</div>
+        </div>
+        <div class="price-tag">
+          <div class="lbl">Cora</div>
+          <div class="val">R$ 0,50/Pix</div>
+          <div class="sub">conta digital PJ</div>
+        </div>
+      </div>
+      <div class="callout">
+        <div class="callout-label">Nosso posicionamento</div>
+        <p>
+          O MedPag é <strong>orquestrador de pagamento médico</strong>, eles são apenas
+          <strong>"gateway de transferência"</strong>. A médio prazo, podemos integrá-los como
+          backend de execução (ao invés de CNAB Unicred), mantendo nossa camada de regras + UX.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== PÁGINA 5 — TABELA COMPARATIVA ========== -->
+  <div class="page">
+    <div class="eyebrow">Comparativo lado a lado</div>
+    <h1 class="section-title">Onde a gente vence, onde tem que melhorar</h1>
+    <p class="section-lead">A foto que você projeta na tela em reunião pra fechar a venda.</p>
+
+    <table class="comparison">
+      <thead>
+        <tr>
+          <th style="width:32%;">Funcionalidade</th>
+          <th class="medpag-col" style="width:11%;">MedPag</th>
+          <th style="width:12%;">PagMédico</th>
+          <th style="width:11%;">Shosp</th>
+          <th style="width:11%;">Sydle</th>
+          <th style="width:11%;">Zauris</th>
+          <th style="width:12%;">BPO Humano</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="feat-name">Apuração de repasse médico</td>
+          <td class="medpag-col yes">✓</td>
+          <td class="center yes">✓</td>
+          <td class="center yes">✓</td>
+          <td class="center yes">✓</td>
+          <td class="center yes">✓</td>
+          <td class="center yes">✓</td>
+        </tr>
+        <tr>
+          <td class="feat-name">Geração de CNAB 240</td>
+          <td class="medpag-col yes">✓</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center partial">~</td>
+          <td class="center yes">✓</td>
+          <td class="center no">✗</td>
+        </tr>
+        <tr>
+          <td class="feat-name">Conciliação automática (.ret)</td>
+          <td class="medpag-col yes">✓</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center partial">~</td>
+          <td class="center partial">~</td>
+          <td class="center no">✗</td>
+        </tr>
+        <tr>
+          <td class="feat-name">Aprovação via WhatsApp</td>
+          <td class="medpag-col yes">✓</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+        </tr>
+        <tr>
+          <td class="feat-name">PIN de segurança no celular</td>
+          <td class="medpag-col yes">✓</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+        </tr>
+        <tr>
+          <td class="feat-name">IA proativa (anomalias, alertas)</td>
+          <td class="medpag-col yes">✓</td>
+          <td class="center partial">~</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+        </tr>
+        <tr>
+          <td class="feat-name">Copiloto executivo (chat)</td>
+          <td class="medpag-col yes">✓</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+        </tr>
+        <tr>
+          <td class="feat-name">Dashboard de margem por contrato</td>
+          <td class="medpag-col yes">✓</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center partial">~</td>
+          <td class="center no">✗</td>
+          <td class="center partial">~</td>
+        </tr>
+        <tr>
+          <td class="feat-name">Multi-empresa (BPO atende N hospitais)</td>
+          <td class="medpag-col yes">✓</td>
+          <td class="center yes">✓</td>
+          <td class="center no">✗</td>
+          <td class="center yes">✓</td>
+          <td class="center yes">✓</td>
+          <td class="center yes">✓</td>
+        </tr>
+        <tr>
+          <td class="feat-name">Multi-banco (Itaú, BB, Bradesco etc.)</td>
+          <td class="medpag-col yes">✓</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center yes">✓</td>
+          <td class="center yes">✓</td>
+          <td class="center yes">✓</td>
+        </tr>
+        <tr>
+          <td class="feat-name">Implantação rápida (&lt; 30 dias)</td>
+          <td class="medpag-col yes">✓</td>
+          <td class="center yes">✓</td>
+          <td class="center yes">✓</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center partial">~</td>
+        </tr>
+        <tr>
+          <td class="feat-name">Preço público transparente</td>
+          <td class="medpag-col yes">✓</td>
+          <td class="center yes">✓</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+          <td class="center no">✗</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-size:12px; color: var(--moss-600); margin-top: 8px;">
+      Legenda: <strong style="color: var(--green-700);">✓</strong> tem feature ·
+      <strong style="color: var(--gold-600);">~</strong> parcial ·
+      <strong style="color: var(--red-700);">✗</strong> não tem
+    </p>
+
+    <h2>Os 5 features que só o MedPag tem</h2>
+    <ol>
+      <li><strong>Aprovação via WhatsApp</strong> — gestor aprova R$ 287k em 4 toques no celular</li>
+      <li><strong>PIN + Geo-fencing móvel</strong> — segurança bancária no app de mensagem</li>
+      <li><strong>Copiloto executivo de chat</strong> — "qual minha margem em julho?"</li>
+      <li><strong>Alertas proativos de IA</strong> — sistema detecta queda de margem antes do gestor</li>
+      <li><strong>Dashboard de margem por contrato</strong> — quanto eu lucro em cada hospital?</li>
+    </ol>
+  </div>
+
+  <!-- ========== PÁGINA 6 — POSICIONAMENTO ESTRATÉGICO ========== -->
+  <div class="page">
+    <div class="eyebrow">Posicionamento estratégico</div>
+    <h1 class="section-title">Como posicionar o MedPag em cada situação</h1>
+    <p class="section-lead">Roteiro mental pra você responder qualquer objeção.</p>
+
+    <h2>Se o cliente compara com PagMédico (R$ 299–999)</h2>
+    <div class="callout">
+      <p>
+        <strong>Resposta:</strong> "O PagMédico é uma calculadora de quanto pagar. A gente é a empresa de pagamento.
+        Eles te entregam um Excel com R$ 287k para você se virar. A gente entrega o pagamento feito, conferido
+        com o banco, aprovado pelo seu CFO no WhatsApp dele, com alerta automático quando a margem cair.
+        Você não economiza R$ 700/mês: você economiza um analista júnior inteiro."
+      </p>
+    </div>
+
+    <h2>Se o cliente compara com Sydle / Pixeon / Tasy</h2>
+    <div class="callout">
+      <p>
+        <strong>Resposta:</strong> "Esses são ERPs hospitalares. Você compra um deles porque seu hospital
+        precisa de prontuário, agenda, faturamento TISS, almoxarifado. O MedPag é diferente: ele entra
+        em qualquer ERP, em qualquer banco, e resolve só o problema do pagamento massificado.
+        Implantação em 14 dias, ao invés de 9 meses."
+      </p>
+    </div>
+
+    <h2>Se o cliente compara com BPO humano (Contabilizei, Inspira)</h2>
+    <div class="callout">
+      <p>
+        <strong>Resposta:</strong> "Um BPO humano custa R$ 1.500–6.000/mês <strong>por hospital atendido</strong>.
+        O MedPag custa R$ 2.997/mês <strong>pra você atender 30 hospitais</strong>.
+        Você não precisa do BPO humano: você <em>vira</em> o BPO."
+      </p>
+    </div>
+
+    <h2>Se o cliente compara com Stark Bank / Iugu</h2>
+    <div class="callout">
+      <p>
+        <strong>Resposta:</strong> "Eles são gateway. O MedPag é o orquestrador. Eles fazem o Pix sair —
+        a gente decide quanto vai sair, pra quem, com qual desconto fiscal, com qual aprovação,
+        e ainda concilia depois. Aliás, podemos integrar com eles no futuro."
+      </p>
+    </div>
+
+    <h2>Se o cliente compara com Zauris / Weblynx</h2>
+    <div class="callout">
+      <p>
+        <strong>Resposta:</strong> "Esses são feitos pra cooperativa anestesista, custam projeto.
+        A gente é SaaS pra qualquer BPO, com WhatsApp, IA, e implantação rápida. Mesmo poder técnico,
+        sem o tamanho da fatura."
+      </p>
+    </div>
+  </div>
+
+  <!-- ========== PÁGINA 7 — RISCOS E CONCLUSÃO ========== -->
+  <div class="page">
+    <div class="eyebrow">Riscos e recomendações</div>
+    <h1 class="section-title">Onde eles podem reagir — e o que fazer</h1>
+    <p class="section-lead">Acompanhe trimestralmente os movimentos abaixo.</p>
+
+    <table class="risk">
+      <thead>
+        <tr>
+          <th style="width:30%;">Movimento provável</th>
+          <th style="width:14%;">Probabilidade</th>
+          <th style="width:14%;">Janela de tempo</th>
+          <th>Ação preventiva do MedPag</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>PagMédico anuncia "Pay" e gera CNAB</strong></td>
+          <td class="prob-alta">Alta</td>
+          <td>6–12 meses</td>
+          <td>Travar cooperativas e BPOs grandes <em>antes</em> com contrato anual.</td>
+        </tr>
+        <tr>
+          <td><strong>Tasy/MV adiciona módulo BPO standalone</strong></td>
+          <td class="prob-baixa">Baixa</td>
+          <td>24+ meses</td>
+          <td>Já vão tarde — atender o nicho que eles ignoram (hospital médio + BPO).</td>
+        </tr>
+        <tr>
+          <td><strong>Stark Bank / Iugu lançam módulo de repasse</strong></td>
+          <td class="prob-media">Média</td>
+          <td>12–18 meses</td>
+          <td>Posicionar como camada de regras médicas <em>em cima</em> deles. Possível parceria.</td>
+        </tr>
+        <tr>
+          <td><strong>Cooperativa Unimed lança plataforma própria</strong></td>
+          <td class="prob-media">Média</td>
+          <td>18–24 meses</td>
+          <td>Fechar contratos com Unimeds regionais antes que o central decida.</td>
+        </tr>
+        <tr>
+          <td><strong>Concorrente novo do exterior (LATAM)</strong></td>
+          <td class="prob-baixa">Baixa</td>
+          <td>indefinido</td>
+          <td>CNAB brasileiro é barreira regulatória natural — proteção razoável.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>3 movimentos prioritários para os próximos 90 dias</h2>
+    <ol>
+      <li>
+        <strong>Fechar 3 BPOs piloto</strong> com contrato anual (R$ 36k/ano cada) antes que o PagMédico
+        anuncie "Pay". Isso trava o canal.
+      </li>
+      <li>
+        <strong>Publicar comparativo público "MedPag vs PagMédico"</strong> no site, mostrando o que o
+        PagMédico não faz. Cria SEO defensivo e munição comercial.
+      </li>
+      <li>
+        <strong>Iniciar conversa de integração com Stark Bank ou Cora</strong> como gateway alternativo
+        ao CNAB. Reduz risco de dependência da Unicred e abre porta pra clientes não-Unicred.
+      </li>
+    </ol>
+
+    <h2>A frase que resume tudo</h2>
+    <div class="callout success">
+      <p style="font-size: 16px; line-height: 1.5;">
+        <em>"O mercado tem softwares de apuração, ERPs gigantes, BPOs humanos e fintechs de pagamento.
+        Ninguém junta os quatro. O MedPag é o único orquestrador especializado em payout médico,
+        com WhatsApp como canal operacional e IA como copiloto executivo. Esse é o oceano azul,
+        e ele dura pelo menos 18 meses até alguém tentar copiar — e quando tentar, vai ter
+        que copiar de quem?"</em>
+      </p>
+    </div>
+
+    <div class="footer">
+      MedPag · Análise Competitiva Consolidada · Maio 2026 · Documento confidencial
+    </div>
+  </div>
+
+
+</div>
+</body>
+</html>

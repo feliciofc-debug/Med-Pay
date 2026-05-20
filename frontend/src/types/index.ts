@@ -1,0 +1,202 @@
+// Tipos compartilhados — espelham os schemas Pydantic do backend.
+
+export type UserRole = "ADMIN" | "APROVADOR" | "OPERADOR";
+
+export interface User {
+  id: string;
+  email: string;
+  nome: string;
+  role: UserRole;
+  ativo: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export type StatusLote =
+  | "RECEBIDO"
+  | "PROCESSANDO"
+  | "AGUARDANDO_REVISAO"
+  | "APROVADO"
+  | "ENVIADO_BANCO"
+  | "CONCILIADO"
+  | "REJEITADO"
+  | "ERRO";
+
+export type StatusPagamento =
+  | "VALIDO"
+  | "CORRIGIVEL"
+  | "BLOQUEADO"
+  | "APROVADO"
+  | "REJEITADO"
+  | "PAGO"
+  | "NAO_PAGO";
+
+export interface ClienteResumo {
+  id: string;
+  nome: string;
+  cnpj: string | null;
+}
+
+export interface Cliente extends ClienteResumo {
+  email_contato: string | null;
+  ativo: boolean;
+}
+
+export interface LoteResumo {
+  id: string;
+  cliente: ClienteResumo;
+  nome_arquivo: string;
+  referencia: string | null;
+  status: StatusLote;
+  total_pagamentos: number;
+  total_validos: number;
+  total_corrigiveis: number;
+  total_bloqueados: number;
+  valor_total_centavos: number;
+  created_at: string;
+  aprovado_at: string | null;
+}
+
+export interface Pagamento {
+  id: string;
+  linha_planilha: number;
+  nome: string;
+  cpf_mascarado: string;
+  cpf_sugerido: string | null;
+  cpf_original: string | null;
+  banco_codigo: string | null;
+  conta_mascarada: string | null;
+  valor_centavos: number;
+  status: StatusPagamento;
+  codigos_erro: string | null;
+  mensagens_validacao: string | null;
+}
+
+export interface LoteDetalhe extends LoteResumo {
+  hash_conteudo: string;
+  hash_arquivo_cnab: string | null;
+  pagamentos: Pagamento[];
+}
+
+export interface AprovacaoResponse {
+  success: boolean;
+  lote_id: string;
+  nome_arquivo: string;
+  hash_arquivo: string;
+  quantidade_pagamentos: number;
+  valor_total_centavos: number;
+  download_url: string;
+}
+
+// =============================================================================
+// Dashboard Executivo
+// =============================================================================
+
+export type SaudeContrato = "saudavel" | "atencao" | "critico";
+
+export interface ContratoFinanceiro {
+  cliente_id: string;
+  cliente_nome: string;
+  receita_mes_centavos: number;
+  custo_mes_centavos: number;
+  margem_pct: number;
+  margem_delta_pp: number; // pontos percentuais vs mês anterior
+  saude: SaudeContrato;
+  lotes_mes: number;
+  pagamentos_mes: number;
+  ultima_atividade: string; // ISO
+}
+
+export interface ProjecaoMensal {
+  mes: string; // ex.: "Jan/26"
+  receita_centavos: number;
+  meta_centavos: number;
+  realizado: boolean;
+}
+
+export interface KPIOperacional {
+  lotes_processados: number;
+  lotes_aguardando: number;
+  tempo_medio_processamento_min: number;
+  taxa_erro_pct: number;
+  pagamentos_mes: number;
+  conciliados_pct: number;
+}
+
+export type AlertaSeveridade = "critico" | "atencao" | "info";
+
+export interface Alerta {
+  id: string;
+  severidade: AlertaSeveridade;
+  titulo: string;
+  descricao: string;
+  cliente_nome: string | null;
+  acao_sugerida: string | null;
+  created_at: string;
+}
+
+export interface RenovacaoProxima {
+  cliente_id: string;
+  cliente_nome: string;
+  vencimento: string; // ISO
+  dias_restantes: number;
+  margem_atual_pct: number;
+  recomendacao: "manter" | "reajustar" | "renegociar_urgente";
+  reajuste_sugerido_pct: number | null;
+}
+
+// =============================================================================
+// Contratos — configuração comercial editável pelo BPO
+// =============================================================================
+
+/**
+ * Configuração de cobrança. Cada campo é INDEPENDENTE — o BPO pode
+ * combinar livremente: % sobre volume + mensalidade, ou só por pagamento, etc.
+ * Campos zerados não entram no cálculo.
+ */
+export interface ConfiguracaoCobranca {
+  /** Valor fixo cobrado todo mês (independente de volume). Em centavos. */
+  mensalidade_centavos: number;
+  /** Cobrança variável por pagamento processado. Em centavos. */
+  taxa_por_pagamento_centavos: number;
+  /** Percentual cobrado sobre o volume movimentado. Em base points (120 = 1,20%). */
+  percentual_volume_bp: number;
+  /** Volume médio mensal estimado processado pra esse cliente. Em centavos. */
+  volume_medio_mensal_centavos: number;
+}
+
+/** Configuração de custo operacional do BPO em cima desse contrato. */
+export interface ConfiguracaoCusto {
+  /** Custo fixo mensal (mão de obra dedicada, etc). Em centavos. */
+  custo_fixo_mensal_centavos: number;
+  /** Custo variável como % da receita (banco, infra). */
+  custo_variavel_pct: number;
+}
+
+export interface ContratoConfig {
+  cliente_id: string;
+  cliente_nome: string;
+  cliente_cnpj: string | null;
+  cobranca: ConfiguracaoCobranca;
+  custo: ConfiguracaoCusto;
+  meta_mensal_centavos: number;
+  vencimento: string; // ISO
+  ativo: boolean;
+}
+
+export interface DashboardExecutivo {
+  periodo: string; // ex.: "Junho/2026"
+  receita_mes_centavos: number;
+  custo_mes_centavos: number;
+  lucro_mes_centavos: number;
+  margem_media_pct: number;
+  lucro_delta_pct: number; // vs mês anterior
+  meta_mes_centavos: number;
+  meta_atingida_pct: number;
+
+  contratos: ContratoFinanceiro[];
+  projecao_12m: ProjecaoMensal[];
+  kpis: KPIOperacional;
+  alertas: Alerta[];
+  renovacoes: RenovacaoProxima[];
+}

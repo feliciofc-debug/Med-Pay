@@ -1,0 +1,456 @@
+# MedPag — Regras do Projeto para o Cursor
+
+> **IMPORTANTE PRO CURSOR:** Este arquivo é a fonte de verdade do projeto. Releia antes de qualquer mudança significativa. Quando houver conflito entre o que o usuário pede e estas regras, **pergunte antes de assumir**.
+
+---
+
+## 1. Contexto do Negócio
+
+**Quem usa:** Empresas que **distribuem pagamentos em massa** de hospitais, clínicas e ONGs para médicos e prestadores PJ da área da saúde.
+
+**Fluxo atual (manual e doloroso):**
+1. Hospital/clínica envia planilha Excel com lista de pagamentos (CPF, nome, valor, banco, conta)
+2. Operador da empresa intermediadora (ex: Thiago) limpa os dados sujos manualmente
+3. Operador digita pagamento por pagamento no internet banking
+4. Pagamentos errados geram retrabalho, estorno e desgaste
+
+**O que o MedPag faz:**
+1. Recebe planilhas (email ou upload)
+2. Identifica o cliente automaticamente
+3. Valida e sugere correção de CPFs e dados bancários
+4. Aprovador único (Thiago, dono da empresa) revisa e aprova no dashboard
+5. Sistema gera arquivo **CNAB 240** pronto pra upload no internet banking
+6. Lê arquivo de retorno e concilia pagamentos
+
+**Volume típico:** 500 a 5.000 pagamentos por mês, distribuídos em 5 a 30 lotes.
+
+**Banco inicial:** Unicred (banco cooperativo médico). Layout CNAB 240 padrão FEBRABAN com variações específicas Unicred.
+
+---
+
+## 2. Stack Técnica (NÃO MUDAR sem discussão)
+
+**Backend:**
+- Python 3.11+
+- FastAPI 0.115+
+- SQLAlchemy 2.0 (modo assíncrono)
+- Alembic (migrations)
+- Pydantic v2 (schemas)
+- Celery 5+ (workers)
+- PostgreSQL 15+
+- Redis 7+
+
+**Frontend:**
+- React 18 + TypeScript (strict mode)
+- Vite 5+
+- TailwindCSS 3
+- shadcn/ui (componentes)
+- TanStack Query (estado servidor)
+- React Hook Form + Zod (formulários)
+- Lucide React (ícones)
+
+**Validações brasileiras:**
+- `validate-docbr` (CPF/CNPJ)
+- Implementação própria de CNAB 240 (não usar libs antigas mal mantidas)
+
+**Auth:** JWT com refresh tokens. Cookie httpOnly em produção.
+
+**Infra:**
+- Docker Compose (dev)
+- VPS simples (Hetzner/DigitalOcean) com docker-compose em prod
+- Caddy ou Traefik como reverse proxy + SSL automático
+
+---
+
+## 3. Princípios Inegociáveis
+
+### 3.1 Segurança financeira é prioridade máxima
+
+- CPFs e dados bancários **criptografados em repouso** (campo a campo, AES-256 via `cryptography.Fernet`)
+- TLS obrigatório em produção
+- Auditoria de TODA operação financeira (quem, quando, o quê, hash)
+- Logs **NUNCA** contém CPF ou conta em plaintext — sempre mascarado (`XXX.XXX.XXX-12`)
+
+### 3.2 Idempotência sempre
+
+- Mesmo arquivo enviado 2x **não gera 2 remessas**
+- Hash SHA-256 do conteúdo do lote como chave de idempotência
+- Tentativa de reenviar lote já processado → retorna o resultado anterior, não processa de novo
+
+### 3.3 Aprovação humana SEMPRE
+
+- Sistema **NUNCA** envia pagamento sem aprovação humana explícita
+- Sistema **NUNCA** "corrige" CPF/conta automaticamente — apenas **sugere** correção que o aprovador aceita ou rejeita
+- Botão "Aprovar" requer confirmação dupla com totalizador (valor total, qtd de pagamentos)
+
+### 3.4 Em dúvida, BLOQUEIE
+
+- Validação retorna 3 estados: ✅ OK, ⚠️ SUGESTÃO, ❌ BLOQUEADO
+- Quando o sistema não tem certeza, escolhe BLOQUEADO. Aprovador decide.
+- Mensagens de erro precisam ser **acionáveis** ("CPF inválido, dígito verificador 35 esperava 36") não vagas
+
+### 3.5 LGPD by design
+
+- Mascaramento automático em qualquer view não-autorizada
+- Política de retenção: dados de pagamento mantidos 5 anos (Receita) + 5 anos (auditoria contábil) = 10 anos
+- Direito de portabilidade: cliente pode exportar todos seus dados em JSON
+- Direito de eliminação: 10 anos após último contrato, dados são anonimizados
+
+---
+
+## 4. Arquitetura
+
+### 4.1 Visão geral
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    FRONTEND (React)                          │
+│  Dashboard Thiago • Tela de revisão • Cadastros • Relatórios │
+└─────────────────┬────────────────────────────────────────────┘
+                  │ HTTPS (JWT)
+┌─────────────────▼────────────────────────────────────────────┐
+│                    BACKEND (FastAPI)                         │
+│  ┌────────────┐ ┌──────────────┐ ┌──────────────────────┐   │
+│  │   API      │ │  Services    │ │  Validators          │   │
+│  │ (rotas)    │ │ (regras)     │ │  (CPF, banco, CNAB)  │   │
+│  └────────────┘ └──────────────┘ └──────────────────────┘   │
+└────────┬──────────────┬──────────────────┬──────────────────┘
+         │              │                  │
+         ▼              ▼                  ▼
+   ┌──────────┐  ┌─────────────┐   ┌──────────────┐
+   │PostgreSQL│  │   Redis     │   │   Celery     │
+   │(dados)   │  │(cache/fila) │   │ (workers)    │
+   └──────────┘  └─────────────┘   └──────────────┘
+```
+
+### 4.2 Estrutura de pastas
+
+```
+medpag/
+├── backend/
+│   ├── app/
+│   │   ├── api/              # Endpoints FastAPI (rotas HTTP)
+│   │   │   ├── auth.py
+│   │   │   ├── lotes.py
+│   │   │   ├── pagamentos.py
+│   │   │   ├── clientes.py
+│   │   │   └── relatorios.py
+│   │   ├── core/             # Config, segurança, deps comuns
+│   │   │   ├── config.py
+│   │   │   ├── security.py   # JWT, hashing
+│   │   │   ├── crypto.py     # Criptografia de campos sensíveis
+│   │   │   ├── database.py   # Conexão SQLAlchemy
+│   │   │   └── deps.py       # Dependências (auth, db session)
+│   │   ├── models/           # Modelos SQLAlchemy (tabelas)
+│   │   │   ├── user.py
+│   │   │   ├── cliente.py
+│   │   │   ├── beneficiario.py
+│   │   │   ├── lote.py
+│   │   │   ├── pagamento.py
+│   │   │   └── auditoria.py
+│   │   ├── schemas/          # Pydantic (request/response)
+│   │   │   ├── lote.py
+│   │   │   ├── pagamento.py
+│   │   │   └── ...
+│   │   ├── services/         # Lógica de negócio
+│   │   │   ├── importacao.py     # Lê planilha, mapeia colunas
+│   │   │   ├── validacao.py      # Orquestra validações
+│   │   │   ├── cnab_generator.py # Gera arquivo CNAB 240
+│   │   │   ├── cnab_parser.py    # Lê arquivo de retorno
+│   │   │   ├── auditoria.py      # Log estruturado
+│   │   │   └── notificacao.py    # Email pra clientes
+│   │   ├── validators/       # Validações puras
+│   │   │   ├── cpf.py
+│   │   │   ├── banco.py
+│   │   │   ├── conta.py
+│   │   │   └── valor.py
+│   │   ├── workers/          # Tasks Celery
+│   │   │   ├── celery_app.py
+│   │   │   ├── processar_lote.py
+│   │   │   └── monitor_email.py  # Monitora caixa de email
+│   │   ├── scripts/          # Scripts utilitários
+│   │   │   ├── create_admin.py
+│   │   │   └── seed_dev.py
+│   │   └── main.py           # Entrypoint FastAPI
+│   ├── tests/                # pytest
+│   ├── alembic/              # Migrations
+│   ├── requirements.txt
+│   ├── Dockerfile
+│   └── pyproject.toml
+├── frontend/
+│   ├── src/
+│   │   ├── components/       # Componentes reutilizáveis
+│   │   ├── pages/            # Páginas (rotas)
+│   │   ├── hooks/            # Custom hooks
+│   │   ├── lib/              # Utilitários, axios config
+│   │   ├── types/            # Tipos TS compartilhados
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── tailwind.config.js
+│   ├── vite.config.ts
+│   └── Dockerfile
+├── docs/                     # Documentação
+│   ├── CNAB240_UNICRED.md
+│   ├── ARCHITECTURE.md
+│   └── DEPLOY.md
+├── docker-compose.yml
+├── docker-compose.prod.yml
+├── .env.example
+├── .gitignore
+├── .cursorrules              # <-- VOCÊ ESTÁ AQUI
+└── README.md
+```
+
+---
+
+## 5. Convenções de Código
+
+### 5.1 Python
+
+- **Type hints obrigatórios** em todas as funções públicas
+- `mypy --strict` deve passar
+- **Docstrings em português** (é o domínio do negócio brasileiro)
+- Nomes de variáveis e funções **em inglês**, mensagens de erro e UI **em português**
+- **Funções pequenas** (<50 linhas). Lógica complexa em services, não em endpoints
+- Pydantic v2 pra todo schema de input/output
+- Async/await em toda I/O (banco, redis, http)
+- Use `from __future__ import annotations` no topo de cada arquivo
+- Imports ordenados: stdlib → third-party → local
+- Formatador: `ruff format`. Linter: `ruff check`
+
+**Estrutura de um endpoint típico:**
+```python
+@router.post("/lotes/{lote_id}/aprovar", response_model=LoteAprovadoResponse)
+async def aprovar_lote(
+    lote_id: UUID,
+    payload: AprovarLoteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> LoteAprovadoResponse:
+    """Aprova um lote e gera o arquivo CNAB 240 para envio ao banco.
+
+    Apenas usuários com permissão APROVADOR podem executar esta operação.
+    A operação é registrada em auditoria com hash do arquivo gerado.
+    """
+    service = LoteService(db)
+    return await service.aprovar(lote_id, payload, current_user)
+```
+
+### 5.2 TypeScript
+
+- `strict: true` no tsconfig
+- Sem `any` (use `unknown` quando precisar)
+- Componentes funcionais com hooks. Zero class components.
+- Props explicitamente tipadas
+- Use `type` em vez de `interface` (exceto extensão)
+- Imports absolutos com alias `@/` (configurado no Vite)
+
+### 5.3 Git
+
+- Mensagens em português
+- Formato: `tipo(escopo): descrição curta`
+- Tipos: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`
+- Exemplos:
+  - `feat(cpf): adicionar correção de CPF com 10 dígitos`
+  - `fix(cnab): corrigir cálculo do dígito verificador da linha de detalhe`
+  - `refactor(lote): extrair validação para service separado`
+
+---
+
+## 6. Modelagem de Dados
+
+### 6.1 Tabelas principais
+
+```
+users               (operadores e aprovadores do sistema)
+├── clientes        (hospitais, clínicas, ONGs que enviam planilhas)
+│   └── lotes       (cada planilha recebida vira um lote)
+│       └── pagamentos  (cada linha da planilha)
+│
+├── beneficiarios   (médicos/prestadores, com memória pra próximas vezes)
+├── mapeamentos     (como mapear colunas da planilha de cada cliente)
+├── arquivos_cnab   (CNABs gerados, com hash e status)
+└── auditoria       (log de TODA operação sensível)
+```
+
+### 6.2 Campos sensíveis (criptografados)
+
+Aplicar criptografia AES-256 (Fernet) nos campos:
+- `pagamentos.cpf`
+- `pagamentos.conta`
+- `beneficiarios.cpf`
+- `beneficiarios.conta`
+
+Manter campos **não-criptografados auxiliares** pra busca:
+- `pagamentos.cpf_hash` (SHA-256 do CPF limpo) — busca exata
+- `pagamentos.cpf_mascarado` (XXX.XXX.XXX-12) — exibição em logs
+
+### 6.3 Soft delete
+
+Nunca DELETE FROM em tabelas financeiras. Sempre `deleted_at TIMESTAMP NULL`.
+
+---
+
+## 7. Códigos de Erro Padronizados
+
+Toda validação retorna código + mensagem em português. Lista canônica:
+
+**CPF:**
+- `CPF_VAZIO` — campo não preenchido
+- `CPF_INVALIDO` — não tem 11 dígitos ou caracteres inválidos
+- `CPF_DIGITO_INVALIDO` — dígito verificador falha no módulo 11
+- `CPF_SEQUENCIA_INVALIDA` — todos dígitos iguais ou conhecido fake
+- `CPF_CORRIGIVEL` — sistema tem sugestão de correção (não bloqueia)
+
+**Dados bancários:**
+- `BANCO_INVALIDO` — código do banco não está na tabela FEBRABAN
+- `BANCO_NAO_SUPORTADO` — banco existe mas não está implementado ainda
+- `AGENCIA_INVALIDA` — formato da agência não bate com regra do banco
+- `CONTA_INVALIDA` — formato da conta não bate com regra do banco
+- `CONTA_DIGITO_INVALIDO` — DV da conta não confere
+
+**PIX:**
+- `PIX_CHAVE_INVALIDA` — não é CPF/CNPJ/email/telefone/UUID válido
+- `PIX_TIPO_DESCONHECIDO` — não conseguiu identificar tipo da chave
+
+**Valor:**
+- `VALOR_ZERO` — valor zero ou negativo
+- `VALOR_SUSPEITO` — fora do range típico daquele beneficiário (>3 desvios padrão)
+- `VALOR_FORMATO_INVALIDO` — não é número parseável
+
+**Lote:**
+- `LOTE_JA_PROCESSADO` — hash idêntico encontrado, retorna lote anterior
+- `LOTE_VAZIO` — planilha sem linhas
+- `LOTE_FORMATO_NAO_RECONHECIDO` — não conseguiu mapear colunas
+
+---
+
+## 8. Padrão de Resposta da API
+
+Sempre JSON estruturado:
+
+**Sucesso:**
+```json
+{
+  "success": true,
+  "data": { ... }
+}
+```
+
+**Erro de validação (422):**
+```json
+{
+  "success": false,
+  "errors": [
+    {
+      "field": "cpf",
+      "line": 42,
+      "code": "CPF_DIGITO_INVALIDO",
+      "message": "CPF com dígito verificador inválido",
+      "suggestion": "12345678909"
+    }
+  ]
+}
+```
+
+**Erro de negócio (400):**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "LOTE_JA_PROCESSADO",
+    "message": "Este lote já foi processado em 19/05/2026 14:32",
+    "lote_existente_id": "uuid..."
+  }
+}
+```
+
+---
+
+## 9. Workflow ao Implementar Funcionalidade Nova
+
+**Ordem obrigatória:**
+
+1. **Discutir o que vai mudar** — confirmar comigo (Felício) antes de criar arquivo
+2. **Criar/atualizar model** SQLAlchemy
+3. **Gerar migration** com `alembic revision --autogenerate`
+4. **Criar schemas Pydantic** (request e response)
+5. **Criar service** com a lógica de negócio
+6. **Criar/atualizar validators** se necessário
+7. **Criar endpoint** que chama o service
+8. **Escrever testes pytest** (mínimo: caminho feliz + 2 casos de erro)
+9. **Atualizar frontend** se for funcionalidade visível
+10. **Atualizar este arquivo** se a regra de negócio mudou
+
+---
+
+## 10. O Que NÃO Fazer
+
+- ❌ NUNCA gerar arquivo CNAB sem aprovação humana explícita
+- ❌ NUNCA "corrigir" CPF automaticamente — apenas sugerir
+- ❌ NUNCA armazenar CPF/conta em plaintext (criptografar sempre)
+- ❌ NUNCA exibir CPF/conta em log (mascarar sempre)
+- ❌ NUNCA processar mesmo arquivo 2x (verificar hash)
+- ❌ NUNCA confiar em dados do frontend (revalidar tudo no backend)
+- ❌ NUNCA fazer query SQL crua (sempre via SQLAlchemy)
+- ❌ NUNCA hardcode credenciais (usar `.env` + `Settings`)
+- ❌ NUNCA fazer commit de `.env` (só `.env.example`)
+- ❌ NUNCA usar libs depreciadas (pycnab antigo, pycrypto, etc)
+- ❌ NUNCA pular escrita de testes em código financeiro
+
+---
+
+## 11. Roadmap
+
+### FASE 1 — MVP (foco aqui agora)
+- [ ] Setup Docker (Postgres + Redis + backend + worker)
+- [ ] Models básicos
+- [ ] Auth JWT
+- [ ] Upload XLSX/CSV
+- [ ] Detecção de schema (mapeamento de colunas)
+- [ ] Validação de CPF com sugestão de correção
+- [ ] Validação de dados bancários (banco Unicred + tabela FEBRABAN básica)
+- [ ] Detecção de duplicatas e valores suspeitos
+- [ ] Tela de revisão com semáforo
+- [ ] Aprovação dupla com confirmação
+- [ ] Geração de CNAB 240 Unicred
+- [ ] Download do arquivo .rem
+- [ ] Log de auditoria estruturado
+- [ ] Tela de dashboard com lotes pendentes
+
+### FASE 2
+- [ ] Cadastro persistente de beneficiários (memória)
+- [ ] Mapeamento de colunas salvo por cliente
+- [ ] Leitura de arquivo de retorno CNAB
+- [ ] Conciliação automática
+- [ ] Notificações por email (cliente + Thiago)
+- [ ] Suporte multi-banco (Itaú, BB, Bradesco, Sicredi)
+- [ ] Portal do cliente (upload sem login)
+- [ ] Relatórios por cliente em PDF
+
+### FASE 3
+- [ ] Integração com API Open Finance (Unicred Empresarial se disponível)
+- [ ] Suporte a PIX em lote
+- [ ] App mobile pra aprovação biométrica
+- [ ] Dashboard executivo
+- [ ] API pública pra clientes integrarem ERP
+- [ ] Multi-tenant completo (vender pra outras empresas como a do Thiago)
+
+---
+
+## 12. Glossário
+
+- **Lote:** conjunto de pagamentos vindo de um cliente em um dado mês
+- **Beneficiário:** quem recebe (médico, enfermeiro, prestador PJ)
+- **Cliente:** quem manda a planilha (hospital, clínica, ONG)
+- **Operador:** funcionário da empresa do Thiago que prepara os lotes
+- **Aprovador:** Thiago (único que aprova o envio ao banco)
+- **CNAB 240:** padrão FEBRABAN de arquivo de pagamento em lote
+- **Remessa (.rem):** arquivo enviado pro banco com os pagamentos
+- **Retorno (.ret):** arquivo que o banco devolve dizendo o que foi pago/rejeitado
+
+---
+
+**Felício, este é seu projeto. O Cursor é a ferramenta. Estas regras existem pra garantir que o produto final seja seguro, escalável e vendável — pro Thiago ou pra qualquer outro cliente do nicho.**

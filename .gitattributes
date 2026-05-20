@@ -1,0 +1,20 @@
+# Force LF line endings for shell scripts (Docker/Linux compatibility).
+# Sem isso, scripts criados no Windows quebram dentro do container.
+*.sh text eol=lf
+
+# Outros arquivos que devem ser sempre LF
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Binários
+*.xlsx binary
+*.xls binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.rem binary
+*.ret binary

@@ -1,0 +1,133 @@
+# MedPag — Blueprint do Render
+# ============================================================================
+# Este arquivo define toda a infraestrutura no Render:
+#   - Banco Postgres (gerenciado)
+#   - Redis (Key Value gerenciado)
+#   - Backend FastAPI (Docker)
+#   - Worker Celery (Docker)
+#
+# Como usar:
+#   1) Conecte sua conta GitHub no Render
+#   2) Dashboard Render → "New" → "Blueprint"
+#   3) Aponte para o repositório feliciofc-debug/Med-Pay
+#   4) Render lê este arquivo e cria todos os serviços
+#   5) ENCRYPTION_KEY precisa ser definido manualmente após o primeiro deploy
+#      (gerar localmente com `python scripts/gerar_chaves.py` e colar no dashboard)
+# ============================================================================
+
+databases:
+  - name: medpag-postgres
+    databaseName: medpag
+    user: medpag
+    plan: free
+    postgresMajorVersion: 15
+    ipAllowList: []  # vazio = somente serviços do Render acessam
+
+services:
+  # --------------------------------------------------------------------------
+  # Redis (Key Value gerenciado do Render)
+  # --------------------------------------------------------------------------
+  - type: keyvalue
+    name: medpag-redis
+    plan: free
+    ipAllowList: []
+    maxmemoryPolicy: noeviction  # Celery precisa que não evicione filas
+
+  # --------------------------------------------------------------------------
+  # Backend FastAPI (web service)
+  # --------------------------------------------------------------------------
+  - type: web
+    name: medpag-api
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PORT
+        value: "8000"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: medpag-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: medpag-redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      # ENCRYPTION_KEY precisa ser gerado MANUALMENTE com:
+      #   python scripts/gerar_chaves.py
+      # E colado no dashboard do Render (formato Fernet de 44 chars base64).
+      # Não use generateValue: true aqui — Render gera string aleatória que
+      # NÃO é uma chave Fernet válida e o app não vai subir.
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_ACCESS_EXPIRE_MINUTES
+        value: "60"
+      - key: JWT_REFRESH_EXPIRE_DAYS
+        value: "7"
+      - key: CORS_ORIGINS
+        # Atualize com a URL real do Vercel depois do primeiro deploy do frontend.
+        # Pode listar várias separadas por vírgula:
+        #   https://medpag.vercel.app,https://medpag-app.vercel.app
+        value: "https://medpag.vercel.app,http://localhost:5173"
+      # Admin inicial (Thiago/Felício) — criado automaticamente no primeiro boot
+      - key: ADMIN_EMAIL
+        value: thiago@medpag.com.br
+      - key: ADMIN_NOME
+        value: Thiago
+      - key: ADMIN_SENHA
+        sync: false  # defina no dashboard ao subir (use senha forte)
+      # Liga o seed de demonstração no primeiro boot (Hospital Santa Casa + Clínica Vida Nova)
+      - key: SEED_DEMO
+        value: "true"
+
+  # --------------------------------------------------------------------------
+  # Worker Celery (background service)
+  # --------------------------------------------------------------------------
+  - type: worker
+    name: medpag-worker
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    autoDeploy: true
+    dockerCommand: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATABASE_URL
+        fromDatabase:
+          name: medpag-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: medpag-redis
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: medpag-api
+          envVarKey: SECRET_KEY
+      - key: ENCRYPTION_KEY
+        sync: false  # mesmo valor que o backend — defina no dashboard
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: CORS_ORIGINS
+        value: "https://medpag.vercel.app"
+      - key: SEED_DEMO
+        value: "false"  # worker não roda seed

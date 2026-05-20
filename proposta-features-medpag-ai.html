@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MedPag AI — Roadmap de Inovação</title>
+<style>
+  :root {
+    --moss-50:#f5f7ef; --moss-100:#e8eed6; --moss-200:#d2daad; --moss-300:#b6c283;
+    --moss-400:#9cab63; --moss-500:#82924b; --moss-600:#687839; --moss-700:#525f30;
+    --moss-800:#424c2a; --moss-900:#353d24; --moss-950:#1f2412;
+    --gold-50:#fdf8e7; --gold-100:#fbedb8; --gold-200:#f6dc83; --gold-300:#f0c64a;
+    --gold-400:#e9b22a; --gold-500:#d29215; --gold-600:#b27512; --gold-700:#8e5a13;
+    --gold-800:#744817;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--moss-100); color: var(--moss-950); line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  body { padding: 40px 20px; }
+  .deck { max-width: 1200px; margin: 0 auto; }
+
+  .nav {
+    background: white; padding: 16px 24px; border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(31,36,18,0.1); margin-bottom: 32px;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    border-top: 3px solid var(--gold-400);
+  }
+  .nav h1 { font-size: 16px; color: var(--moss-700); font-weight: 600; }
+  .nav button {
+    background: var(--gold-500); color: var(--moss-950); border: none;
+    padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 700;
+    cursor: pointer; transition: background .2s;
+  }
+  .nav button:hover { background: var(--gold-400); }
+
+  .slide {
+    width: 100%; aspect-ratio: 16/9; background: white; border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(31,36,18,0.15); margin-bottom: 32px;
+    overflow: hidden; position: relative; page-break-after: always;
+  }
+  .slide-content { width: 100%; height: 100%; padding: 48px 56px; display: flex; flex-direction: column; }
+  .slide-number {
+    position: absolute; bottom: 20px; right: 28px; font-size: 11px;
+    color: #94a3b8; font-weight: 500; letter-spacing: 0.1em;
+  }
+  .slide-brand {
+    position: absolute; bottom: 20px; left: 28px; font-size: 11px;
+    color: var(--moss-600); font-weight: 700; letter-spacing: 0.15em;
+  }
+
+  /* Cover */
+  .cover { background: linear-gradient(135deg, var(--moss-950), var(--moss-900) 50%, var(--moss-800)); color: white; }
+  .cover::before { content:''; position: absolute; top:0; left:0; right:0; height:1px; background: linear-gradient(90deg, transparent, var(--gold-400), transparent); }
+  .cover .pattern { position: absolute; bottom:-120px; right:-120px; width:480px; height:480px; background: radial-gradient(circle, rgba(210,146,21,0.25), transparent 70%); border-radius: 50%; }
+  .cover .slide-content { justify-content: center; padding: 56px 72px; }
+  .cover .badge {
+    position: absolute; top: 32px; right: 56px;
+    background: rgba(210,146,21,0.15); backdrop-filter: blur(10px);
+    padding: 8px 16px; border-radius: 20px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.1em; color: var(--gold-200); border: 1px solid rgba(210,146,21,0.4);
+  }
+  .cover .logo { display: flex; align-items: center; gap: 14px; margin-bottom: 40px; }
+  .cover .logo-mark {
+    width: 56px; height: 56px; background: var(--moss-900);
+    border: 1px solid var(--gold-400); border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--gold-300); font-weight: 800; font-size: 24px;
+  }
+  .cover .logo-text { font-size: 24px; font-weight: 800; letter-spacing: 0.15em; }
+  .cover h1 { font-size: 50px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; margin-bottom: 18px; }
+  .cover h1 .gold {
+    background: linear-gradient(135deg, var(--gold-300), var(--gold-400), var(--gold-200));
+    -webkit-background-clip: text; background-clip: text; color: transparent; font-style: italic;
+  }
+  .cover .subtitle { font-size: 19px; color: var(--moss-100); max-width: 720px; margin-bottom: 48px; line-height: 1.5; }
+  .cover .meta { display: flex; gap: 48px; color: var(--moss-200); font-size: 12px; letter-spacing: 0.05em; }
+  .cover .meta strong { display: block; color: white; font-size: 15px; margin-top: 4px; font-weight: 600; letter-spacing: 0; }
+
+  /* Headers */
+  .slide-header { margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--moss-100); position: relative; }
+  .slide-header::after { content:''; position: absolute; bottom:-1px; left:0; width:80px; height:2px; background: var(--gold-500); }
+  .slide-eyebrow { font-size: 11px; font-weight: 700; color: var(--gold-600); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 6px; }
+  .slide-title { font-size: 32px; font-weight: 800; color: var(--moss-950); letter-spacing: -0.02em; line-height: 1.15; }
+  .slide-subtitle { font-size: 14px; color: var(--moss-700); margin-top: 6px; max-width: 820px; }
+  .slide-body { flex: 1; display: flex; flex-direction: column; }
+
+  /* Feature cards */
+  .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; flex: 1; }
+  .feature-card {
+    background: linear-gradient(135deg, white, var(--moss-50));
+    border: 1.5px solid var(--moss-200); border-radius: 14px; padding: 22px 20px;
+    display: flex; flex-direction: column; gap: 12px; position: relative; overflow: hidden;
+  }
+  .feature-card::before { content:''; position: absolute; top:0; left:0; right:0; height:3px; background: linear-gradient(90deg, var(--gold-400), var(--gold-500)); }
+  .feature-card .icon {
+    width: 44px; height: 44px; background: var(--moss-900);
+    border: 1px solid var(--gold-400); border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  .feature-card h3 { font-size: 17px; font-weight: 800; color: var(--moss-950); }
+  .feature-card p { font-size: 13px; color: var(--moss-700); line-height: 1.6; }
+  .feature-card .tag {
+    display: inline-block; background: var(--gold-100); color: var(--gold-800);
+    padding: 4px 10px; border-radius: 12px; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.05em; margin-top: auto; width: fit-content;
+  }
+
+  /* Dashboard mock */
+  .dash-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 28px; flex: 1; }
+  .dash-mock {
+    background: var(--moss-950); border-radius: 14px; padding: 22px;
+    color: white; font-family: 'SF Mono', 'Consolas', monospace; font-size: 11px;
+    position: relative; box-shadow: 0 8px 24px rgba(31,36,18,0.3);
+  }
+  .dash-mock::before {
+    content:''; position: absolute; top: 12px; left: 16px;
+    width: 10px; height: 10px; border-radius: 50%; background: #ff5f57;
+    box-shadow: 16px 0 #febc2e, 32px 0 #28c840;
+  }
+  .dash-mock-content { margin-top: 18px; }
+  .dash-mock h4 { font-size: 13px; color: var(--gold-300); margin-bottom: 10px; font-weight: 700; }
+  .dash-row {
+    display: flex; justify-content: space-between; padding: 5px 0;
+    border-bottom: 1px solid rgba(210,146,21,0.15); color: var(--moss-100);
+  }
+  .dash-row:last-child { border-bottom: none; }
+  .dash-row .val { color: var(--gold-200); font-weight: 700; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .dot-green { background: #5b8138; }
+  .dot-amber { background: var(--gold-400); }
+  .dot-red { background: #b91c1c; }
+  .big-stat {
+    margin-top: 14px; padding: 12px; background: rgba(210,146,21,0.1);
+    border-radius: 10px; border-left: 3px solid var(--gold-400);
+  }
+  .big-stat .lbl { font-size: 10px; color: var(--moss-200); letter-spacing: 0.05em; }
+  .big-stat .v { font-size: 22px; font-weight: 800; color: white; margin-top: 4px; }
+  .big-stat .sub { font-size: 11px; color: var(--gold-300); margin-top: 2px; }
+
+  .feat-list { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+  .feat-item {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding: 12px 16px; background: var(--moss-50);
+    border-left: 3px solid var(--gold-500); border-radius: 8px;
+  }
+  .feat-item .ico { font-size: 18px; flex-shrink: 0; }
+  .feat-item h4 { font-size: 14px; font-weight: 800; color: var(--moss-950); margin-bottom: 2px; }
+  .feat-item p { font-size: 12px; color: var(--moss-700); line-height: 1.45; }
+
+  /* WhatsApp phone mock */
+  .phone {
+    background: #111b21; border-radius: 28px; padding: 36px 12px 12px;
+    box-shadow: 0 12px 32px rgba(31,36,18,0.3); position: relative;
+  }
+  .phone::before {
+    content:''; position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    width: 90px; height: 5px; background: #000; border-radius: 6px;
+  }
+  .wa-screen {
+    background: #efeae2; border-radius: 16px; padding: 12px 8px;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .wa-bubble {
+    padding: 9px 11px; border-radius: 8px; max-width: 88%; font-size: 11px;
+    color: #303942; box-shadow: 0 1px 1px rgba(0,0,0,0.1); line-height: 1.45;
+  }
+  .wa-bubble.bot { background: #d9fdd3; align-self: flex-start; }
+  .wa-bubble.user { background: white; align-self: flex-end; }
+  .wa-bubble strong { color: var(--moss-700); }
+  .wa-bubble .time {
+    display: block; font-size: 9px; color: #667781;
+    text-align: right; margin-top: 3px;
+  }
+  .wa-attachment {
+    background: rgba(0,0,0,0.05); margin: 4px -2px;
+    padding: 8px 10px; border-radius: 6px; display: flex;
+    align-items: center; gap: 8px; border-left: 3px solid var(--gold-500);
+  }
+  .wa-attachment .ic { font-size: 22px; }
+  .wa-attachment .fname { font-size: 10px; font-weight: 700; color: var(--moss-950); }
+  .wa-attachment .fsize { font-size: 9px; color: #667781; }
+  .wa-buttons { display: flex; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #e9edef; }
+  .wa-btn {
+    flex: 1; background: #f0f2f5; color: #00a884;
+    padding: 5px; border-radius: 4px; font-size: 10px; font-weight: 600; text-align: center;
+  }
+  .wa-bubble.alert { background: #fff4d4; border-left: 3px solid var(--gold-500); }
+
+  /* Two phones grid */
+  .two-phones { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; flex: 1; align-items: stretch; }
+  .phone-col { display: flex; flex-direction: column; gap: 12px; }
+  .phone-col .label {
+    font-size: 11px; font-weight: 800; color: var(--gold-700);
+    text-transform: uppercase; letter-spacing: 0.1em; padding: 6px 12px;
+    background: var(--gold-100); border-radius: 8px; width: fit-content;
+  }
+
+  /* Single phone with side text */
+  .phone-side { display: grid; grid-template-columns: 280px 1fr; gap: 32px; flex: 1; align-items: center; }
+  .wa-features { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .wa-feat {
+    background: var(--moss-50); border: 1px solid var(--moss-200);
+    border-radius: 10px; padding: 14px 16px; border-top: 2px solid var(--gold-500);
+  }
+  .wa-feat h4 { font-size: 13px; font-weight: 800; color: var(--moss-950); margin-bottom: 4px; }
+  .wa-feat p { font-size: 11.5px; color: var(--moss-700); line-height: 1.45; }
+
+  /* AI conversations grid */
+  .ai-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex: 1; }
+  .ai-grid-4 { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 16px; flex: 1; }
+  .convo {
+    background: #efeae2; border-radius: 12px; padding: 12px;
+    display: flex; flex-direction: column; gap: 5px; overflow: hidden;
+  }
+  .convo-title {
+    font-size: 10px; font-weight: 800; color: var(--gold-700);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    padding: 5px 10px; background: var(--gold-100); border-radius: 6px;
+    margin-bottom: 4px; width: fit-content;
+  }
+  .ai-bubble { padding: 8px 11px; border-radius: 7px; max-width: 90%; font-size: 11px; line-height: 1.45; }
+  .ai-bubble.user { background: white; align-self: flex-end; color: #303942; }
+  .ai-bubble.bot { background: #d9fdd3; align-self: flex-start; color: #303942; }
+  .ai-bubble.alert { background: #fff4d4; border-left: 3px solid var(--gold-500); align-self: flex-start; color: #303942; }
+  .ai-bubble strong { color: var(--moss-700); }
+
+  /* Stack flow */
+  .stack-flow { flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 0 16px; }
+  .stack-box {
+    background: white; border: 2px solid var(--moss-200); border-radius: 14px;
+    padding: 16px 14px; flex: 1; text-align: center; position: relative;
+  }
+  .stack-box.gold { border-color: var(--gold-500); background: linear-gradient(135deg, var(--gold-50), white); }
+  .stack-box.dark { background: linear-gradient(135deg, var(--moss-900), var(--moss-800)); color: white; border-color: var(--moss-900); }
+  .stack-box .icon { font-size: 30px; margin-bottom: 6px; }
+  .stack-box h4 { font-size: 14px; font-weight: 800; color: var(--moss-950); margin-bottom: 4px; }
+  .stack-box.dark h4 { color: white; }
+  .stack-box p { font-size: 11px; color: var(--moss-600); line-height: 1.4; }
+  .stack-box.dark p { color: var(--moss-200); }
+  .stack-arrow { font-size: 26px; color: var(--gold-500); flex-shrink: 0; }
+  .stack-cost { margin-top: 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .cost-item {
+    padding: 12px 14px; background: var(--moss-50); border-radius: 10px;
+    text-align: center; border-bottom: 3px solid var(--gold-500);
+  }
+  .cost-lbl { font-size: 10px; color: var(--moss-600); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700; }
+  .cost-val { font-size: 22px; font-weight: 800; color: var(--moss-950); margin-top: 4px; letter-spacing: -0.01em; }
+  .cost-sub { font-size: 10px; color: var(--gold-700); margin-top: 2px; font-weight: 600; }
+
+  /* Comparativo table */
+  .comp-table { flex: 1; display: flex; flex-direction: column; background: white; border-radius: 12px; overflow: hidden; border: 1px solid var(--moss-200); }
+  .comp-row {
+    display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    align-items: center; padding: 11px 18px;
+    border-bottom: 1px solid var(--moss-100); font-size: 12px;
+  }
+  .comp-row:last-child { border-bottom: none; }
+  .comp-row.head { background: var(--moss-950); color: white; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; }
+  .comp-row.head .medpag-col { background: var(--gold-500); color: var(--moss-950); padding: 4px 8px; border-radius: 6px; text-align: center; }
+  .comp-row .medpag-col { font-weight: 700; color: var(--gold-700); text-align: center; }
+  .comp-cell { text-align: center; color: var(--moss-700); }
+  .comp-cell.feat-name { text-align: left; font-weight: 600; color: var(--moss-950); }
+  .ok { color: #5b8138; font-size: 16px; font-weight: 800; }
+  .ko { color: #b91c1c; font-size: 16px; font-weight: 800; }
+  .partial { color: var(--gold-600); font-size: 16px; font-weight: 800; }
+
+  /* Pricing */
+  .pricing-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; flex: 1; }
+  .price-card {
+    border: 1.5px solid var(--moss-200); border-radius: 12px; padding: 18px 14px;
+    background: white; display: flex; flex-direction: column; gap: 10px; position: relative;
+  }
+  .price-card.highlight {
+    border-color: var(--gold-500); background: linear-gradient(135deg, var(--gold-50), white);
+    box-shadow: 0 4px 16px rgba(210,146,21,0.15); transform: scale(1.03);
+  }
+  .price-card.highlight::before {
+    content: 'POPULAR'; position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+    background: var(--gold-500); color: var(--moss-950); padding: 3px 10px;
+    border-radius: 10px; font-size: 9px; font-weight: 800; letter-spacing: 0.1em;
+  }
+  .price-card .name { font-size: 11px; font-weight: 800; color: var(--gold-700); text-transform: uppercase; letter-spacing: 0.1em; }
+  .price-card .value { font-size: 22px; font-weight: 800; color: var(--moss-950); letter-spacing: -0.02em; }
+  .price-card .value small { font-size: 11px; color: var(--moss-600); font-weight: 500; display: block; margin-top: 2px; }
+  .price-card ul { list-style: none; display: flex; flex-direction: column; gap: 5px; margin-top: 4px; }
+  .price-card li { font-size: 11px; color: var(--moss-700); padding-left: 14px; position: relative; line-height: 1.4; }
+  .price-card li::before { content:'✓'; position: absolute; left: 0; color: var(--gold-600); font-weight: 800; }
+
+  /* Impact */
+  .impact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; flex: 1; }
+  .impact-col h3 { font-size: 13px; font-weight: 800; color: var(--gold-700); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--moss-200); }
+  .impact-num-box {
+    background: linear-gradient(135deg, var(--moss-950), var(--moss-800));
+    color: white; border-radius: 14px; padding: 18px 22px; margin-bottom: 14px;
+    position: relative; overflow: hidden;
+  }
+  .impact-num-box::before { content:''; position: absolute; top:0; left:0; right:0; height:3px; background: var(--gold-500); }
+  .impact-num-box.gold { background: linear-gradient(135deg, var(--gold-700), var(--gold-500)); }
+  .impact-num-box .lbl { font-size: 11px; color: var(--moss-200); letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; }
+  .impact-num-box.gold .lbl { color: var(--gold-100); }
+  .impact-num-box .v { font-size: 34px; font-weight: 800; color: var(--gold-300); letter-spacing: -0.02em; margin: 4px 0; }
+  .impact-num-box.gold .v { color: white; }
+  .impact-num-box .desc { font-size: 12px; color: var(--moss-100); line-height: 1.5; }
+  .impact-num-box.gold .desc { color: var(--gold-50); }
+  .impact-row {
+    display: grid; grid-template-columns: 1fr auto; padding: 8px 14px;
+    background: var(--moss-50); border-radius: 8px; margin-bottom: 5px;
+    font-size: 12px; align-items: center;
+  }
+  .impact-row.gold-row { background: var(--gold-100); }
+  .impact-row .lbl { color: var(--moss-700); }
+  .impact-row .v { font-weight: 700; color: var(--moss-950); }
+  .impact-row.total { background: var(--gold-500); }
+  .impact-row.total .lbl { color: var(--moss-950); font-weight: 700; }
+  .impact-row.total .v { font-size: 14px; font-weight: 800; color: var(--moss-950); }
+
+  /* Valuation */
+  .val-hero { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 28px; }
+  .val-jump { display: flex; align-items: center; gap: 28px; }
+  .val-card {
+    text-align: center; padding: 24px 32px; background: white;
+    border: 2px solid var(--moss-200); border-radius: 16px; min-width: 220px;
+  }
+  .val-card.before { opacity: 0.7; }
+  .val-card.after {
+    border-color: var(--gold-500); background: linear-gradient(135deg, var(--gold-50), white);
+    box-shadow: 0 12px 28px rgba(210,146,21,0.2); transform: scale(1.1);
+  }
+  .val-card .lbl { font-size: 11px; color: var(--moss-600); letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; }
+  .val-card .num { font-size: 40px; font-weight: 800; color: var(--moss-950); letter-spacing: -0.02em; margin: 4px 0; }
+  .val-card.after .num { color: var(--gold-700); }
+  .val-card .det { font-size: 12px; color: var(--moss-700); }
+  .val-arrow { font-size: 44px; color: var(--gold-500); font-weight: 800; }
+  .val-multipliers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%; max-width: 800px; }
+  .mult-box { background: var(--moss-50); border-radius: 12px; padding: 16px; text-align: center; border-top: 3px solid var(--gold-500); }
+  .mult-box .num { font-size: 30px; font-weight: 800; color: var(--gold-700); letter-spacing: -0.02em; }
+  .mult-box .lbl { font-size: 11px; font-weight: 700; color: var(--moss-700); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+  .mult-box .det { font-size: 11px; color: var(--moss-600); margin-top: 4px; line-height: 1.4; }
+
+  /* Roadmap */
+  .roadmap { flex: 1; display: flex; flex-direction: column; gap: 14px; padding-top: 8px; }
+  .phase {
+    display: grid; grid-template-columns: 80px 1fr 220px; gap: 22px;
+    align-items: center; padding: 16px 22px; background: white;
+    border-radius: 14px; border: 1px solid var(--moss-200); border-left: 6px solid var(--gold-500);
+  }
+  .num-circle {
+    width: 64px; height: 64px; background: var(--moss-950); color: var(--gold-300);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 24px; font-weight: 800; border: 2px solid var(--gold-400);
+  }
+  .phase h3 { font-size: 17px; font-weight: 800; color: var(--moss-950); margin-bottom: 3px; }
+  .phase .when { font-size: 11px; color: var(--gold-700); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 5px; }
+  .phase p { font-size: 12px; color: var(--moss-700); line-height: 1.5; }
+  .phase .deliv {
+    background: var(--moss-50); padding: 10px 14px; border-radius: 8px;
+    font-size: 11px; color: var(--moss-700); line-height: 1.5;
+    border-left: 2px solid var(--gold-500);
+  }
+  .phase .deliv strong { color: var(--moss-950); display: block; margin-bottom: 3px; font-size: 11.5px; }
+
+  /* CTA boxes */
+  .cta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 28px; }
+  .cta-box {
+    background: rgba(210,146,21,0.1); border: 1px solid rgba(210,146,21,0.3);
+    border-radius: 14px; padding: 20px;
+  }
+  .cta-box .lbl { font-size: 11px; color: var(--gold-200); letter-spacing: 0.1em; font-weight: 700; }
+  .cta-box .v { font-size: 30px; font-weight: 800; color: white; margin: 6px 0; }
+  .cta-box .det { font-size: 12px; color: var(--moss-100); }
+
+  .cta-action {
+    margin-top: 40px; padding: 22px; background: rgba(255,255,255,0.05);
+    border-left: 3px solid var(--gold-400); border-radius: 8px;
+  }
+  .cta-action .lbl { font-size: 13px; color: var(--gold-200); font-weight: 700; letter-spacing: 0.1em; margin-bottom: 8px; }
+  .cta-action .text { font-size: 16px; color: white; font-weight: 600; line-height: 1.5; }
+
+  /* Print */
+  @media print {
+    body { padding: 0; background: white; }
+    .nav { display: none; }
+    .deck { max-width: 100%; }
+    .slide { box-shadow: none; margin-bottom: 0; border-radius: 0; width: 100vw; height: 100vh; aspect-ratio: unset; }
+    @page { size: landscape; margin: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="nav">
+    <h1>MedPag AI · 14 slides — use Ctrl+P para exportar como PDF (orientação Paisagem)</h1>
+    <button onclick="window.print()">Imprimir / Salvar PDF</button>
+  </div>
+
+  <!-- ========== SLIDE 1: CAPA ========== -->
+  <div class="slide cover">
+    <div class="badge">PROPOSTA INTERNA · MAIO 2026</div>
+    <div class="pattern"></div>
+    <div class="slide-content">
+      <div class="logo">
+        <div class="logo-mark">M</div>
+        <div class="logo-text">MEDPAG · AI</div>
+      </div>
+      <h1>O futuro dos pagamentos médicos<br />é uma <span class="gold">conversa.</span></h1>
+      <p class="subtitle">Roadmap de evolução do MedPag — Dashboard Executivo, WhatsApp como canal operacional e Copiloto de IA contextual. Três features que transformam ferramenta em plataforma.</p>
+      <div class="meta">
+        <div>AUTOR<strong>Felício — CTO &amp; Cofundador</strong></div>
+        <div>DESTINATÁRIO<strong>Sócios MedPag</strong></div>
+        <div>HORIZONTE<strong>90 dias de desenvolvimento</strong></div>
+      </div>
+    </div>
+    <div class="slide-brand" style="color: var(--gold-300);">MEDPAG AI</div>
+    <div class="slide-number" style="color: rgba(255,255,255,0.4);">01 / 14</div>
+  </div>
+
+  <!-- ========== SLIDE 2: VISÃO GERAL ========== -->
+  <div class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Visão geral</div>
+        <h2 class="slide-title">Três features que mudam o jogo</h2>
+        <p class="slide-subtitle">Cada uma resolve uma dor real do gestor financeiro brasileiro. Juntas, transformam o MedPag em copiloto de gestão que mora no celular.</p>
+      </div>
+      <div class="three-col">
+        <div class="feature-card">
+          <div class="icon">📊</div>
+          <h3>Dashboard Executivo</h3>
+          <p>Receita por contrato, margem por cliente, projeções e alertas de queda em tempo real. CFO toma decisão olhando uma tela só.</p>
+          <span class="tag">FASE A · 30 DIAS</span>
+        </div>
+        <div class="feature-card">
+          <div class="icon">💬</div>
+          <h3>WhatsApp Operacional</h3>
+          <p>Arquivos CNAB chegam no celular do aprovador. Aprovação com PIN. Status de cada lote em verde, amarelo, vermelho.</p>
+          <span class="tag">FASE B · 60 DIAS</span>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🤖</div>
+          <h3>IA Contextual</h3>
+          <p>Copiloto que conhece o negócio do cliente em tempo real. Responde, sugere, alerta e antecipa antes do problema acontecer.</p>
+          <span class="tag">FASE C · 90 DIAS</span>
+        </div>
+      </div>
+    </div>
+    <div class="slide-brand">MEDPAG AI · VISÃO</div>
+    <div class="slide-number">02 / 14</div>
+  </div>
+
+  <!-- ========== SLIDE 3: DASHBOARD EXECUTIVO ========== -->
+  <div class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Feature 1 · Fase A · 30 dias</div>
+        <h2 class="slide-title">Dashboard Executivo</h2>
+        <p class="slide-subtitle">Toda a operação financeira numa única tela. Margem, projeção, anomalia — tudo visível antes de virar problema.</p>
+      </div>
+      <div class="dash-grid">
+        <div class="dash-mock">
+          <div class="dash-mock-content">
+            <h4>📊 RECEITA POR CONTRATO · JUNHO/2026</h4>
+            <div class="dash-row"><span><span class="dot dot-green"></span>Santa Casa BH</span><span class="val">R$ 25.200</span></div>
+            <div class="dash-row"><span><span class="dot dot-green"></span>VidaPlena</span><span class="val">R$ 8.100</span></div>
+            <div class="dash-row"><span><span class="dot dot-amber"></span>MedCoop</span><span class="val">R$ 20.000</span></div>
+            <div class="dash-row"><span><span class="dot dot-amber"></span>São Lucas</span><span class="val">R$ 8.000</span></div>
+            <div class="dash-row"><span><span class="dot dot-red"></span>Saúde+ <small style="opacity:.6">(revisar)</small></span><span class="val">R$ 8.100</span></div>
+            <div class="big-stat">
+              <div class="lbl">LUCRO LÍQUIDO MÊS</div>
+              <div class="v">R$ 42.700</div>
+              <div class="sub">▲ 65,7% margem · projeção R$ 1,2M anual</div>
+            </div>
+          </div>
+        </div>
+        <div class="feat-list">
+          <div class="feat-item">
+            <div class="ico">💰</div>
+            <div><h4>Margem por contrato em tempo real</h4><p>Vê quem dá lucro e quem está sangrando. Alerta automático quando margem cai &gt; 10% mês contra mês.</p></div>
+          </div>
+          <div class="feat-item">
+            <div class="ico">📈</div>
+            <div><h4>Projeção 12 meses + meta</h4><p>Regressão sobre histórico cruzada com pipeline de novos contratos. CFO vê pra onde está indo, não só onde está.</p></div>
+          </div>
+          <div class="feat-item">
+            <div class="ico">🎯</div>
+            <div><h4>KPIs operacionais críticos</h4><p>Lotes processados, tempo médio, taxa de erro, tickets de suporte, churn. Operação inteira numa tela.</p></div>
+          </div>
+          <div class="feat-item">
+            <div class="ico">🚨</div>
+            <div><h4>Alertas de renovação e upsell</h4><p>30 dias antes do vencimento, sistema sugere condições baseadas em histórico real.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-brand">MEDPAG AI · DASHBOARD</div>
+    <div class="slide-number">03 / 14</div>
+  </div>
+
+  <!-- ========== SLIDE 4: COMO OS ARQUIVOS CHEGAM NO WHATSAPP ========== -->
+  <div class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Feature 2.1 · WhatsApp como canal operacional</div>
+        <h2 class="slide-title">Como os arquivos chegam no WhatsApp</h2>
+        <p class="slide-subtitle">Todo o ciclo de pagamento dentro do app que o gestor já usa. Notificação, anexo CNAB, status colorido e retorno do banco — sem precisar abrir o computador.</p>
+      </div>
+
+      <div class="two-phones">
+        <!-- IDA: novo lote chegou e arquivo CNAB pronto -->
+        <div class="phone-col">
+          <div class="label">📥 LOTE CHEGOU · ARQUIVO PRONTO</div>
+          <div class="phone">
+            <div class="wa-screen">
+              <div class="wa-bubble bot">
+                🏥 <strong>Novo lote — Santa Casa BH</strong><br />
+                Recebido: hoje 09:23<br />
+                <strong>437 pagamentos</strong> · R$ 287.450,00<br />
+                <span class="time">09:24 ✓✓</span>
+              </div>
+              <div class="wa-bubble bot">
+                Validação concluída:<br />
+                🟢 432 OK · 🟡 4 sugestão · 🔴 1 bloqueado<br />
+                <span class="time">09:24 ✓✓</span>
+              </div>
+              <div class="wa-bubble bot">
+                ✅ <strong>Lote aprovado!</strong> Arquivo CNAB pronto pra envio ao banco:
+                <div class="wa-attachment">
+                  <div class="ic">📎</div>
+                  <div>
+                    <div class="fname">santa-casa-jun-2026.rem</div>
+                    <div class="fsize">CNAB 240 · 87 KB · Hash a7f3b9e2…</div>
+                  </div>
+                </div>
+                <span class="time">09:33 ✓✓</span>
+              </div>
+              <div class="wa-bubble bot">
+                📋 <strong>Próximos passos</strong><br />
+                1. Baixe o arquivo acima<br />
+                2. Internet banking Unicred<br />
+                3. Pagamentos &gt; Importar Arquivo<br />
+                4. Confirme o envio<br />
+                <span class="time">09:33 ✓✓</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- VOLTA: status do banco e arquivo .ret -->
+        <div class="phone-col">
+          <div class="label">📤 BANCO RESPONDEU · CONCILIAÇÃO</div>
+          <div class="phone">
+            <div class="wa-screen">
+              <div class="wa-bubble bot">
+                🟡 <strong>Lote enviado ao banco</strong><br />
+                Santa Casa BH · 437 pgto<br />
+                Aguardando processamento Unicred…<br />
+                <span class="time">10:48 ✓✓</span>
+              </div>
+              <div class="wa-bubble user">
+                <div class="wa-attachment">
+                  <div class="ic">📎</div>
+                  <div>
+                    <div class="fname">retorno-12062026.ret</div>
+                    <div class="fsize">CNAB 240 retorno · 92 KB</div>
+                  </div>
+                </div>
+                <span class="time">14:12 ✓✓</span>
+              </div>
+              <div class="wa-bubble bot">
+                Recebido! Processando conciliação automática…<br />
+                <span class="time">14:12</span>
+              </div>
+              <div class="wa-bubble bot">
+                🟢 <strong>Conciliado — Santa Casa BH</strong><br /><br />
+                ✅ 433 confirmados (R$ 285.150)<br />
+                ⚠️ 4 rejeitados pelo banco (R$ 2.300)<br /><br />
+                Motivos das rejeições:<br />
+                • 2 contas inválidas<br />
+                • 1 CPF/conta não conferem<br />
+                • 1 conta encerrada<br />
+                <div class="wa-buttons">
+                  <div class="wa-btn">📊 Ver relatório</div>
+                  <div class="wa-btn">↩️ Reprocessar</div>
+                </div>
+                <span class="time">14:13 ✓✓</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-brand">MEDPAG AI · WHATSAPP / ARQUIVOS</div>
+    <div class="slide-number">04 / 14</div>
+  </div>
+
+  <!-- ========== SLIDE 5: APROVAÇÃO COM PIN ========== -->
+  <div class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Feature 2.2 · Aprovação segura</div>
+        <h2 class="slide-title">Aprovação por WhatsApp com PIN</h2>
+        <p class="slide-subtitle">Decisão financeira do bar, do almoço, da viagem. Mas com camada de segurança que aguenta auditoria de banco e Receita.</p>
+      </div>
+
+      <div class="phone-side">
+        <div class="phone">
+          <div class="wa-screen">
+            <div class="wa-bubble bot">
+              🏥 <strong>Lote pra revisão</strong><br />
+              Hospital Santa Casa<br />
+              <strong>437 pagamentos</strong> · R$ 287.450,00<br /><br />
+              🟢 432 OK · 🟡 4 sug · 🔴 1 bloq
+              <div class="wa-buttons">
+                <div class="wa-btn">✓ Aprovar</div>
+                <div class="wa-btn">Detalhes</div>
+              </div>
+              <span class="time">09:24 ✓✓</span>
+            </div>
+            <div class="wa-bubble user"><strong>Aprovar</strong><span class="time">09:32 ✓✓</span></div>
+            <div class="wa-bubble bot">
+              ⚠️ Confirme com seu PIN MedPag (6 dígitos do app)<br />
+              <span class="time">09:32</span>
+            </div>
+            <div class="wa-bubble user"><strong>473912</strong><span class="time">09:32 ✓✓</span></div>
+            <div class="wa-bubble bot">
+              ✅ <strong>Lote aprovado!</strong><br />
+              Arquivo CNAB gerado · Hash a7f3b9e2…<br />
+              📍 Aprovado em São Paulo/SP<br />
+              <span class="time">09:33 ✓✓</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="wa-features">
+            <div class="wa-feat"><h4>🔒 PIN de 6 dígitos</h4><p>OTP separado da mensagem. Mesmo se invadirem o WhatsApp, sem PIN não aprova.</p></div>
+            <div class="wa-feat"><h4>📍 Geo-fencing</h4><p>Aprovação só de cidades autorizadas. Detecta tentativas suspeitas de outros locais.</p></div>
+            <div class="wa-feat"><h4>💰 Limite por valor</h4><p>Acima de R$ 100k vai pro painel web. Lotes grandes têm camada extra.</p></div>
+            <div class="wa-feat"><h4>📋 Auditoria forense</h4><p>IP, hora, telefone, hash do PIN, geolocalização. Trilha completa pra defesa jurídica.</p></div>
+            <div class="wa-feat"><h4>⚡ Infraestrutura própria</h4><p>O canal de WhatsApp é nosso, não dependemos de terceiros nem de mensalidade extra.</p></div>
+            <div class="wa-feat"><h4>🇧🇷 100% mobile-first</h4><p>Onde 120M brasileiros já estão. Vence email, vence portal, vence app dedicado.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-brand">MEDPAG AI · WHATSAPP / SEGURANÇA</div>
+    <div class="slide-number">05 / 14</div>
+  </div>
+
+  <!-- ========== SLIDE 6: IA — 4 CONVERSAS DIA A DIA ========== -->
+  <div class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Feature 3.1 · Copiloto contextual</div>
+        <h2 class="slide-title">A IA conversa como um sócio que conhece tudo</h2>
+        <p class="slide-subtitle">Não é chatbot de FAQ. É um copiloto que lê dados em tempo real e responde com números reais do negócio do cliente.</p>
+      </div>
+
+      <div class="ai-grid-4">
+        <div class="convo">
+          <div class="convo-title">📊 Pergunta executiva</div>
+          <div class="ai-bubble user">como tá o mês?</div>
+          <div class="ai-bubble bot">
+            Esse mês até hoje (19/06):<br />
+            • Faturamento: <strong>R$ 47.300</strong> (78% da meta)<br />
+            • Margem: 64% (-3pp vs maio)<br />
+            • Lotes: 23 processados, 2 pendentes<br />
+            • Top cliente: Santa Casa BH (R$ 21k)<br /><br />
+            🚨 Saúde+ está com margem de 22% — processamos 3 lotes extras sem renegociar.
+          </div>
+          <div class="ai-bubble user">prepara renegociação</div>
+          <div class="ai-bubble bot">
+            ✅ Email de proposta de reajuste pronto pra Saúde+ (cópia pra você revisar antes de enviar).
+          </div>
+        </div>
+
+        <div class="convo">
+          <div class="convo-title">📋 Operação rápida</div>
+          <div class="ai-bubble user">qual o status do lote da VidaPlena?</div>
+          <div class="ai-bubble bot">
+            <strong>VidaPlena · Lote #4729</strong><br />
+            🟡 Enviado ao Itaú às 11:08<br />
+            Aguardando retorno (média do banco: 3h)<br /><br />
+            82 pagamentos · R$ 47.200,00<br />
+            Aprovado por: você (11:05)
+          </div>
+          <div class="ai-bubble user">manda relatório de junho dela</div>
+          <div class="ai-bubble bot">
+            📎 vidaplena-junho-2026.pdf<br /><br />
+            Resumo: 412 pagamentos, R$ 198.500, 100% conciliado, 0 rejeições. Margem nossa: R$ 8.100 (4,1%).
+          </div>
+        </div>
+
+        <div class="convo">
+          <div class="convo-title">💡 Pedindo conselho</div>
+          <div class="ai-bubble user">o thiago quer reajustar 20% pra Santa Casa, vale?</div>
+          <div class="ai-bubble bot">
+            Olhei os últimos 6 meses:<br /><br />
+            • Volume cresceu 45% (300 → 437 pgto/mês)<br />
+            • Margem caiu de 71% pra 58%<br />
+            • Sem reajuste há 14 meses<br /><br />
+            <strong>Reajuste justificável: 12-15%.</strong> 20% pode soar agressivo e gerar atrito. Posso preparar argumentação com esses dados se quiser.
+          </div>
+          <div class="ai-bubble user">faz pra 14% e me manda</div>
+          <div class="ai-bubble bot">✅ Documento pronto. Te enviei por email com os gráficos.</div>
+        </div>
+
+        <div class="convo">
+          <div class="convo-title">📞 Cobrança e dúvida</div>
+          <div class="ai-bubble user">a são lucas tá atrasada?</div>
+          <div class="ai-bubble bot">
+            <strong>São Lucas · Status</strong><br /><br />
+            Fatura #SL-0625: R$ 8.000<br />
+            Vencimento: 10/06 — atrasada 9 dias<br /><br />
+            Histórico: nunca atrasou em 8 meses. Provável esquecimento.<br /><br />
+            Quer que eu envie cobrança amigável agora pelo WhatsApp do contato deles?
+          </div>
+          <div class="ai-bubble user">manda</div>
+          <div class="ai-bubble bot">
+            ✅ Mensagem enviada pra +55 11 9xxxx-xxxx (Patrícia, financeiro).<br />
+            Te aviso quando responderem.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-brand">MEDPAG AI · IA / DIA A DIA</div>
+    <div class="slide-number">06 / 14</div>
+  </div>
+
+  <!-- ========== SLIDE 7: IA PROATIVA — ALERTAS QUE A IA DISPARA ========== -->
+  <div class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Feature 3.2 · IA proativa</div>
+        <h2 class="slide-title">Quando a IA fala antes de você perguntar</h2>
+        <p class="slide-subtitle">A inteligência artificial monitora os dados o tempo todo. Antecipa problema, sugere ação e pede confirmação. O gestor para de apagar incêndio.</p>
+      </div>
+
+      <div class="ai-grid-4">
+        <div class="convo">
+          <div class="convo-title">🚨 Anomalia em valor</div>
+          <div class="ai-bubble alert">
+            <strong>🚨 Algo estranho no lote da Santa Casa</strong><br /><br />
+            Dr. José Silva normalmente recebe R$ 2.500. Esse mês está como <strong>R$ 25.000</strong>.<br /><br />
+            Provavelmente erro de vírgula (linha 47). Quer que eu segure a aprovação e mande email pro hospital revisar?
+          </div>
+          <div class="ai-bubble user">sim, segura</div>
+          <div class="ai-bubble bot">
+            ✅ Lote pausado. Email enviado pra Santa Casa solicitando confirmação. Te aviso quando responderem.
+          </div>
+        </div>
+
+        <div class="convo">
+          <div class="convo-title">📅 Renovações vencendo</div>
+          <div class="ai-bubble alert">
+            <strong>📅 4 contratos vencendo em 30 dias</strong><br /><br />
+            • AMO (02/07) · margem 71% 🟢 manter<br />
+            • Santa Casa Marília (05/07) · subir 10%<br />
+            • São Lucas (28/06) · margem 38% revisar<br />
+            • Saúde+ (12/07) · 🔴 prejuízo, urgente<br /><br />
+            Quer os emails de renovação prontos pros 4?
+          </div>
+          <div class="ai-bubble user">sim, manda na ordem</div>
+          <div class="ai-bubble bot">
+            ✅ 4 rascunhos no seu email. Comecei pelo Saúde+ (mais crítico).
+          </div>
+        </div>
+
+        <div class="convo">
+          <div class="convo-title">⚠️ Margem caindo</div>
+          <div class="ai-bubble alert">
+            <strong>⚠️ Margem do MedCoop caindo</strong><br /><br />
+            Últimos 3 meses:<br />
+            Abr: 62% → Mai: 51% → Jun: 38%<br /><br />
+            Volume +30%, mas valor por pagamento -22%. Eles estão diluindo nosso ticket sem renegociar.<br /><br />
+            <strong>Sugestão:</strong> reunião antes do fim do mês.
+          </div>
+          <div class="ai-bubble user">agenda pra próxima quinta 14h</div>
+          <div class="ai-bubble bot">
+            ✅ Convite enviado pro Renato (CFO MedCoop). Confirmação automática quando aceitar.
+          </div>
+        </div>
+
+        <div class="convo">
+          <div class="convo-title">🟡 Banco com atraso</div>
+          <div class="ai-bubble alert">
+            <strong>🟡 Itaú está demorando hoje</strong><br /><br />
+            3 lotes enviados às 09:00 ainda sem retorno (média do dia: 2h, hoje: 5h+).<br /><br />
+            Pode ser instabilidade no banco. Já recebi reclamações similares de outros 2 clientes.<br /><br />
+            Quer que eu avise os 3 hospitais que está com atraso por parte do banco (não nosso)?
+          </div>
+          <div class="ai-bubble user">sim, manda mensagem padrão</div>
+          <div class="ai-bubble bot">
+            ✅ 3 mensagens enviadas. Texto explicando que é instabilidade Itaú e não MedPag. Reduz volume de ligação no suporte.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-brand">MEDPAG AI · IA / PROATIVA</div>
+    <div class="slide-number">07 / 14</div>
+  </div>
+
+  <!-- ========== SLIDE 8: O QUE MUDA NO DIA A DIA ========== -->
+  <style>
+    .compare-grid { display: grid; grid-template-columns: 1fr 60px 1fr; gap: 14px; flex: 1; align-items: stretch; }
+    .compare-col { display: flex; flex-direction: column; gap: 12px; }
+    .compare-head {
+      font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 10px 14px; border-radius: 10px; text-align: center;
+    }
+    .compare-head.before { background: var(--moss-100); color: var(--moss-700); }
+    .compare-head.after { background: var(--gold-500); color: var(--moss-950); }
+    .compare-row {
+      background: white; border: 1px solid var(--moss-200); border-radius: 10px;
+      padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start;
+      flex: 1;
+    }
+    .compare-row.before { border-left: 3px solid #b91c1c; }
+    .compare-row.after { border-left: 3px solid var(--gold-500); background: linear-gradient(135deg, var(--gold-50), white); }
+    .compare-row .ic { font-size: 20px; flex-shrink: 0; }
+    .compare-row .txt { font-size: 12.5px; color: var(--moss-800); line-height: 1.5; }
+    .compare-row .txt strong { color: var(--moss-950); display: block; margin-bottom: 2px; font-size: 13px; }
+    .compare-arrows {
+      display: flex; flex-direction: column; align-items: center; justify-content: space-around;
+      font-size: 24px; color: var(--gold-500); font-weight: 800;
+    }
+    .time-saved {
+      margin-top: 22px; padding: 18px 24px; background: linear-gradient(135deg, var(--moss-950), var(--moss-800));
+      color: white; border-radius: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+      position: relative; overflow: hidden;
+    }
+    .time-saved::before { content:''; position: absolute; top:0; left:0; right:0; height: 3px; background: var(--gold-500); }
+    .time-stat .lbl { font-size: 10px; color: var(--moss-200); letter-spacing: 0.1em; font-weight: 700; text-transform: uppercase; }
+    .time-stat .val { font-size: 24px; font-weight: 800; color: var(--gold-300); margin-top: 4px; letter-spacing: -0.02em; }
+    .time-stat .desc { font-size: 11px; color: var(--moss-100); margin-top: 2px; }
+  </style>
+
+  <div class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Como o seu dia muda</div>
+        <h2 class="slide-title">Você compra tempo. E para de apagar incêndio.</h2>
+        <p class="slide-subtitle">A diferença entre operar a empresa e gerenciar a empresa. Cada hora que você ganha de volta vira decisão estratégica.</p>
+      </div>
+
+      <div class="compare-grid">
+        <div class="compare-col">
+          <div class="compare-head before">⏱️ ANTES — segunda-feira de manhã</div>
+
+          <div class="compare-row before">
+            <div class="ic">📊</div>
+            <div class="txt"><strong>Abro 4 planilhas pra montar relatório de margem</strong>do mês passado. Levo 2 horas.</div>
+          </div>
+          <div class="compare-row before">
+            <div class="ic">📞</div>
+            <div class="txt"><strong>Ligo pro Marcos pra ele aprovar o lote</strong>do hospital. Ele está em reunião. Espero 3 horas.</div>
+          </div>
+          <div class="compare-row before">
+            <div class="ic">😰</div>
+            <div class="txt"><strong>Descubro que o São Lucas atrasou 9 dias</strong>quando o financeiro me cobra. Já era.</div>
+          </div>
+          <div class="compare-row before">
+            <div class="ic">📑</div>
+            <div class="txt"><strong>Não lembro qual contrato vence esse mês.</strong>Renovação acontece automaticamente, sem reajuste.</div>
+          </div>
+        </div>
+
+        <div class="compare-arrows">
+          <div>→</div>
+          <div>→</div>
+          <div>→</div>
+          <div>→</div>
+        </div>
+
+        <div class="compare-col">
+          <div class="compare-head after">✅ DEPOIS — segunda-feira de manhã</div>
+
+          <div class="compare-row after">
+            <div class="ic">☕</div>
+            <div class="txt"><strong>Abro o MedPag tomando café.</strong>Margem por hospital, lucro do mês, alertas — tudo em uma tela. Gasto 2 minutos.</div>
+          </div>
+          <div class="compare-row after">
+            <div class="ic">💬</div>
+            <div class="txt"><strong>Marcos aprova pelo WhatsApp em 30 segundos.</strong>Do almoço, da viagem, do bar. Com PIN, seguro.</div>
+          </div>
+          <div class="compare-row after">
+            <div class="ic">🔔</div>
+            <div class="txt"><strong>O MedPag te avisou no dia 3 que o São Lucas atrasou.</strong>Você já mandou cobrança amigável e recebeu no dia 5.</div>
+          </div>
+          <div class="compare-row after">
+            <div class="ic">📅</div>
+            <div class="txt"><strong>Recebe alerta 30 dias antes de cada renovação</strong>com sugestão de reajuste baseada no histórico real do cliente.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="time-saved">
+        <div class="time-stat">
+          <div class="lbl">Você economiza</div>
+          <div class="val">~12h/semana</div>
+          <div class="desc">Tempo que volta pra estratégia</div>
+        </div>
+        <div class="time-stat">
+          <div class="lbl">Aprovação por WhatsApp</div>
+          <div class="val">30 segundos</div>
+          <div class="desc">Antes: até 2 dias por email</div>
+        </div>
+        <div class="time-stat">
+          <div class="lbl">Decisão de margem</div>
+          <div class="val">1 olhar</div>
+          <div class="desc">Antes: 2 horas de planilha</div>
+        </div>
+        <div class="time-stat">
+          <div class="lbl">Alerta de problema</div>
+          <div class="val">automático</div>
+          <div class="desc">Antes: depois do estrago</div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-brand">MEDPAG AI · DIA A DIA</div>
+    <div class="slide-number">08 / 14</div>
+  </div>
+
+  <!-- ========== SLIDE 9: COMPARATIVO ========== -->
+  <div class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Comparativo competitivo</div>
+        <h2 class="slide-title">Onde o MedPag deixa todo mundo pra trás</h2>
+        <p class="slide-subtitle">Análise feature-a-feature contra concorrentes brasileiros que tentam atender o setor.</p>
+      </div>
+      <div class="comp-table">
+        <div class="comp-row head">
+          <div>Feature</div>
+          <div class="comp-cell">ERP Hospitalar (MV/Tasy)</div>
+          <div class="comp-cell">Conta Azul / Omie</div>
+          <div class="comp-cell">Banking Tools</div>
+          <div class="medpag-col">MedPag AI</div>
+        </div>
+        <div class="comp-row"><div class="comp-cell feat-name">CNAB 240 multi-banco</div><div class="comp-cell"><span class="partial">~</span></div><div class="comp-cell"><span class="ko">✗</span></div><div class="comp-cell"><span class="ok">✓</span></div><div class="medpag-col"><span class="ok">✓</span></div></div>
+        <div class="comp-row"><div class="comp-cell feat-name">Validação inteligente de CPF e dados</div><div class="comp-cell"><span class="ko">✗</span></div><div class="comp-cell"><span class="partial">~</span></div><div class="comp-cell"><span class="ko">✗</span></div><div class="medpag-col"><span class="ok">✓</span></div></div>
+        <div class="comp-row"><div class="comp-cell feat-name">Conciliação automática de retorno</div><div class="comp-cell"><span class="partial">~</span></div><div class="comp-cell"><span class="ko">✗</span></div><div class="comp-cell"><span class="partial">~</span></div><div class="medpag-col"><span class="ok">✓</span></div></div>
+        <div class="comp-row"><div class="comp-cell feat-name">Aprovação multi-camada com hash</div><div class="comp-cell"><span class="ko">✗</span></div><div class="comp-cell"><span class="ko">✗</span></div><div class="comp-cell"><span class="ko">✗</span></div><div class="medpag-col"><span class="ok">✓</span></div></div>
+        <div class="comp-row"><div class="comp-cell feat-name">Dashboard executivo de margem</div><div class="comp-cell"><span class="partial">~</span></div><div class="comp-cell"><span class="partial">~</span></div><div class="comp-cell"><span class="ko">✗</span></div><div class="medpag-col"><span class="ok">✓</span></div></div>
+        <div class="comp-row"><div class="comp-cell feat-name">Aprovação por WhatsApp com PIN</div><div class="comp-cell"><span class="ko">✗</span></div><div class="comp-cell"><span class="ko">✗</span></div><div class="comp-cell"><span class="ko">✗</span></div><div class="medpag-col"><span class="ok">✓</span></div></div>
+        <div class="comp-row"><div class="comp-cell feat-name">IA contextual conversacional</div><div class="comp-cell"><span class="ko">✗</span></div><div class="comp-cell"><span class="ko">✗</span></div><div class="comp-cell"><span class="ko">✗</span></div><div class="medpag-col"><span class="ok">✓</span></div></div>
+        <div class="comp-row"><div class="comp-cell feat-name">LGPD by design + criptografia AES-256</div><div class="comp-cell"><span class="partial">~</span></div><div class="comp-cell"><span class="ok">✓</span></div><div class="comp-cell"><span class="partial">~</span></div><div class="medpag-col"><span class="ok">✓</span></div></div>
+        <div class="comp-row"><div class="comp-cell feat-name" style="color: var(--gold-700); font-weight: 800;">FOCO no setor de saúde brasileiro</div><div class="comp-cell"><span class="ok">✓</span></div><div class="comp-cell"><span class="ko">✗</span></div><div class="comp-cell"><span class="ko">✗</span></div><div class="medpag-col"><span class="ok">✓</span></div></div>
+      </div>
+      <p style="margin-top: 14px; font-size: 12px; color: var(--moss-600); text-align: center;"><strong style="color: var(--gold-700);">3 features são exclusivas:</strong> Aprovação WhatsApp · Dashboard de Margem · IA Contextual.</p>
+    </div>
+    <div class="slide-brand">MEDPAG AI · COMPETIÇÃO</div>
+    <div class="slide-number">09 / 14</div>
+  </div>
+
+  <!-- ========== SLIDE 10: PRICING DEFINITIVO ========== -->
+  <div class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Pricing definitivo</div>
+        <h2 class="slide-title">4 planos · acessível pra começar, escalável pra crescer</h2>
+        <p class="slide-subtitle">Tickets honestos pro mercado brasileiro. Cada plano destrava features novas com ROI imediato pro cliente.</p>
+      </div>
+      <div class="pricing-grid">
+        <div class="price-card">
+          <span class="name">Básico</span>
+          <span class="value">R$ 597<small>/mês</small></span>
+          <ul>
+            <li>Até 300 pgto/mês</li>
+            <li>1 usuário</li>
+            <li>CNAB Unicred</li>
+            <li>Validação inteligente</li>
+            <li>Auditoria completa</li>
+          </ul>
+        </div>
+        <div class="price-card">
+          <span class="name">Profissional</span>
+          <span class="value">R$ 1.297<small>/mês</small></span>
+          <ul>
+            <li>Até 1.000 pgto/mês</li>
+            <li>3 usuários</li>
+            <li><strong>+ WhatsApp</strong></li>
+            <li>+ Multi-banco</li>
+            <li>+ Conciliação automática</li>
+          </ul>
+        </div>
+        <div class="price-card highlight">
+          <span class="name">Empresarial</span>
+          <span class="value">R$ 2.997<small>/mês</small></span>
+          <ul>
+            <li>Até 3.000 pgto/mês</li>
+            <li>10 usuários</li>
+            <li><strong>+ Dashboard Executivo</strong></li>
+            <li>+ Multi-empresa</li>
+            <li>+ SLA garantido</li>
+          </ul>
+        </div>
+        <div class="price-card">
+          <span class="name">Ilimitado</span>
+          <span class="value">R$ 3.997<small>/mês</small></span>
+          <ul>
+            <li>Volume ilimitado</li>
+            <li>Usuários ilimitados</li>
+            <li><strong>+ IA Contextual</strong></li>
+            <li>+ Alertas proativos</li>
+            <li>+ Customer Success</li>
+          </ul>
+        </div>
+      </div>
+      <p style="margin-top: 24px; font-size: 12px; color: var(--moss-600); text-align: center;">
+        Setup one-time: <strong>R$ 1.500</strong> (Básico/Profissional) · <strong>R$ 3.500</strong> (Empresarial/Ilimitado) · custos do banco e tarifas são responsabilidade do cliente contratante.
+      </p>
+    </div>
+    <div class="slide-brand">MEDPAG AI · PRICING</div>
+    <div class="slide-number">10 / 14</div>
+  </div>
+
+  <!-- ========== SLIDE 11: IMPACTO FINANCEIRO ========== -->
+  <div class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Impacto financeiro</div>
+        <h2 class="slide-title">Custo zero, receita 2× maior</h2>
+        <p class="slide-subtitle">Cenário conservador: 30 clientes em 12 meses com mix realista nos planos. Sem custo adicional de operação.</p>
+      </div>
+      <div class="impact-grid">
+        <div class="impact-col">
+          <h3>Cenário SEM features novas</h3>
+          <div class="impact-num-box">
+            <div class="lbl">MRR projetado em 12 meses</div>
+            <div class="v">R$ 30.510</div>
+            <div class="desc">30 clientes · teto no Profissional · sem Dashboard/IA</div>
+          </div>
+          <div class="impact-row"><span class="lbl">12 × Básico (R$ 597)</span><span class="v">R$ 7.164</span></div>
+          <div class="impact-row"><span class="lbl">18 × Profissional (R$ 1.297)</span><span class="v">R$ 23.346</span></div>
+          <div class="impact-row total"><span class="lbl">MRR Total</span><span class="v">R$ 30.510</span></div>
+          <p style="margin-top: 12px; font-size: 11.5px; color: var(--moss-600); line-height: 1.5;">
+            <strong>ARR:</strong> R$ 366k · <strong>Valuation (8× ARR):</strong> R$ 2,9 milhões
+          </p>
+        </div>
+        <div class="impact-col">
+          <h3>Cenário COM features novas</h3>
+          <div class="impact-num-box gold">
+            <div class="lbl">MRR projetado em 12 meses</div>
+            <div class="v">R$ 62.510</div>
+            <div class="desc">30 clientes · ticket médio R$ 2.084 · upsell em Empresarial e Ilimitado</div>
+          </div>
+          <div class="impact-row"><span class="lbl">5 × Básico (R$ 597)</span><span class="v">R$ 2.985</span></div>
+          <div class="impact-row"><span class="lbl">12 × Profissional (R$ 1.297)</span><span class="v">R$ 15.564</span></div>
+          <div class="impact-row gold-row"><span class="lbl">8 × Empresarial (R$ 2.997)</span><span class="v">R$ 23.976</span></div>
+          <div class="impact-row gold-row"><span class="lbl">5 × Ilimitado (R$ 3.997)</span><span class="v">R$ 19.985</span></div>
+          <div class="impact-row total"><span class="lbl">MRR Total</span><span class="v">R$ 62.510</span></div>
+          <p style="margin-top: 12px; font-size: 11.5px; color: var(--gold-700); font-weight: 700; line-height: 1.5;">
+            ARR: R$ 750k · Valuation (12× ARR pelo AI premium): <strong style="font-size: 13px;">R$ 9 milhões</strong>
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="slide-brand">MEDPAG AI · IMPACTO</div>
+    <div class="slide-number">11 / 14</div>
+  </div>
+
+  <!-- ========== SLIDE 12: VALUATION JUMP ========== -->
+  <div class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Valuation</div>
+        <h2 class="slide-title">De fintech a Vertical AI</h2>
+        <p class="slide-subtitle">A reclassificação do produto multiplica o valuation. Mercado paga 12-20× ARR em vertical AI vs 6-8× em SaaS de pagamentos.</p>
+      </div>
+      <div class="val-hero">
+        <div class="val-jump">
+          <div class="val-card before">
+            <div class="lbl">Sem AI · Pré-features</div>
+            <div class="num">R$ 2,9M</div>
+            <div class="det">SaaS payment ops · 8× ARR</div>
+          </div>
+          <div class="val-arrow">→</div>
+          <div class="val-card after">
+            <div class="lbl">Com AI · Pós-features</div>
+            <div class="num">R$ 9M</div>
+            <div class="det">Vertical AI Healthcare · 12× ARR</div>
+          </div>
+        </div>
+        <div class="val-multipliers">
+          <div class="mult-box">
+            <div class="num">3,1×</div>
+            <div class="lbl">Aumento de valuation</div>
+            <div class="det">Mesma base de clientes, narrativa diferente</div>
+          </div>
+          <div class="mult-box">
+            <div class="num">2,1×</div>
+            <div class="lbl">Aumento de MRR</div>
+            <div class="det">R$ 30k → R$ 62k com upsell em Empresarial e Ilimitado</div>
+          </div>
+          <div class="mult-box">
+            <div class="num">99%</div>
+            <div class="lbl">Margem operacional</div>
+            <div class="det">Custo zero adicional · IA gratuita</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-brand">MEDPAG AI · VALUATION</div>
+    <div class="slide-number">12 / 14</div>
+  </div>
+
+  <!-- ========== SLIDE 13: ROADMAP ========== -->
+  <div class="slide">
+    <div class="slide-content">
+      <div class="slide-header">
+        <div class="slide-eyebrow">Roadmap</div>
+        <h2 class="slide-title">90 dias para entregar tudo</h2>
+        <p class="slide-subtitle">Entrega em três fases. Cada 30 dias o cliente já enxerga valor novo na tela e fecha contrato maior.</p>
+      </div>
+      <div class="roadmap">
+        <div class="phase">
+          <div class="num-circle">1</div>
+          <div>
+            <div class="when">DIAS 1–30 · FASE A</div>
+            <h3>Dashboard Executivo</h3>
+            <p>O gestor abre o sistema e vê em uma tela só: lucro do mês, margem por hospital, alertas e o que precisa de atenção.</p>
+          </div>
+          <div class="deliv">
+            <strong>Cliente recebe</strong>
+            • Visão financeira em tempo real<br />
+            • Margem por contrato<br />
+            • Projeção de 12 meses<br />
+            • Alertas automáticos
+          </div>
+        </div>
+        <div class="phase">
+          <div class="num-circle">2</div>
+          <div>
+            <div class="when">DIAS 31–60 · FASE B</div>
+            <h3>WhatsApp como canal</h3>
+            <p>O lote chega no celular do aprovador. Ele aprova com PIN, recebe o arquivo de pagamento e o status colorido — sem precisar abrir o computador.</p>
+          </div>
+          <div class="deliv">
+            <strong>Cliente recebe</strong>
+            • Notificações no WhatsApp<br />
+            • Aprovação com senha (PIN)<br />
+            • Arquivo CNAB direto no chat<br />
+            • Conciliação automática
+          </div>
+        </div>
+        <div class="phase">
+          <div class="num-circle">3</div>
+          <div>
+            <div class="when">DIAS 61–90 · FASE C</div>
+            <h3>Assistente inteligente</h3>
+            <p>Um copiloto que conhece o negócio do cliente, responde dúvidas, sugere ações e avisa antes do problema acontecer. Conversa pelo WhatsApp.</p>
+          </div>
+          <div class="deliv">
+            <strong>Cliente recebe</strong>
+            • Pergunta e resposta no WhatsApp<br />
+            • Alertas proativos<br />
+            • Sugestão de renegociação<br />
+            • Detecção de anomalias
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-brand">MEDPAG AI · ROADMAP</div>
+    <div class="slide-number">13 / 14</div>
+  </div>
+
+  <!-- ========== SLIDE 14: CTA FECHAMENTO ========== -->
+  <div class="slide cover">
+    <div class="badge">DECISÃO · MAIO 2026</div>
+    <div class="pattern"></div>
+    <div class="slide-content" style="justify-content: center;">
+      <h1 style="font-size: 52px; margin-bottom: 24px;">
+        Por <span class="gold">R$ 0</span> em custo recorrente,<br />
+        a gente vira referência<br />
+        de <span class="gold">um setor inteiro.</span>
+      </h1>
+      <div class="cta-grid">
+        <div class="cta-box">
+          <div class="lbl">INVESTIMENTO</div>
+          <div class="v">próximo de zero</div>
+          <div class="det">Toda a infraestrutura do WhatsApp e da inteligência artificial já está pronta e paga.</div>
+        </div>
+        <div class="cta-box">
+          <div class="lbl">PRAZO</div>
+          <div class="v">90 dias</div>
+          <div class="det">Em 30 dias o primeiro cliente já está pagando o plano Empresarial.</div>
+        </div>
+        <div class="cta-box">
+          <div class="lbl">RETORNO</div>
+          <div class="v">R$ 6M+</div>
+          <div class="det">Salto de valuation: R$ 2,9M → R$ 9M com a mesma base de clientes.</div>
+        </div>
+      </div>
+      <div class="cta-action">
+        <div class="lbl">PRÓXIMO PASSO</div>
+        <div class="text">
+          Aprovar o Dashboard Executivo e começar o desenvolvimento essa semana.<br />
+          Primeira entrega em 30 dias, com 5 clientes piloto pra validar o plano Ilimitado.
+        </div>
+      </div>
+    </div>
+    <div class="slide-brand" style="color: var(--gold-300);">MEDPAG AI · DECISÃO</div>
+    <div class="slide-number" style="color: rgba(255,255,255,0.4);">14 / 14</div>
+  </div>
+
+</div>
+</body>
+</html>
