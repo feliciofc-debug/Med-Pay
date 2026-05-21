@@ -28,7 +28,7 @@ const UFS = [
 // O usuário pode trocar tudo, mas começar com a config dele economiza tempo
 // na sessão presencial.
 const DEFAULTS_AURIS: EmpresaPagadoraPayload = {
-  razao_social: "UNICRED DO BRASIL",
+  razao_social: "AURIS GESTAO EM SAUDE LTDA",
   nome_fantasia: null,
   tipo_inscricao: "CNPJ",
   cnpj_cpf: "40.917.845/0001-60",
