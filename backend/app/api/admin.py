@@ -28,7 +28,7 @@ from app.core.exceptions import (
 )
 from app.core.security import hash_password
 from app.models.cliente import Cliente
-from app.models.empresa_config import EmpresaConfig
+from app.models.empresa_config import EmpresaConfig, TipoInscricao
 from app.models.lote import Lote, StatusLote
 from app.models.pagamento import Pagamento, StatusPagamento
 from app.models.user import User, UserRole
