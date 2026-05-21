@@ -169,6 +169,62 @@ async def atualizar_usuario(
     return user
 
 
+@router.delete(
+    "/users/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def deletar_usuario(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> Response:
+    """Remove um usuário definitivamente.
+
+    Bloqueado quando:
+      - O ADMIN tenta apagar a si mesmo.
+      - O usuário tem histórico (lotes enviados/aprovados): nesse caso
+        a única opção segura é **desativar** (preservar trilha de
+        auditoria). Operadores antigos sempre devem ser desativados,
+        nunca apagados, pra manter rastreabilidade de quem subiu/aprovou
+        cada lote.
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise UsuarioNaoEncontradoError(f"Usuário {user_id} não encontrado")
+
+    if user.id == admin.id:
+        raise ValidacaoError(
+            "Você não pode excluir a si mesmo. Peça pra outro ADMIN."
+        )
+
+    qtd_lotes_enviados = await db.scalar(
+        select(func.count(Lote.id)).where(Lote.enviado_por_id == user.id)
+    )
+    qtd_lotes_aprovados = await db.scalar(
+        select(func.count(Lote.id)).where(Lote.aprovado_por_id == user.id)
+    )
+    if (qtd_lotes_enviados or 0) > 0 or (qtd_lotes_aprovados or 0) > 0:
+        raise ValidacaoError(
+            f"Usuário tem histórico no sistema "
+            f"({qtd_lotes_enviados or 0} lotes enviados, "
+            f"{qtd_lotes_aprovados or 0} aprovados) — não pode ser apagado "
+            f"sem perder a auditoria. Use 'Desativar' em vez de excluir."
+        )
+
+    email_apagado = user.email
+    await db.delete(user)
+    await db.flush()
+
+    log.info(
+        "admin.user_deletado",
+        deletado_por=admin.email,
+        user_apagado=email_apagado,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 # ============================================================
 # Reprocessamento de lote (recurso operacional pra ADMIN)
 # ============================================================

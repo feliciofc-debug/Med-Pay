@@ -7,6 +7,7 @@ import {
   Pencil,
   Plus,
   ShieldCheck,
+  Trash2,
   UserCheck,
   UserCog,
   UserX,
@@ -66,7 +67,31 @@ export function AdminUsuariosPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
     },
+    onError: (err) => {
+      alert(`Não foi possível alterar o status: ${getErrorMessage(err)}`);
+    },
   });
+
+  const excluirUsuario = useMutation({
+    mutationFn: async (user: UserAdmin) => {
+      await api.delete(`/api/admin/users/${user.id}`);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+    onError: (err) => {
+      alert(`Não foi possível excluir: ${getErrorMessage(err)}`);
+    },
+  });
+
+  function confirmarExclusao(user: UserAdmin) {
+    const ok = window.confirm(
+      `Excluir definitivamente "${user.nome}" (${user.email})?\n\n` +
+        `Essa ação não pode ser desfeita. Se o usuário já tiver lotes ` +
+        `no sistema, prefira "Desativar" para preservar a auditoria.`,
+    );
+    if (ok) excluirUsuario.mutate(user);
+  }
 
   return (
     <div className="space-y-6">
@@ -213,6 +238,15 @@ export function AdminUsuariosPage() {
                       title={user.ativo ? "Desativar" : "Ativar"}
                     >
                       {user.ativo ? <UserX size={14} /> : <UserCheck size={14} />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => confirmarExclusao(user)}
+                      disabled={excluirUsuario.isPending}
+                      className="p-1.5 rounded hover:bg-red-50 text-red-600"
+                      title="Excluir definitivamente"
+                    >
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </td>
