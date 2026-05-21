@@ -82,6 +82,30 @@ def _register_exception_handlers(app: FastAPI) -> None:
             content={"success": False, "errors": errors},
         )
 
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
+        # Pega QUALQUER exception não tratada e devolve JSON com CORS aplicado
+        # (caso contrário, browser bloqueia a resposta como Mixed Content/CORS).
+        log.exception(
+            "medpag.unhandled_error",
+            path=request.url.path,
+            method=request.method,
+            erro=str(exc),
+            tipo=type(exc).__name__,
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": {
+                    "code": "ERRO_INTERNO",
+                    "message": f"Erro interno: {type(exc).__name__}: {exc}",
+                },
+            },
+        )
+
 
 def create_app() -> FastAPI:
     """Factory da aplicação FastAPI."""

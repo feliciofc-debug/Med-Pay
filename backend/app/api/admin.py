@@ -879,7 +879,18 @@ async def salvar_empresa_pagadora(
             empresa.proximo_numero_sequencial = payload.proximo_numero_sequencial
         acao = "atualizada"
 
-    await db.flush()
+    try:
+        await db.flush()
+    except Exception as exc:
+        log.exception(
+            "admin.empresa_pagadora_save_error",
+            admin=admin.email,
+            erro=str(exc),
+            tipo_erro=type(exc).__name__,
+        )
+        raise ValidacaoError(
+            f"Erro ao salvar empresa pagadora: {type(exc).__name__}: {exc}"
+        ) from exc
 
     log.warning(
         "admin.empresa_pagadora_salva",
