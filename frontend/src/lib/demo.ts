@@ -139,6 +139,8 @@ function gerarPagamentos(quantidade: number, seed: number): Pagamento[] {
       banco_codigo: i % 17 === 3 ? "341" : "136",
       conta_mascarada: `****-${String(1000 + ((seed * 11 + i) % 9000))}`,
       valor_centavos: valor,
+      modalidade: "TED",
+      chave_pix: null,
       status,
       codigos_erro: codigosErro,
       mensagens_validacao: mensagens,

@@ -1,4 +1,4 @@
-import { type ComponentType, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   ArrowLeftRight,
@@ -7,6 +7,7 @@ import {
   Building2,
   FileSpreadsheet,
   Home,
+  type LucideIcon,
   LogOut,
   TrendingUp,
   Upload,
@@ -19,7 +20,7 @@ import type { UserRole } from "@/types";
 interface NavItem {
   to: string;
   label: string;
-  icon: ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   exact?: boolean;
   roles: UserRole[];
 }
