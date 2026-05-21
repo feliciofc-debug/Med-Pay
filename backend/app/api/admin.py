@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -174,12 +174,16 @@ async def atualizar_usuario(
 # ============================================================
 
 
-@router.delete("/lotes/{lote_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/lotes/{lote_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
 async def deletar_lote(
     lote_id: UUID,
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
-) -> None:
+) -> Response:
     """Deleta um lote (e todos os pagamentos por cascade).
 
     Uso recomendado:
@@ -219,7 +223,7 @@ async def deletar_lote(
         cliente_id=str(lote.cliente_id),
         status_antes=lote.status.value,
     )
-    return None
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/lotes/{lote_id}/reprocessar")
