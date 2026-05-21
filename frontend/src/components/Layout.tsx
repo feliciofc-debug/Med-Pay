@@ -70,7 +70,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const ADMIN_ITEMS = [
-  { to: "/app/admin/empresa-pagadora", label: "Empresa", icon: Building2 },
+  { to: "/app/admin/empresa-pagadora", label: "Empresa Pagadora", icon: Building2 },
   { to: "/app/admin/usuarios", label: "Equipe", icon: UserCog },
   { to: "/app/admin/relatorio-erros", label: "Erros", icon: TrendingUp },
   { to: "/app/admin/devolucoes", label: "Devoluções", icon: ArrowLeftRight },
