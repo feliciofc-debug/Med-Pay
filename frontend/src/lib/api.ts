@@ -1,7 +1,25 @@
 import axios, { type AxiosError } from "axios";
 import { DEMO_MODE, demoAdapter } from "@/lib/demo";
 
-const baseURL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+// Resolve baseURL com fallback robusto:
+// - Se VITE_API_URL definida: usa.
+// - Senão, se a página tá em HTTPS (produção): usa o backend do Render.
+// - Senão (dev local): usa localhost.
+function resolveBaseURL(): string {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && typeof envUrl === "string" && envUrl.length > 0) {
+    return envUrl;
+  }
+  if (
+    typeof window !== "undefined" &&
+    window.location.protocol === "https:"
+  ) {
+    return "https://medpag-api.onrender.com";
+  }
+  return "http://localhost:8000";
+}
+
+const baseURL = resolveBaseURL();
 
 export const api = axios.create({
   baseURL,
