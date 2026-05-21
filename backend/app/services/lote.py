@@ -355,6 +355,9 @@ class LoteService:
         lote.nome_arquivo_cnab = cnab.nome_arquivo
         lote.hash_arquivo_cnab = cnab.hash_sha256
         lote.conteudo_arquivo_cnab = cnab.conteudo_bytes
+        # Consome o sequencial: esse arquivo vai pro banco; o próximo lote
+        # aprovado tem que sair com o número seguinte.
+        empresa.proximo_numero_sequencial += 1
         await self.db.flush()
 
         log.info(
