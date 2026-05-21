@@ -157,7 +157,7 @@ async def upload_lote(
 # ============================================================
 
 
-@router.get("/", response_model=list[LoteResumo])
+@router.get("", response_model=list[LoteResumo])
 async def listar_lotes(
     status_filtro: StatusLote | None = Query(None, alias="status"),
     cliente_id: UUID | None = Query(None),

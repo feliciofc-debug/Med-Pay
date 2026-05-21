@@ -13,7 +13,7 @@ from app.models.user import User
 router = APIRouter()
 
 
-@router.get("/", status_code=status.HTTP_200_OK)
+@router.get("", status_code=status.HTTP_200_OK)
 async def listar_clientes(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -37,7 +37,7 @@ async def listar_clientes(
     }
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def criar_cliente(
     payload: dict[str, object],
     db: AsyncSession = Depends(get_db),
