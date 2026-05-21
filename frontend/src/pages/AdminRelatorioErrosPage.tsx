@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
+  ArrowRight,
   Building2,
   Download,
   FileSpreadsheet,
@@ -25,6 +27,7 @@ const JANELAS = [
 
 export function AdminRelatorioErrosPage() {
   const [dias, setDias] = useState(30);
+  const navigate = useNavigate();
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["admin", "relatorio-erros", dias],
@@ -168,38 +171,68 @@ export function AdminRelatorioErrosPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.por_operador.map((op, idx) => (
-                      <tr
-                        key={op.operador_id ?? `sem-${idx}`}
-                        className="border-b border-slate-100 last:border-0"
-                      >
-                        <td className="px-6 py-3">
-                          <div className="font-medium text-slate-900">
-                            {op.operador_nome}
-                          </div>
-                          {op.operador_email && (
-                            <div className="text-xs text-slate-500">
-                              {op.operador_email}
+                    {data.por_operador.map((op, idx) => {
+                      const clicavel = !!op.operador_id;
+                      return (
+                        <tr
+                          key={op.operador_id ?? `sem-${idx}`}
+                          onClick={
+                            clicavel
+                              ? () =>
+                                  navigate(
+                                    `/app/lotes?operador=${op.operador_id}`,
+                                  )
+                              : undefined
+                          }
+                          className={`border-b border-slate-100 last:border-0 ${
+                            clicavel
+                              ? "cursor-pointer hover:bg-accent-50/40 transition"
+                              : ""
+                          }`}
+                          title={
+                            clicavel
+                              ? `Ver lotes de ${op.operador_nome}`
+                              : undefined
+                          }
+                        >
+                          <td className="px-6 py-3">
+                            <div className="flex items-center gap-2">
+                              <div>
+                                <div className="font-medium text-slate-900">
+                                  {op.operador_nome}
+                                </div>
+                                {op.operador_email && (
+                                  <div className="text-xs text-slate-500">
+                                    {op.operador_email}
+                                  </div>
+                                )}
+                              </div>
+                              {clicavel && (
+                                <ArrowRight
+                                  size={14}
+                                  className="text-accent-500 opacity-60"
+                                />
+                              )}
                             </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-3 text-right text-slate-700">
-                          {op.total_lotes}
-                        </td>
-                        <td className="px-6 py-3 text-right text-slate-700">
-                          {op.total_pagamentos.toLocaleString("pt-BR")}
-                        </td>
-                        <td className="px-6 py-3 text-right font-medium text-red-700">
-                          {op.total_bloqueados.toLocaleString("pt-BR")}
-                        </td>
-                        <td className="px-6 py-3 text-right">
-                          <TaxaErroChip taxa={op.taxa_erro_pct} />
-                        </td>
-                        <td className="px-6 py-3 text-right font-medium text-slate-900">
-                          {formatBRL(op.valor_bloqueado_centavos)}
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="px-6 py-3 text-right text-slate-700">
+                            {op.total_lotes}
+                          </td>
+                          <td className="px-6 py-3 text-right text-slate-700">
+                            {op.total_pagamentos.toLocaleString("pt-BR")}
+                          </td>
+                          <td className="px-6 py-3 text-right font-medium text-red-700">
+                            {op.total_bloqueados.toLocaleString("pt-BR")}
+                          </td>
+                          <td className="px-6 py-3 text-right">
+                            <TaxaErroChip taxa={op.taxa_erro_pct} />
+                          </td>
+                          <td className="px-6 py-3 text-right font-medium text-slate-900">
+                            {formatBRL(op.valor_bloqueado_centavos)}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
@@ -279,10 +312,20 @@ export function AdminRelatorioErrosPage() {
                     {data.por_hospital.map((h) => (
                       <tr
                         key={h.cliente_id}
-                        className="border-b border-slate-100 last:border-0"
+                        onClick={() =>
+                          navigate(`/app/lotes?cliente=${h.cliente_id}`)
+                        }
+                        className="border-b border-slate-100 last:border-0 cursor-pointer hover:bg-accent-50/40 transition"
+                        title={`Ver lotes de ${h.cliente_nome}`}
                       >
                         <td className="px-6 py-3 font-medium text-slate-900">
-                          {h.cliente_nome}
+                          <div className="flex items-center gap-2">
+                            {h.cliente_nome}
+                            <ArrowRight
+                              size={14}
+                              className="text-accent-500 opacity-60"
+                            />
+                          </div>
                         </td>
                         <td className="px-6 py-3 text-right text-slate-700">
                           {h.total_lotes}

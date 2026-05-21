@@ -1,22 +1,90 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { X } from "lucide-react";
+
 import { api } from "@/lib/api";
 import { formatBRL, formatDateTime } from "@/lib/utils";
 import { StatusBadgeLote } from "@/components/StatusBadge";
-import type { LoteResumo } from "@/types";
+import type { LoteResumo, UserAdmin, Cliente } from "@/types";
 
 export function LotesListPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const operadorId = searchParams.get("operador");
+  const clienteId = searchParams.get("cliente");
+
   const { data: lotes = [], isLoading } = useQuery({
-    queryKey: ["lotes", "all"],
+    queryKey: ["lotes", "all", operadorId, clienteId],
     queryFn: async () => {
-      const { data } = await api.get<LoteResumo[]>("/api/lotes?limit=100");
+      const params = new URLSearchParams();
+      params.set("limit", "100");
+      if (operadorId) params.set("operador", operadorId);
+      if (clienteId) params.set("cliente_id", clienteId);
+      const { data } = await api.get<LoteResumo[]>(
+        `/api/lotes?${params.toString()}`,
+      );
       return data;
     },
   });
 
+  const { data: operadorInfo } = useQuery({
+    queryKey: ["admin", "user", operadorId],
+    enabled: !!operadorId,
+    queryFn: async () => {
+      const { data } = await api.get<UserAdmin[]>("/api/admin/users");
+      return data.find((u) => u.id === operadorId) ?? null;
+    },
+  });
+
+  const { data: clienteInfo } = useQuery({
+    queryKey: ["cliente", clienteId],
+    enabled: !!clienteId,
+    queryFn: async () => {
+      const { data } = await api.get<Cliente[]>("/api/clientes/");
+      return data.find((c) => c.id === clienteId) ?? null;
+    },
+  });
+
+  const limparFiltros = () => setSearchParams({});
+
+  const filtroAtivo = !!operadorId || !!clienteId;
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">Todos os Lotes</h1>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="text-2xl font-bold text-slate-900">Todos os Lotes</h1>
+        {filtroAtivo && (
+          <button
+            type="button"
+            onClick={limparFiltros}
+            className="btn-secondary text-xs"
+          >
+            <X size={14} /> Limpar filtros
+          </button>
+        )}
+      </div>
+
+      {filtroAtivo && (
+        <div className="card bg-accent-50/40 border-accent-200 text-sm text-brand-800">
+          <strong>Filtrando por:</strong>{" "}
+          {operadorId && (
+            <span>
+              operador{" "}
+              <span className="font-semibold text-accent-700">
+                {operadorInfo?.nome ?? operadorId.slice(0, 8)}
+              </span>
+            </span>
+          )}
+          {operadorId && clienteId && " · "}
+          {clienteId && (
+            <span>
+              hospital{" "}
+              <span className="font-semibold text-accent-700">
+                {clienteInfo?.nome ?? clienteId.slice(0, 8)}
+              </span>
+            </span>
+          )}
+        </div>
+      )}
 
       {isLoading && (
         <div className="card text-sm text-slate-500">Carregando...</div>
@@ -64,7 +132,9 @@ export function LotesListPage() {
         </table>
         {!isLoading && lotes.length === 0 && (
           <div className="p-6 text-sm text-slate-500 text-center">
-            Nenhum lote ainda. Faça o primeiro upload!
+            {filtroAtivo
+              ? "Nenhum lote encontrado com esse filtro."
+              : "Nenhum lote ainda. Faça o primeiro upload!"}
           </div>
         )}
       </div>

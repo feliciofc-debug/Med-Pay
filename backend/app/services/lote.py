@@ -152,6 +152,7 @@ class LoteService:
         *,
         status: StatusLote | None = None,
         cliente_id: UUID | None = None,
+        enviado_por_id: UUID | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Lote]:
@@ -167,6 +168,8 @@ class LoteService:
             query = query.where(Lote.status == status)
         if cliente_id is not None:
             query = query.where(Lote.cliente_id == cliente_id)
+        if enviado_por_id is not None:
+            query = query.where(Lote.enviado_por_id == enviado_por_id)
 
         result = await self.db.execute(query)
         return list(result.scalars().all())

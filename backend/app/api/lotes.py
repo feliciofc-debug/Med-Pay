@@ -161,6 +161,7 @@ async def upload_lote(
 async def listar_lotes(
     status_filtro: StatusLote | None = Query(None, alias="status"),
     cliente_id: UUID | None = Query(None),
+    enviado_por_id: UUID | None = Query(None, alias="operador"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -171,6 +172,7 @@ async def listar_lotes(
     lotes = await service.listar(
         status=status_filtro,
         cliente_id=cliente_id,
+        enviado_por_id=enviado_por_id,
         limit=limit,
         offset=offset,
     )
