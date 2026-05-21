@@ -149,14 +149,30 @@ export function LoteDetalhePage() {
               {aprovado.hash_arquivo.slice(0, 16)}…
             </code>
           </p>
-          <a
-            href={aprovado.download_url}
+          <button
+            type="button"
             className="btn-success"
-            download
+            onClick={async () => {
+              try {
+                const resp = await api.get(aprovado.download_url, {
+                  responseType: "blob",
+                });
+                const url = window.URL.createObjectURL(resp.data as Blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = aprovado.nome_arquivo;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+              } catch (err) {
+                alert(`Erro ao baixar: ${getErrorMessage(err)}`);
+              }
+            }}
           >
             <Download size={16} />
             Baixar {aprovado.nome_arquivo}
-          </a>
+          </button>
 
           <div className="mt-4 text-sm text-emerald-900">
             <p className="font-medium mb-1">Próximos passos:</p>
