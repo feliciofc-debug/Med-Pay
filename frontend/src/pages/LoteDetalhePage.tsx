@@ -81,6 +81,31 @@ export function LoteDetalhePage() {
     0,
   );
 
+  const loteJaAprovado =
+    lote.status === "APROVADO" || lote.status === "ENVIADO_BANCO";
+
+  async function baixarCnab(fallbackName: string) {
+    try {
+      const resp = await api.get(`/api/lotes/${lote!.id}/cnab`, {
+        responseType: "blob",
+      });
+      const cd =
+        (resp.headers["content-disposition"] as string | undefined) ?? "";
+      const match = cd.match(/filename="?([^";]+)"?/);
+      const filename = match?.[1] ?? fallbackName;
+      const url = window.URL.createObjectURL(resp.data as Blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Erro ao baixar: ${getErrorMessage(err)}`);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -136,42 +161,48 @@ export function LoteDetalhePage() {
         </div>
       </div>
 
-      {/* Resultado da aprovação */}
-      {aprovado && (
+      {/* Resultado da aprovação (logo após aprovar) ou lote já aprovado anteriormente */}
+      {(aprovado || (loteJaAprovado && lote.hash_arquivo_cnab)) && (
         <div className="card border-emerald-200 bg-emerald-50">
           <h2 className="font-semibold text-emerald-900 mb-2">
-            ✅ Lote aprovado e arquivo CNAB gerado!
+            ✅ Lote aprovado — arquivo CNAB pronto para download
           </h2>
           <p className="text-sm text-emerald-800 mb-4">
-            {aprovado.quantidade_pagamentos} pagamentos •{" "}
-            {formatBRL(aprovado.valor_total_centavos)} • Hash:{" "}
-            <code className="text-xs">
-              {aprovado.hash_arquivo.slice(0, 16)}…
-            </code>
+            {aprovado ? (
+              <>
+                {aprovado.quantidade_pagamentos} pagamentos •{" "}
+                {formatBRL(aprovado.valor_total_centavos)} • Hash:{" "}
+                <code className="text-xs">
+                  {aprovado.hash_arquivo.slice(0, 16)}…
+                </code>
+              </>
+            ) : (
+              <>
+                {lote.total_validos + lote.total_corrigiveis} pagamentos •{" "}
+                {formatBRL(lote.valor_total_centavos)}
+                {lote.hash_arquivo_cnab && (
+                  <>
+                    {" "}
+                    • Hash:{" "}
+                    <code className="text-xs">
+                      {lote.hash_arquivo_cnab.slice(0, 16)}…
+                    </code>
+                  </>
+                )}
+              </>
+            )}
           </p>
           <button
             type="button"
             className="btn-success"
-            onClick={async () => {
-              try {
-                const resp = await api.get(aprovado.download_url, {
-                  responseType: "blob",
-                });
-                const url = window.URL.createObjectURL(resp.data as Blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = aprovado.nome_arquivo;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                window.URL.revokeObjectURL(url);
-              } catch (err) {
-                alert(`Erro ao baixar: ${getErrorMessage(err)}`);
-              }
-            }}
+            onClick={() =>
+              baixarCnab(
+                aprovado?.nome_arquivo ?? `medpag_lote_${lote.id}.rem`,
+              )
+            }
           >
             <Download size={16} />
-            Baixar {aprovado.nome_arquivo}
+            Baixar arquivo CNAB (.rem)
           </button>
 
           <div className="mt-4 text-sm text-emerald-900">
