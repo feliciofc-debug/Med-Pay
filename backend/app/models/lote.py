@@ -7,7 +7,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -76,6 +76,12 @@ class Lote(Base):
     caminho_arquivo_original: Mapped[str | None] = mapped_column(String(500), nullable=True)
     caminho_arquivo_cnab: Mapped[str | None] = mapped_column(String(500), nullable=True)
     hash_arquivo_cnab: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    nome_arquivo_cnab: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Bytes do CNAB persistidos no banco (Render/Vercel têm disco efêmero;
+    # sem isso o arquivo somia após cada deploy).
+    conteudo_arquivo_cnab: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True
+    )
     caminho_arquivo_retorno: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # ===== Quem subiu (operador) =====

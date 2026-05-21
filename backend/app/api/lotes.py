@@ -15,7 +15,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -242,26 +242,56 @@ async def download_cnab(
     lote_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> FileResponse:
-    """Baixa o arquivo .rem CNAB 240 gerado para este lote."""
-    service = LoteService(db)
-    lote = await service.get(lote_id)
+) -> Response:
+    """Baixa o arquivo .rem CNAB 240 gerado para este lote.
 
-    if not lote.caminho_arquivo_cnab:
+    Estratégia (em ordem):
+      1. Bytes persistidos no banco (`conteudo_arquivo_cnab`).
+      2. Arquivo em disco (cache local — pode sumir entre deploys).
+      3. Regera on-demand a partir dos pagamentos aprovados (último recurso,
+         para lotes antigos cujo arquivo perdeu antes de termos persistência
+         no banco).
+    """
+    service = LoteService(db)
+    lote = await service.get_com_pagamentos(lote_id)
+
+    nome_arquivo = (
+        lote.nome_arquivo_cnab or f"medpag_lote_{lote.id.hex[:8]}.rem"
+    )
+
+    # 1) Banco
+    if lote.conteudo_arquivo_cnab:
+        return Response(
+            content=bytes(lote.conteudo_arquivo_cnab),
+            media_type="text/plain; charset=latin-1",
+            headers={
+                "Content-Disposition": f'attachment; filename="{nome_arquivo}"'
+            },
+        )
+
+    # 2) Disco
+    if lote.caminho_arquivo_cnab:
+        caminho = Path(lote.caminho_arquivo_cnab)
+        if caminho.exists():
+            return FileResponse(
+                path=caminho,
+                media_type="text/plain; charset=latin-1",
+                filename=caminho.name,
+            )
+
+    # 3) Regera (lote tem que estar aprovado)
+    if lote.status not in (StatusLote.APROVADO, StatusLote.ENVIADO_BANCO):
         raise LoteNaoEncontradoError(
             "Arquivo CNAB ainda não foi gerado para este lote"
         )
 
-    caminho = Path(lote.caminho_arquivo_cnab)
-    if not caminho.exists():
-        raise LoteNaoEncontradoError(
-            f"Arquivo CNAB não encontrado em disco: {caminho.name}"
-        )
-
-    return FileResponse(
-        path=caminho,
-        media_type="text/plain",
-        filename=caminho.name,
+    bytes_gerados, nome_gerado = await service.regerar_cnab(lote)
+    return Response(
+        content=bytes_gerados,
+        media_type="text/plain; charset=latin-1",
+        headers={
+            "Content-Disposition": f'attachment; filename="{nome_gerado}"'
+        },
     )
 
 

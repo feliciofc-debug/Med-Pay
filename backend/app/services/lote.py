@@ -252,18 +252,24 @@ class LoteService:
         )
         cnab = gerador.gerar()
 
-        # Salva arquivo em disco
-        CNAB_DIR.mkdir(parents=True, exist_ok=True)
-        caminho_cnab = CNAB_DIR / cnab.nome_arquivo
-        caminho_cnab.write_bytes(cnab.conteudo_bytes)
+        # Persiste o CNAB no banco (disco do Render é efêmero — sumia a
+        # cada deploy). Mantemos cópia em disco como cache opcional.
+        try:
+            CNAB_DIR.mkdir(parents=True, exist_ok=True)
+            caminho_cnab = CNAB_DIR / cnab.nome_arquivo
+            caminho_cnab.write_bytes(cnab.conteudo_bytes)
+            lote.caminho_arquivo_cnab = str(caminho_cnab)
+        except OSError:
+            # Disco read-only/cheio: ok, conteúdo está no banco.
+            lote.caminho_arquivo_cnab = None
 
-        # Atualiza lote
         lote.status = StatusLote.APROVADO
         lote.aprovado_por_id = aprovador.id
         lote.aprovado_at = datetime.now(UTC)
         lote.observacoes_aprovacao = observacoes
-        lote.caminho_arquivo_cnab = str(caminho_cnab)
         lote.hash_arquivo_cnab = cnab.hash_sha256
+        lote.nome_arquivo_cnab = cnab.nome_arquivo
+        lote.conteudo_arquivo_cnab = cnab.conteudo_bytes
 
         # Incrementa sequencial da empresa
         empresa.proximo_numero_sequencial += 1
@@ -301,6 +307,63 @@ class LoteService:
         )
 
         return cnab
+
+    # ============================================================
+    # Regeração de CNAB (lote já aprovado, mas arquivo perdeu em disco)
+    # ============================================================
+
+    async def regerar_cnab(self, lote: Lote) -> tuple[bytes, str]:
+        """Regera o CNAB de um lote já aprovado e persiste no banco.
+
+        Usado quando o arquivo em disco sumiu (deploy do Render é efêmero)
+        e ainda não tínhamos persistência de bytes no banco. Não incrementa
+        o sequencial da empresa: reaproveita o próximo livre só para regerar
+        bytes válidos. O hash pode diferir do original.
+        """
+        if lote.status not in (StatusLote.APROVADO, StatusLote.ENVIADO_BANCO):
+            raise LoteNaoAprovavelError(
+                f"Lote em status {lote.status.value} não tem CNAB para regerar"
+            )
+
+        pagamentos_aprovados = [
+            p
+            for p in lote.pagamentos
+            if p.status == StatusPagamento.APROVADO
+        ]
+        if not pagamentos_aprovados:
+            raise LoteNaoAprovavelError(
+                "Lote aprovado, mas sem pagamentos aprovados para regerar CNAB"
+            )
+
+        empresa_q = await self.db.execute(
+            select(EmpresaConfig).where(EmpresaConfig.ativo.is_(True)).limit(1)
+        )
+        empresa = empresa_q.scalar_one_or_none()
+        if empresa is None:
+            raise EmpresaConfigNaoEncontradaError(
+                "Configuração da empresa pagadora não encontrada"
+            )
+
+        gerador = CNABGenerator(
+            lote=lote,
+            pagamentos=pagamentos_aprovados,
+            empresa=empresa,
+            numero_sequencial_arquivo=empresa.proximo_numero_sequencial,
+        )
+        cnab = gerador.gerar()
+
+        lote.nome_arquivo_cnab = cnab.nome_arquivo
+        lote.hash_arquivo_cnab = cnab.hash_sha256
+        lote.conteudo_arquivo_cnab = cnab.conteudo_bytes
+        await self.db.flush()
+
+        log.info(
+            "lote.cnab_regerado",
+            lote_id=str(lote.id),
+            hash_cnab=cnab.hash_sha256[:16],
+        )
+
+        return cnab.conteudo_bytes, cnab.nome_arquivo
 
     # ============================================================
     # Marcação de envio ao banco (manual)
