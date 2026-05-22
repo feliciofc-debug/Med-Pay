@@ -196,6 +196,7 @@ function montarLote(
       : null,
     hash_conteudo: `a7f3b9e2${id}c4d8f1`,
     hash_arquivo_cnab: aprovado ? `cnab${id}9f2b1e3` : null,
+    nome_arquivo_cnab: aprovado ? `MEDPAG${id.toUpperCase()}.REM` : null,
     pagamentos,
   };
 }
