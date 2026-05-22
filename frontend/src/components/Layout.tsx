@@ -188,8 +188,23 @@ export function Layout({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto p-8">{children}</div>
+      <main className="flex-1 overflow-auto flex flex-col">
+        <div className="max-w-7xl mx-auto p-8 w-full flex-1">{children}</div>
+        <footer className="border-t border-slate-200 bg-white/60 backdrop-blur py-3 px-8">
+          <p className="text-center text-[11px] text-slate-500">
+            Plataforma proprietária e desenvolvida por{" "}
+            <a
+              href="https://atombrasildigital.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-brand-800 hover:text-accent-600 transition-colors"
+            >
+              ATOM BRASIL DIGITAL LTDA
+            </a>
+            <span className="mx-2 text-slate-300">•</span>
+            CNPJ: 22.003.550/0001-05
+          </p>
+        </footer>
       </main>
     </div>
   );
