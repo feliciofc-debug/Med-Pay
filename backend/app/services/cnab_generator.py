@@ -341,9 +341,16 @@ class CNABGenerator:
         linhas.append(self._header_lote())
 
         soma_valores = 0
-        for idx, pagamento in enumerate(self.pagamentos, start=1):
-            linhas.append(self._segmento_a(pagamento, idx))
-            linhas.append(self._segmento_b(pagamento, idx))
+        # No CNAB 240 o sequencial dentro do lote (posições 9-13 de cada
+        # segmento detalhe) é POR REGISTRO, não por pagamento. Como cada
+        # pagamento gera 2 linhas (Segmento A + Segmento B), o sequencial
+        # avança 1 a cada linha, não 1 a cada par.
+        seq_registro = 0
+        for pagamento in self.pagamentos:
+            seq_registro += 1
+            linhas.append(self._segmento_a(pagamento, seq_registro))
+            seq_registro += 1
+            linhas.append(self._segmento_b(pagamento, seq_registro))
             soma_valores += pagamento.valor_centavos
 
         # Trailer de lote: registros do lote inclui header(1) + 2*N + trailer(1)
