@@ -85,6 +85,25 @@ export function LoteDetalhePage() {
   const loteJaAprovado =
     lote.status === "APROVADO" || lote.status === "ENVIADO_BANCO";
 
+  function nomeSafeBanco(nome: string, loteId: string): string {
+    // Bancos brasileiros (Unicred, Itaú, Bradesco etc.) só aceitam nome
+    // 100% alfanumérico. Trocamos qualquer caractere fora dessa regra
+    // antes de salvar no disco — independente do que o servidor mandou.
+    const semExt = nome.replace(/\.[^.]+$/, "");
+    const ext = (nome.match(/\.[^.]+$/)?.[0] ?? ".REM").toUpperCase();
+    const limpo = semExt.replace(/[^A-Za-z0-9]/g, "");
+    if (limpo.length >= 8) {
+      return `${limpo.toUpperCase()}${ext}`;
+    }
+    // Nome antigo veio sem nada de aproveitável — gera um do zero.
+    const idLimpo = loteId.replace(/-/g, "").slice(0, 12).toUpperCase();
+    const ts = new Date()
+      .toISOString()
+      .replace(/[-:T.Z]/g, "")
+      .slice(0, 14);
+    return `MEDPAG${idLimpo}${ts}${ext}`;
+  }
+
   async function baixarCnab(fallbackName: string) {
     try {
       const resp = await api.get(`/api/lotes/${lote!.id}/cnab`, {
@@ -93,7 +112,8 @@ export function LoteDetalhePage() {
       const cd =
         (resp.headers["content-disposition"] as string | undefined) ?? "";
       const match = cd.match(/filename="?([^";]+)"?/);
-      const filename = match?.[1] ?? fallbackName;
+      const filenameRaw = match?.[1] ?? fallbackName;
+      const filename = nomeSafeBanco(filenameRaw, lote!.id);
       const url = window.URL.createObjectURL(resp.data as Blob);
       const a = document.createElement("a");
       a.href = url;
