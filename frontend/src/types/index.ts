@@ -79,6 +79,7 @@ export interface Pagamento {
 export interface LoteDetalhe extends LoteResumo {
   hash_conteudo: string;
   hash_arquivo_cnab: string | null;
+  nome_arquivo_cnab: string | null;
   pagamentos: Pagamento[];
 }
 

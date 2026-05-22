@@ -65,6 +65,7 @@ class LoteDetalhe(LoteResumo):
     pagamentos: list[PagamentoOut] = Field(default_factory=list)
     hash_conteudo: str
     hash_arquivo_cnab: str | None = None
+    nome_arquivo_cnab: str | None = None
 
 
 class AprovarLoteRequest(BaseModel):

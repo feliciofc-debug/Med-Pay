@@ -372,9 +372,15 @@ class CNABGenerator:
         conteudo = TERMINADOR_LINHA.join(linhas) + TERMINADOR_LINHA
         hash_arquivo = hashlib.sha256(conteudo.encode("latin-1")).hexdigest()
 
+        # Unicred (e bancos em geral) só aceita nome com letras e números
+        # — sem hífens, underlines, pontos ou espaços. Por isso usamos
+        # somente caracteres alfanuméricos no nome (a extensão `.REM` é
+        # tratada como parte do nome final, não como separador).
+        # Formato: MEDPAG{sequencial:6}{YYYYMMDD}{HHMMSS}.REM
         nome_arquivo = (
-            f"medpag_lote_{self.lote.id.hex[:8]}_"
-            f"{self.agora.strftime('%Y%m%d_%H%M%S')}.rem"
+            f"MEDPAG"
+            f"{self.numero_sequencial:06d}"
+            f"{self.agora.strftime('%Y%m%d%H%M%S')}.REM"
         )
 
         return CNABResult(

@@ -199,7 +199,9 @@ export function LoteDetalhePage() {
               className="btn-success"
               onClick={() =>
                 baixarCnab(
-                  aprovado?.nome_arquivo ?? `medpag_lote_${lote.id}.rem`,
+                  aprovado?.nome_arquivo ??
+                    lote.nome_arquivo_cnab ??
+                    `MEDPAG${lote.id.replace(/-/g, "").slice(0, 12).toUpperCase()}.REM`,
                 )
               }
             >
