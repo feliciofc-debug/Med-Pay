@@ -14,6 +14,7 @@ import {
   UserCog,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
 
@@ -177,6 +178,12 @@ export function Layout({ children }: { children: ReactNode }) {
             <LogOut size={16} />
             Sair
           </button>
+          <div
+            className="mt-3 pt-3 border-t border-brand-900/60 text-[10px] text-brand-100/40 truncate"
+            title={`API: ${api.defaults.baseURL ?? "(vazio)"}`}
+          >
+            API: {(api.defaults.baseURL ?? "").replace(/^https?:\/\//, "") || "(vazio)"}
+          </div>
         </div>
       </aside>
 
