@@ -2,6 +2,10 @@
 .env
 .env.local
 .env.*.local
+.env.production
+# Exceção: o .env.production do frontend é commitável de propósito
+# (URLs/flags públicas que o build do Vite injeta no bundle).
+!/frontend/.env.production
 
 # Python
 __pycache__/
@@ -54,7 +58,6 @@ data/
 *.xlsm
 
 # Frontend produção
-frontend/.env.production
 frontend/.env.local
 
 # Arquivos CNAB gerados localmente
