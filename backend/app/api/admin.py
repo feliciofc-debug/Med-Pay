@@ -937,6 +937,12 @@ async def salvar_empresa_pagadora(
 
     try:
         await db.flush()
+        # Recarrega tudo do banco pra garantir que os atributos populados
+        # via server_default (created_at/updated_at) estejam disponíveis
+        # quando o FastAPI serializar a resposta (response_model). Sem isso
+        # o SQLAlchemy pode tentar lazy-load num atributo expirado depois
+        # da session fechar, gerando DetachedInstanceError.
+        await db.refresh(empresa)
     except Exception as exc:
         log.exception(
             "admin.empresa_pagadora_save_error",
