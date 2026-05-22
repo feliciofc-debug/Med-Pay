@@ -296,6 +296,45 @@ async def download_cnab(
 
 
 # ============================================================
+# Regerar CNAB (forçar geração nova)
+# ============================================================
+
+
+@router.post("/{lote_id}/cnab/regerar")
+async def regerar_cnab(
+    lote_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    aprovador: User = Depends(require_aprovador),
+) -> dict[str, str | int]:
+    """Força a regeração do CNAB com o sequencial atual da empresa.
+
+    Caso de uso: banco rejeitou o arquivo (ex.: sequencial fora de ordem),
+    operador ajusta `proximo_numero_sequencial` em Empresa Pagadora e
+    pede o arquivo novo aqui. Limpa o conteúdo armazenado e gera de novo.
+    """
+    service = LoteService(db)
+    lote = await service.get_com_pagamentos(lote_id)
+
+    if lote.status not in (StatusLote.APROVADO, StatusLote.ENVIADO_BANCO):
+        raise LoteNaoEncontradoError(
+            f"Lote em status {lote.status.value} não tem CNAB para regerar"
+        )
+
+    lote.conteudo_arquivo_cnab = None
+    lote.nome_arquivo_cnab = None
+    lote.hash_arquivo_cnab = None
+    lote.caminho_arquivo_cnab = None
+
+    bytes_gerados, nome_gerado = await service.regerar_cnab(lote)
+    return {
+        "lote_id": str(lote.id),
+        "nome_arquivo": nome_gerado,
+        "tamanho_bytes": len(bytes_gerados),
+        "hash_arquivo": lote.hash_arquivo_cnab or "",
+    }
+
+
+# ============================================================
 # Marcar como enviado ao banco
 # ============================================================
 

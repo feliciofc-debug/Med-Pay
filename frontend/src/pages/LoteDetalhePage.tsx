@@ -7,6 +7,7 @@ import {
   XCircle,
   Download,
   ArrowLeft,
+  RefreshCw,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -192,18 +193,46 @@ export function LoteDetalhePage() {
               </>
             )}
           </p>
-          <button
-            type="button"
-            className="btn-success"
-            onClick={() =>
-              baixarCnab(
-                aprovado?.nome_arquivo ?? `medpag_lote_${lote.id}.rem`,
-              )
-            }
-          >
-            <Download size={16} />
-            Baixar arquivo CNAB (.rem)
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="btn-success"
+              onClick={() =>
+                baixarCnab(
+                  aprovado?.nome_arquivo ?? `medpag_lote_${lote.id}.rem`,
+                )
+              }
+            >
+              <Download size={16} />
+              Baixar arquivo CNAB (.rem)
+            </button>
+            <button
+              type="button"
+              className="px-3 py-2 text-sm rounded-md border border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100 inline-flex items-center gap-2 disabled:opacity-50"
+              onClick={async () => {
+                const ok = window.confirm(
+                  "Regerar o arquivo CNAB?\n\n" +
+                    "Use isso quando o banco rejeitar por sequencial. " +
+                    "Antes, ajuste 'Próximo número sequencial' em Empresa Pagadora. " +
+                    "O arquivo atual será substituído.",
+                );
+                if (!ok) return;
+                try {
+                  await api.post(`/api/lotes/${lote.id}/cnab/regerar`);
+                  await queryClient.invalidateQueries({
+                    queryKey: ["lote", id],
+                  });
+                  await refetch();
+                  alert("Arquivo regerado. Clique em 'Baixar' para obter a versão nova.");
+                } catch (err) {
+                  alert(`Erro ao regerar: ${getErrorMessage(err)}`);
+                }
+              }}
+            >
+              <RefreshCw size={14} />
+              Regerar arquivo
+            </button>
+          </div>
 
           <div className="mt-4 text-sm text-emerald-900">
             <p className="font-medium mb-1">Próximos passos:</p>
