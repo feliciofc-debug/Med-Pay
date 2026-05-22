@@ -255,8 +255,24 @@ async def download_cnab(
     service = LoteService(db)
     lote = await service.get_com_pagamentos(lote_id)
 
+    # Se o nome salvo no banco ainda está no formato antigo (com hífen/
+    # underline), força regeração: bancos como a Unicred só aceitam nome
+    # 100% alfanumérico. Vale também pra arquivos cujo conteúdo foi gerado
+    # antes do fix do sequencial dos segmentos.
+    nome_invalido = (
+        lote.nome_arquivo_cnab is not None
+        and not lote.nome_arquivo_cnab.replace(".", "").isalnum()
+    )
+    if nome_invalido and lote.status in (
+        StatusLote.APROVADO,
+        StatusLote.ENVIADO_BANCO,
+    ):
+        lote.conteudo_arquivo_cnab = None
+        lote.nome_arquivo_cnab = None
+        lote.hash_arquivo_cnab = None
+
     nome_arquivo = (
-        lote.nome_arquivo_cnab or f"medpag_lote_{lote.id.hex[:8]}.rem"
+        lote.nome_arquivo_cnab or f"MEDPAG{lote.id.hex[:8].upper()}.REM"
     )
 
     # 1) Banco
