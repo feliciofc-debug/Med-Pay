@@ -1,21 +1,25 @@
 """Rotas REST de Fichas de Plantão (módulo de OCR).
 
 Fluxo do coordenador:
-    POST   /api/fichas/upload          → sobe foto/PDF, OCR roda inline
-    GET    /api/fichas                 → lista para o aprovador conferir
-    GET    /api/fichas/{id}            → detalhe (texto OCR + linhas)
-    PUT    /api/fichas/{id}/linhas     → revisor edita as linhas
+    POST   /api/fichas/upload           → sobe foto/PDF, OCR roda inline
+    POST   /api/fichas/upload-lote      → sobe ZIP com várias fichas dentro
+    GET    /api/fichas                  → lista para o aprovador conferir
+    GET    /api/fichas/{id}             → detalhe (texto OCR + linhas)
+    PUT    /api/fichas/{id}/linhas      → revisor edita as linhas
     POST   /api/fichas/{id}/reprocessar → re-roda o OCR
-    POST   /api/fichas/{id}/converter  → vira lote de pagamento
-    GET    /api/fichas/{id}/arquivo    → baixa o arquivo original
-    DELETE /api/fichas/{id}            → remove (se não virou lote)
+    POST   /api/fichas/{id}/converter   → vira lote de pagamento
+    GET    /api/fichas/{id}/arquivo     → baixa o arquivo original
+    DELETE /api/fichas/{id}             → remove (se não virou lote)
 """
 
 from __future__ import annotations
 
+import io
+import zipfile
 from pathlib import Path
 from uuid import UUID
 
+import structlog
 from fastapi import (
     APIRouter,
     Depends,
@@ -26,6 +30,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,6 +53,12 @@ from app.schemas.ficha import (
     LinhaExtraidaSchema,
 )
 from app.services.ficha import EXTENSOES_SUPORTADAS, FichaService
+
+log = structlog.get_logger()
+
+# Limites do upload em lote (ZIP)
+ZIP_MAX_FICHAS = 50
+ZIP_MAX_SIZE_MB = 100
 
 router = APIRouter()
 
@@ -149,6 +160,221 @@ async def upload_ficha(
     # Recarrega com cliente eager pra serialização
     ficha = await service.get(ficha.id)
     return _ficha_para_detalhe(ficha)
+
+
+# ============================================================
+# Upload em lote (ZIP)
+# ============================================================
+
+
+class FichaProcessadaItem(BaseModel):
+    """Resultado individual dentro de um upload em lote."""
+
+    nome_arquivo: str
+    sucesso: bool
+    ficha_id: UUID | None = None
+    status: StatusFicha | None = None
+    erro: str | None = None
+
+
+class UploadLoteResponse(BaseModel):
+    """Resumo do upload em lote (ZIP)."""
+
+    total_arquivos: int
+    sucessos: int
+    falhas: int
+    itens: list[FichaProcessadaItem]
+
+
+def _eh_arquivo_oculto_zip(nome: str) -> bool:
+    """Filtra entradas chatas de ZIP (macOS metadata, dotfiles, pastas)."""
+    if nome.endswith("/"):
+        return True
+    base = Path(nome).name
+    if not base:
+        return True
+    if base.startswith(".") or base.startswith("._"):
+        return True
+    if "__MACOSX" in nome:
+        return True
+    return False
+
+
+@router.post(
+    "/upload-lote",
+    response_model=UploadLoteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_ficha_lote(
+    cliente_id: UUID = Form(...),
+    arquivo: UploadFile = File(...),
+    executar_ocr: bool = Form(True),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_pode_subir_ficha),
+) -> UploadLoteResponse:
+    """Aceita um ZIP contendo várias fichas (PNG/JPG/PDF) e processa todas.
+
+    Cada arquivo dentro do ZIP é tratado como uma ficha independente:
+        - Hash duplicado → ignorado com erro DUPLICADA (idempotente)
+        - Formato não suportado → erro FORMATO_INVALIDO
+        - OCR falhou → ficha persistida em status ERRO (revisor edita manual)
+        - Sucesso → ficha persistida em status EXTRAIDA/RECEBIDA
+
+    A response sempre traz `itens` com 1 entrada por arquivo do ZIP, mesmo
+    nos erros. Assim o frontend mostra a lista completa pro coordenador.
+
+    Limites:
+        - Máximo {ZIP_MAX_FICHAS} fichas por ZIP
+        - ZIP até {ZIP_MAX_SIZE_MB}MB
+        - Cada ficha individualmente respeita OCR_MAX_FILE_MB
+    """
+    if not arquivo.filename:
+        raise ValidacaoError("Nome do arquivo ausente")
+
+    ext = Path(arquivo.filename).suffix.lower().lstrip(".")
+    if ext != "zip":
+        raise ValidacaoError(
+            "Endpoint /upload-lote aceita apenas .zip. "
+            "Para arquivos individuais use /upload."
+        )
+
+    conteudo_zip = await arquivo.read()
+    tamanho_mb = len(conteudo_zip) / (1024 * 1024)
+    if tamanho_mb > ZIP_MAX_SIZE_MB:
+        raise ValidacaoError(
+            f"ZIP de {tamanho_mb:.1f}MB excede o limite de {ZIP_MAX_SIZE_MB}MB"
+        )
+
+    cliente_q = await db.execute(select(Cliente).where(Cliente.id == cliente_id))
+    cliente = cliente_q.scalar_one_or_none()
+    if cliente is None:
+        raise ValidacaoError("Cliente não encontrado")
+
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(conteudo_zip))
+    except zipfile.BadZipFile as exc:
+        raise ValidacaoError(f"ZIP inválido ou corrompido: {exc}") from exc
+
+    nomes_dentro = [n for n in zf.namelist() if not _eh_arquivo_oculto_zip(n)]
+    if not nomes_dentro:
+        raise ValidacaoError("ZIP vazio ou sem arquivos válidos")
+    if len(nomes_dentro) > ZIP_MAX_FICHAS:
+        raise ValidacaoError(
+            f"ZIP tem {len(nomes_dentro)} arquivos — máximo é {ZIP_MAX_FICHAS}. "
+            "Divida em vários ZIPs menores."
+        )
+
+    service = FichaService(db)
+    itens: list[FichaProcessadaItem] = []
+    sucessos = 0
+    falhas = 0
+
+    for nome in nomes_dentro:
+        nome_base = Path(nome).name
+        ext_item = Path(nome_base).suffix.lower().lstrip(".")
+
+        if ext_item not in EXTENSOES_SUPORTADAS:
+            itens.append(
+                FichaProcessadaItem(
+                    nome_arquivo=nome_base,
+                    sucesso=False,
+                    erro=(
+                        f"Formato '{ext_item}' não suportado. "
+                        f"Use: {', '.join(sorted(EXTENSOES_SUPORTADAS))}"
+                    ),
+                )
+            )
+            falhas += 1
+            continue
+
+        try:
+            conteudo_item = zf.read(nome)
+        except Exception as exc:  # noqa: BLE001 - queremos engolir e reportar
+            itens.append(
+                FichaProcessadaItem(
+                    nome_arquivo=nome_base,
+                    sucesso=False,
+                    erro=f"Falha ao extrair do ZIP: {exc}",
+                )
+            )
+            falhas += 1
+            continue
+
+        item_mb = len(conteudo_item) / (1024 * 1024)
+        if item_mb > settings.OCR_MAX_FILE_MB:
+            itens.append(
+                FichaProcessadaItem(
+                    nome_arquivo=nome_base,
+                    sucesso=False,
+                    erro=(
+                        f"Arquivo de {item_mb:.1f}MB excede o limite de "
+                        f"{settings.OCR_MAX_FILE_MB}MB do plano OCR"
+                    ),
+                )
+            )
+            falhas += 1
+            continue
+
+        # Mime aproximado pela extensão (UploadFile não tem por item)
+        mime = {
+            "pdf": "application/pdf",
+            "png": "image/png",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "tiff": "image/tiff",
+            "tif": "image/tiff",
+            "bmp": "image/bmp",
+            "webp": "image/webp",
+        }.get(ext_item, "application/octet-stream")
+
+        try:
+            ficha = await service.criar_a_partir_de_upload(
+                conteudo=conteudo_item,
+                nome_arquivo=nome_base,
+                mime_type=mime,
+                cliente=cliente,
+                enviado_por=current_user,
+                executar_ocr=executar_ocr,
+            )
+            itens.append(
+                FichaProcessadaItem(
+                    nome_arquivo=nome_base,
+                    sucesso=True,
+                    ficha_id=ficha.id,
+                    status=ficha.status,
+                )
+            )
+            sucessos += 1
+        except Exception as exc:  # noqa: BLE001 - registra a falha individual
+            log.warning(
+                "ficha_upload_lote_item_falhou",
+                nome=nome_base,
+                erro=str(exc),
+            )
+            itens.append(
+                FichaProcessadaItem(
+                    nome_arquivo=nome_base,
+                    sucesso=False,
+                    erro=str(exc),
+                )
+            )
+            falhas += 1
+
+    log.info(
+        "ficha_upload_lote_concluido",
+        cliente_id=str(cliente_id),
+        usuario_id=str(current_user.id),
+        total=len(nomes_dentro),
+        sucessos=sucessos,
+        falhas=falhas,
+    )
+
+    return UploadLoteResponse(
+        total_arquivos=len(nomes_dentro),
+        sucessos=sucessos,
+        falhas=falhas,
+        itens=itens,
+    )
 
 
 # ============================================================

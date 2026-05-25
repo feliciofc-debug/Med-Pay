@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  Archive,
   Camera,
   CheckCircle2,
   ClipboardList,
@@ -11,6 +12,7 @@ import {
   Loader2,
   Trash2,
   Upload,
+  XCircle,
 } from "lucide-react";
 
 import { api, getErrorMessage } from "@/lib/api";
@@ -19,7 +21,26 @@ import type { Cliente, FichaDetalhe, FichaResumo, StatusFicha } from "@/types";
 
 // Tamanhos máximos do OCR.space no plano free
 const MAX_MB = 5;
-const ACCEPT = ".jpg,.jpeg,.png,.tiff,.tif,.bmp,.webp,.pdf";
+const ZIP_MAX_MB = 100;
+const ACCEPT_SINGLE = ".jpg,.jpeg,.png,.tiff,.tif,.bmp,.webp,.pdf";
+const ACCEPT_ZIP = ".zip,application/zip";
+
+type UploadMode = "single" | "zip";
+
+interface FichaProcessadaItem {
+  nome_arquivo: string;
+  sucesso: boolean;
+  ficha_id: string | null;
+  status: StatusFicha | null;
+  erro: string | null;
+}
+
+interface UploadLoteResponse {
+  total_arquivos: number;
+  sucessos: number;
+  falhas: number;
+  itens: FichaProcessadaItem[];
+}
 
 const STATUS_LABELS: Record<StatusFicha, string> = {
   RECEBIDA: "Recebida",
@@ -132,11 +153,17 @@ export function FichasListPage() {
 
       {showUpload && (
         <UploadFichaModal
-          onClose={() => setShowUpload(false)}
+          onClose={() => {
+            setShowUpload(false);
+            void queryClient.invalidateQueries({ queryKey: ["fichas"] });
+          }}
           onSuccess={(ficha) => {
             setShowUpload(false);
             void queryClient.invalidateQueries({ queryKey: ["fichas"] });
             navigate(`/app/fichas/${ficha.id}`);
+          }}
+          onLoteSuccess={() => {
+            void queryClient.invalidateQueries({ queryKey: ["fichas"] });
           }}
         />
       )}
@@ -244,18 +271,25 @@ export function FichasListPage() {
 }
 
 // ============================================================
-// Modal de upload
+// Modal de upload (suporta arquivo único OU ZIP com várias fichas)
 // ============================================================
 
 interface UploadFichaModalProps {
   onClose: () => void;
   onSuccess: (ficha: FichaDetalhe) => void;
+  onLoteSuccess?: (resumo: UploadLoteResponse) => void;
 }
 
-function UploadFichaModal({ onClose, onSuccess }: UploadFichaModalProps) {
+function UploadFichaModal({
+  onClose,
+  onSuccess,
+  onLoteSuccess,
+}: UploadFichaModalProps) {
+  const [mode, setMode] = useState<UploadMode>("single");
   const [clienteId, setClienteId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [resumoLote, setResumoLote] = useState<UploadLoteResponse | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { data: clientes = [] } = useQuery({
@@ -268,7 +302,9 @@ function UploadFichaModal({ onClose, onSuccess }: UploadFichaModalProps) {
     },
   });
 
-  const upload = useMutation({
+  const limiteMb = mode === "zip" ? ZIP_MAX_MB : MAX_MB;
+
+  const uploadSingle = useMutation({
     mutationFn: async () => {
       if (!file || !clienteId) throw new Error("Selecione cliente e arquivo");
       if (file.size > MAX_MB * 1024 * 1024) {
@@ -291,6 +327,34 @@ function UploadFichaModal({ onClose, onSuccess }: UploadFichaModalProps) {
     onError: (err) => setError(getErrorMessage(err)),
   });
 
+  const uploadLote = useMutation({
+    mutationFn: async () => {
+      if (!file || !clienteId) throw new Error("Selecione cliente e ZIP");
+      if (file.size > ZIP_MAX_MB * 1024 * 1024) {
+        throw new Error(
+          `ZIP de ${(file.size / 1024 / 1024).toFixed(1)}MB excede o limite de ${ZIP_MAX_MB}MB.`,
+        );
+      }
+      const fd = new FormData();
+      fd.append("cliente_id", clienteId);
+      fd.append("arquivo", file);
+      fd.append("executar_ocr", "true");
+      const { data } = await api.post<UploadLoteResponse>(
+        "/api/fichas/upload-lote",
+        fd,
+        { headers: { "Content-Type": "multipart/form-data" }, timeout: 600_000 },
+      );
+      return data;
+    },
+    onSuccess: (data) => {
+      setResumoLote(data);
+      onLoteSuccess?.(data);
+    },
+    onError: (err) => setError(getErrorMessage(err)),
+  });
+
+  const isPending = uploadSingle.isPending || uploadLote.isPending;
+
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
     setFile(f);
@@ -306,6 +370,97 @@ function UploadFichaModal({ onClose, onSuccess }: UploadFichaModalProps) {
     }
   }
 
+  function handleEnviar() {
+    setError(null);
+    if (mode === "single") {
+      uploadSingle.mutate();
+    } else {
+      uploadLote.mutate();
+    }
+  }
+
+  function trocarModo(novo: UploadMode) {
+    setMode(novo);
+    setFile(null);
+    setError(null);
+    setResumoLote(null);
+  }
+
+  // Tela de resumo após upload em lote
+  if (resumoLote) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-200">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Upload em lote — concluído
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {resumoLote.total_arquivos} arquivos processados:{" "}
+              <span className="text-emerald-700 font-medium">
+                {resumoLote.sucessos} sucesso(s)
+              </span>
+              {resumoLote.falhas > 0 && (
+                <>
+                  {" • "}
+                  <span className="text-red-700 font-medium">
+                    {resumoLote.falhas} falha(s)
+                  </span>
+                </>
+              )}
+            </p>
+          </div>
+
+          <div className="p-6 max-h-[55vh] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="pb-2">Arquivo</th>
+                  <th className="pb-2">Resultado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {resumoLote.itens.map((item, idx) => (
+                  <tr key={idx}>
+                    <td className="py-2 pr-3">
+                      <div className="font-medium text-slate-800">
+                        {item.nome_arquivo}
+                      </div>
+                      {item.erro && (
+                        <div className="text-[11px] text-red-600 mt-0.5">
+                          {item.erro}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2">
+                      {item.sucesso ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-700">
+                          <CheckCircle2 size={14} />
+                          {item.status ?? "OK"}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-red-700">
+                          <XCircle size={14} />
+                          Falhou
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="btn-primary">
+              Fechar e ver lista
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
@@ -314,9 +469,42 @@ function UploadFichaModal({ onClose, onSuccess }: UploadFichaModalProps) {
             Enviar ficha de plantão
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Foto ou PDF da ficha carimbada. O OCR vai extrair os plantões em
-            alguns segundos.
+            {mode === "single"
+              ? "Foto ou PDF da ficha carimbada. O OCR extrai os plantões em alguns segundos."
+              : "Envie um ZIP com várias fichas — o sistema processa todas de uma vez."}
           </p>
+        </div>
+
+        {/* Toggle de modo */}
+        <div className="px-6 pt-4">
+          <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-lg">
+            <button
+              type="button"
+              onClick={() => trocarModo("single")}
+              disabled={isPending}
+              className={`flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${
+                mode === "single"
+                  ? "bg-white shadow-sm text-slate-900"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <FileImage size={14} />
+              Arquivo único
+            </button>
+            <button
+              type="button"
+              onClick={() => trocarModo("zip")}
+              disabled={isPending}
+              className={`flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${
+                mode === "zip"
+                  ? "bg-white shadow-sm text-slate-900"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Archive size={14} />
+              ZIP em lote
+            </button>
+          </div>
         </div>
 
         <div className="p-6 space-y-4">
@@ -329,6 +517,7 @@ function UploadFichaModal({ onClose, onSuccess }: UploadFichaModalProps) {
               onChange={(e) => setClienteId(e.target.value)}
               className="input"
               required
+              disabled={isPending}
             >
               <option value="">Selecione...</option>
               {clientes.map((c) => (
@@ -341,15 +530,19 @@ function UploadFichaModal({ onClose, onSuccess }: UploadFichaModalProps) {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Arquivo (foto ou PDF)
+              {mode === "single" ? "Arquivo (foto ou PDF)" : "Arquivo .zip"}
             </label>
             <div
-              onClick={() => inputRef.current?.click()}
+              onClick={() => !isPending && inputRef.current?.click()}
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
               className="cursor-pointer border-2 border-dashed border-slate-200 hover:border-brand-400 hover:bg-slate-50 rounded-lg px-4 py-8 text-center transition"
             >
-              <Upload size={28} className="mx-auto text-slate-400 mb-2" />
+              {mode === "zip" ? (
+                <Archive size={28} className="mx-auto text-slate-400 mb-2" />
+              ) : (
+                <Upload size={28} className="mx-auto text-slate-400 mb-2" />
+              )}
               {file ? (
                 <>
                   <p className="text-sm font-medium text-slate-800">
@@ -366,16 +559,19 @@ function UploadFichaModal({ onClose, onSuccess }: UploadFichaModalProps) {
                     Clique para selecionar ou arraste o arquivo
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    JPG, PNG, TIFF, PDF (até {MAX_MB}MB)
+                    {mode === "single"
+                      ? `JPG, PNG, TIFF, PDF (até ${MAX_MB}MB)`
+                      : `Arquivo .zip (até ${limiteMb}MB, máx 50 fichas)`}
                   </p>
                 </>
               )}
               <input
                 ref={inputRef}
                 type="file"
-                accept={ACCEPT}
+                accept={mode === "single" ? ACCEPT_SINGLE : ACCEPT_ZIP}
                 onChange={handleFile}
                 className="hidden"
+                disabled={isPending}
               />
             </div>
           </div>
@@ -387,9 +583,20 @@ function UploadFichaModal({ onClose, onSuccess }: UploadFichaModalProps) {
           )}
 
           <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded px-3 py-2">
-            <strong>Dica:</strong> tire a foto sob boa iluminação, com a folha
-            chapada na superfície. Quanto melhor a foto, mais campos o OCR
-            consegue ler sem revisão manual.
+            {mode === "single" ? (
+              <>
+                <strong>Dica:</strong> tire a foto sob boa iluminação, com a
+                folha chapada na superfície. Quanto melhor a foto, mais campos
+                o OCR consegue ler sem revisão manual.
+              </>
+            ) : (
+              <>
+                <strong>Dica:</strong> coloque várias fotos/PDFs em uma pasta,
+                comprima em .zip e envie. Cada arquivo dentro é tratado como
+                uma ficha independente — duplicatas são ignoradas
+                automaticamente. Pode levar alguns minutos pra processar tudo.
+              </>
+            )}
           </div>
         </div>
 
@@ -397,26 +604,28 @@ function UploadFichaModal({ onClose, onSuccess }: UploadFichaModalProps) {
           <button
             type="button"
             onClick={onClose}
-            disabled={upload.isPending}
+            disabled={isPending}
             className="btn-ghost"
           >
             Cancelar
           </button>
           <button
             type="button"
-            onClick={() => upload.mutate()}
-            disabled={!file || !clienteId || upload.isPending}
+            onClick={handleEnviar}
+            disabled={!file || !clienteId || isPending}
             className="btn-primary"
           >
-            {upload.isPending ? (
+            {isPending ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                Processando OCR...
+                {mode === "single"
+                  ? "Processando OCR..."
+                  : "Processando lote..."}
               </>
             ) : (
               <>
                 <Upload size={16} />
-                Enviar e processar
+                {mode === "single" ? "Enviar e processar" : "Enviar lote"}
               </>
             )}
           </button>
