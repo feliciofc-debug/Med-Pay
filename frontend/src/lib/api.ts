@@ -50,13 +50,26 @@ api.interceptors.request.use((config) => {
 });
 
 // Interceptor: redireciona em 401 (sessão expirada)
+// e em 403 USUARIO_INATIVO (admin bloqueou esse usuário enquanto ele estava logado)
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<{ error?: { code?: string; message?: string } }>) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    const code = error.response?.data?.error?.code;
+
+    const sessaoMorta =
+      status === 401 || (status === 403 && code === "USUARIO_INATIVO");
+
+    if (sessaoMorta) {
       const path = window.location.pathname;
       if (path !== "/login") {
         localStorage.removeItem("medpag_access_token");
+        // Mensagem amigável pra quando o admin bloqueia em tempo real
+        if (code === "USUARIO_INATIVO") {
+          alert(
+            "Seu acesso foi suspenso pelo administrador da plataforma. Em caso de dúvida, entre em contato.",
+          );
+        }
         window.location.href = "/login";
       }
     }

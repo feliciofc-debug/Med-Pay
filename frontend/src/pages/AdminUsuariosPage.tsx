@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Ban,
+  CheckCircle2,
   Eye,
   EyeOff,
   KeyRound,
@@ -8,9 +10,9 @@ import {
   Plus,
   ShieldCheck,
   Trash2,
+  Unlock,
   UserCheck,
   UserCog,
-  UserX,
   X,
 } from "lucide-react";
 
@@ -56,21 +58,53 @@ export function AdminUsuariosPage() {
     },
   });
 
+  const [feedback, setFeedback] = useState<
+    { tipo: "sucesso" | "erro"; mensagem: string } | null
+  >(null);
+
   const toggleAtivo = useMutation({
     mutationFn: async (user: UserAdmin) => {
       const { data } = await api.patch<UserAdmin>(
         `/api/admin/users/${user.id}`,
         { ativo: !user.ativo } satisfies AtualizarUsuarioPayload,
       );
-      return data;
+      return { user, atualizado: data };
     },
-    onSuccess: () => {
+    onSuccess: ({ user, atualizado }) => {
       void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      const acao = atualizado.ativo ? "desbloqueado" : "bloqueado";
+      setFeedback({
+        tipo: "sucesso",
+        mensagem: `${user.nome} ${acao} com sucesso. ${
+          atualizado.ativo
+            ? "Pode logar normalmente."
+            : "Não consegue mais acessar a plataforma."
+        }`,
+      });
+      setTimeout(() => setFeedback(null), 5000);
     },
     onError: (err) => {
-      alert(`Não foi possível alterar o status: ${getErrorMessage(err)}`);
+      setFeedback({
+        tipo: "erro",
+        mensagem: `Não foi possível alterar o status: ${getErrorMessage(err)}`,
+      });
     },
   });
+
+  function confirmarBloqueio(user: UserAdmin) {
+    if (user.ativo) {
+      const ok = window.confirm(
+        `Bloquear acesso de "${user.nome}" (${user.email})?\n\n` +
+          `O usuário não conseguirá mais fazer login na plataforma. ` +
+          `Você pode desbloquear a qualquer momento clicando no mesmo botão.\n\n` +
+          `Histórico, lotes e auditoria são preservados.`,
+      );
+      if (ok) toggleAtivo.mutate(user);
+    } else {
+      // Desbloqueio não exige confirmação — é ação reversível
+      toggleAtivo.mutate(user);
+    }
+  }
 
   const excluirUsuario = useMutation({
     mutationFn: async (user: UserAdmin) => {
@@ -113,6 +147,30 @@ export function AdminUsuariosPage() {
           <Plus size={16} /> Novo usuário
         </button>
       </header>
+
+      {feedback && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm flex items-start gap-3 ${
+            feedback.tipo === "sucesso"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-red-200 bg-red-50 text-red-800"
+          }`}
+        >
+          {feedback.tipo === "sucesso" ? (
+            <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
+          ) : (
+            <Ban size={18} className="shrink-0 mt-0.5" />
+          )}
+          <div className="flex-1">{feedback.mensagem}</div>
+          <button
+            type="button"
+            onClick={() => setFeedback(null)}
+            className="opacity-60 hover:opacity-100"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="card flex flex-wrap gap-3 items-end">
@@ -199,26 +257,73 @@ export function AdminUsuariosPage() {
                   </span>
                 </td>
                 <td className="px-6 py-3">
-                  {user.ativo ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
-                      <UserCheck size={14} /> Ativo
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-                      <UserX size={14} /> Inativo
-                    </span>
-                  )}
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={user.ativo}
+                      onClick={() => confirmarBloqueio(user)}
+                      disabled={toggleAtivo.isPending}
+                      title={
+                        user.ativo
+                          ? "Clique para BLOQUEAR o acesso"
+                          : "Clique para DESBLOQUEAR"
+                      }
+                      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-50 ${
+                        user.ativo ? "bg-emerald-500" : "bg-red-500"
+                      }`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                          user.ativo ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                    {user.ativo ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                        <UserCheck size={13} /> Ativo
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700">
+                        <Ban size={13} /> Bloqueado
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-3 text-slate-500 text-xs">
                   {formatDateTime(user.last_login_at)}
                 </td>
                 <td className="px-6 py-3 text-right">
-                  <div className="inline-flex items-center gap-1">
+                  <div className="inline-flex items-center gap-1.5">
+                    {user.ativo ? (
+                      <button
+                        type="button"
+                        onClick={() => confirmarBloqueio(user)}
+                        disabled={toggleAtivo.isPending}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-60 transition shadow-sm"
+                        title="Bloquear acesso à plataforma"
+                      >
+                        <Ban size={13} />
+                        BLOQUEAR
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => confirmarBloqueio(user)}
+                        disabled={toggleAtivo.isPending}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-60 transition shadow-sm"
+                        title="Reativar acesso à plataforma"
+                      >
+                        <Unlock size={13} />
+                        DESBLOQUEAR
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setEditando(user)}
                       className="p-1.5 rounded hover:bg-slate-100 text-slate-600"
-                      title="Editar"
+                      title="Editar nome / papel"
                     >
                       <Pencil size={14} />
                     </button>
@@ -232,19 +337,10 @@ export function AdminUsuariosPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => toggleAtivo.mutate(user)}
-                      disabled={toggleAtivo.isPending}
-                      className="p-1.5 rounded hover:bg-slate-100 text-slate-600"
-                      title={user.ativo ? "Desativar" : "Ativar"}
-                    >
-                      {user.ativo ? <UserX size={14} /> : <UserCheck size={14} />}
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => confirmarExclusao(user)}
                       disabled={excluirUsuario.isPending}
                       className="p-1.5 rounded hover:bg-red-50 text-red-600"
-                      title="Excluir definitivamente"
+                      title="Excluir definitivamente (irreversível)"
                     >
                       <Trash2 size={14} />
                     </button>
