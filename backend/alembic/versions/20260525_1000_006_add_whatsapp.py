@@ -16,6 +16,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import inspect
 from sqlalchemy.dialects import postgresql
 
 revision: str = "006_add_whatsapp"
@@ -29,13 +30,42 @@ _STATUS_INSTANCIA = ("DESCONECTADA", "AGUARDANDO_QR", "CONECTADA", "ERRO")
 
 
 def upgrade() -> None:
-    direcao_enum = postgresql.ENUM(*_DIRECAO, name="direcao_mensagem", create_type=False)
-    direcao_enum.create(op.get_bind(), checkfirst=True)
-
-    status_enum = postgresql.ENUM(
-        *_STATUS_INSTANCIA, name="status_instancia_wpp", create_type=False
+    # ENUMs idempotentes (vide migration 005 pra rationale)
+    op.execute(
+        """
+        DO $$ BEGIN
+            CREATE TYPE direcao_mensagem AS ENUM ('INBOUND', 'OUTBOUND');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+        """
     )
-    status_enum.create(op.get_bind(), checkfirst=True)
+    op.execute(
+        """
+        DO $$ BEGIN
+            CREATE TYPE status_instancia_wpp AS ENUM (
+                'DESCONECTADA', 'AGUARDANDO_QR', 'CONECTADA', 'ERRO'
+            );
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+        """
+    )
+
+    inspector = inspect(op.get_bind())
+    existentes = set(inspector.get_table_names())
+    if {"whatsapp_users", "whatsapp_mensagens", "whatsapp_instancias"}.issubset(
+        existentes
+    ):
+        return
+
+    if "whatsapp_users" in existentes:
+        # Estado parcial — não conseguimos recuperar com segurança.
+        # Aborta com mensagem clara ao invés de quebrar no meio.
+        raise RuntimeError(
+            "Estado parcial detectado: whatsapp_users existe mas outras tabelas "
+            "do módulo WhatsApp não. Limpe manualmente antes de reaplicar."
+        )
 
     op.create_table(
         "whatsapp_users",

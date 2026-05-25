@@ -15,6 +15,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import inspect
 from sqlalchemy.dialects import postgresql
 
 revision: str = "008_add_contratos_hospital"
@@ -24,6 +25,10 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    inspector = inspect(op.get_bind())
+    if "contratos_hospital" in inspector.get_table_names():
+        return
+
     op.create_table(
         "contratos_hospital",
         sa.Column(

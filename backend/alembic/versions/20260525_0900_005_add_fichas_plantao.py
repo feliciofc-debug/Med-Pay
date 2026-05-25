@@ -15,6 +15,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import inspect
 from sqlalchemy.dialects import postgresql
 
 revision: str = "005_add_fichas_plantao"
@@ -27,8 +28,27 @@ _STATUS_FICHA = ("RECEBIDA", "PROCESSANDO", "EXTRAIDA", "REVISADA", "CONVERTIDA"
 
 
 def upgrade() -> None:
-    status_enum = postgresql.ENUM(*_STATUS_FICHA, name="status_ficha", create_type=False)
-    status_enum.create(op.get_bind(), checkfirst=True)
+    # Cria o ENUM de forma idempotente. Se uma execução anterior falhou
+    # parcialmente (criou o type mas não a tabela), checkfirst do SQLAlchemy
+    # nem sempre detecta. SQL bruto é a forma mais confiável.
+    op.execute(
+        """
+        DO $$ BEGIN
+            CREATE TYPE status_ficha AS ENUM (
+                'RECEBIDA', 'PROCESSANDO', 'EXTRAIDA',
+                'REVISADA', 'CONVERTIDA', 'ERRO'
+            );
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+        """
+    )
+
+    inspector = inspect(op.get_bind())
+    if "fichas_plantao" in inspector.get_table_names():
+        # Tabela já existe (execução anterior chegou até aqui).
+        # Pula tudo — idempotência total.
+        return
 
     op.create_table(
         "fichas_plantao",
