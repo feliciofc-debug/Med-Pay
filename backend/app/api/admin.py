@@ -92,7 +92,7 @@ async def criar_usuario(
     payload: CriarUsuarioRequest,
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
-) -> User:
+) -> UserAdminOut:
     """Cria operador, aprovador ou outro admin.
 
     O Thiago usa esse endpoint quando contrata gente nova: cria um
@@ -118,6 +118,9 @@ async def criar_usuario(
     )
     db.add(novo)
     await db.flush()
+    # Refresh pra carregar server_default (created_at, updated_at) antes
+    # da sessão fechar — evita DetachedInstanceError na serialização.
+    await db.refresh(novo)
 
     log.info(
         "admin.user_criado",
@@ -125,7 +128,7 @@ async def criar_usuario(
         novo_usuario=novo.email,
         role=novo.role.value,
     )
-    return novo
+    return UserAdminOut.model_validate(novo)
 
 
 @router.patch("/users/{user_id}", response_model=UserAdminOut)
@@ -134,7 +137,7 @@ async def atualizar_usuario(
     payload: AtualizarUsuarioRequest,
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
-) -> User:
+) -> UserAdminOut:
     """Edita parcialmente um usuário (nome, role, ativo)."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -158,6 +161,11 @@ async def atualizar_usuario(
         user.ativo = payload.ativo
 
     await db.flush()
+    # Refresh garante que `updated_at` (com onupdate=func.now()) seja
+    # lido do banco antes da sessão fechar. Sem isso, o lazy reload
+    # explode com DetachedInstanceError quando FastAPI serializa.
+    await db.refresh(user)
+
     log.info(
         "admin.user_atualizado",
         editado_por=admin.email,
@@ -166,7 +174,7 @@ async def atualizar_usuario(
         role=user.role.value,
         ativo=user.ativo,
     )
-    return user
+    return UserAdminOut.model_validate(user)
 
 
 @router.delete(
@@ -419,7 +427,7 @@ async def reset_senha_usuario(
     payload: ResetSenhaRequest,
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
-) -> User:
+) -> UserAdminOut:
     """Reset de senha imposto pelo ADMIN.
 
     Cenário típico: operador esqueceu senha → liga pra TI → ADMIN reseta
@@ -433,13 +441,14 @@ async def reset_senha_usuario(
 
     user.hashed_password = hash_password(payload.nova_senha)
     await db.flush()
+    await db.refresh(user)  # Garante updated_at fresh antes de serializar
 
     log.info(
         "admin.senha_resetada",
         resetado_por=admin.email,
         user=user.email,
     )
-    return user
+    return UserAdminOut.model_validate(user)
 
 
 # ============================================================

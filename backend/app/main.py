@@ -95,8 +95,26 @@ def _register_exception_handlers(app: FastAPI) -> None:
             erro=str(exc),
             tipo=type(exc).__name__,
         )
+        # Aplica CORS manualmente no 500 — o middleware CORS pode não rodar
+        # em alguns caminhos de erro (ex.: erro durante serialização do
+        # response_model), e sem CORS o browser oculta o status real e
+        # reporta como "Network Error" no axios.
+        origin = request.headers.get("origin", "")
+        cors_headers: dict[str, str] = {}
+        if origin:
+            allowed = origin in settings.cors_origins_list
+            if not allowed and settings.CORS_ORIGIN_REGEX:
+                import re
+
+                allowed = bool(re.match(settings.CORS_ORIGIN_REGEX, origin))
+            if allowed:
+                cors_headers["Access-Control-Allow-Origin"] = origin
+                cors_headers["Access-Control-Allow-Credentials"] = "true"
+                cors_headers["Vary"] = "Origin"
+
         return JSONResponse(
             status_code=500,
+            headers=cors_headers,
             content={
                 "success": False,
                 "error": {
