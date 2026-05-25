@@ -14,10 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-import sqlalchemy as sa
 from alembic import op
-from sqlalchemy import inspect
-from sqlalchemy.dialects import postgresql
 
 revision: str = "006_add_whatsapp"
 down_revision: str | None = "005_add_fichas_plantao"
@@ -25,12 +22,8 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-_DIRECAO = ("INBOUND", "OUTBOUND")
-_STATUS_INSTANCIA = ("DESCONECTADA", "AGUARDANDO_QR", "CONECTADA", "ERRO")
-
-
+# SQL bruto e idempotente — vide rationale em 005_add_fichas_plantao.
 def upgrade() -> None:
-    # ENUMs idempotentes (vide migration 005 pra rationale)
     op.execute(
         """
         DO $$ BEGIN
@@ -52,188 +45,96 @@ def upgrade() -> None:
         """
     )
 
-    inspector = inspect(op.get_bind())
-    existentes = set(inspector.get_table_names())
-    if {"whatsapp_users", "whatsapp_mensagens", "whatsapp_instancias"}.issubset(
-        existentes
-    ):
-        return
-
-    if "whatsapp_users" in existentes:
-        # Estado parcial — não conseguimos recuperar com segurança.
-        # Aborta com mensagem clara ao invés de quebrar no meio.
-        raise RuntimeError(
-            "Estado parcial detectado: whatsapp_users existe mas outras tabelas "
-            "do módulo WhatsApp não. Limpe manualmente antes de reaplicar."
-        )
-
-    op.create_table(
-        "whatsapp_users",
-        sa.Column(
-            "id",
-            postgresql.UUID(as_uuid=True),
-            primary_key=True,
-            server_default=sa.text("gen_random_uuid()"),
-        ),
-        sa.Column(
-            "user_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("users.id"),
-            nullable=False,
-        ),
-        sa.Column("numero_e164", sa.String(length=20), nullable=False, unique=True),
-        sa.Column("apelido", sa.String(length=100), nullable=True),
-        sa.Column(
-            "pode_aprovar_pagamento",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.false(),
-        ),
-        sa.Column(
-            "ativo", sa.Boolean(), nullable=False, server_default=sa.true()
-        ),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS whatsapp_users (
+            id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id                 UUID NOT NULL REFERENCES users(id),
+            numero_e164             VARCHAR(20) NOT NULL UNIQUE,
+            apelido                 VARCHAR(100),
+            pode_aprovar_pagamento  BOOLEAN NOT NULL DEFAULT FALSE,
+            ativo                   BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """
     )
-    op.create_index("ix_whatsapp_users_user_id", "whatsapp_users", ["user_id"])
-    op.create_index(
-        "ix_whatsapp_users_numero_e164",
-        "whatsapp_users",
-        ["numero_e164"],
-        unique=True,
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_whatsapp_users_user_id "
+        "ON whatsapp_users (user_id);"
+    )
+    op.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_whatsapp_users_numero_e164 "
+        "ON whatsapp_users (numero_e164);"
     )
 
-    op.create_table(
-        "whatsapp_mensagens",
-        sa.Column(
-            "id",
-            postgresql.UUID(as_uuid=True),
-            primary_key=True,
-            server_default=sa.text("gen_random_uuid()"),
-        ),
-        sa.Column("numero_e164", sa.String(length=20), nullable=False),
-        sa.Column(
-            "user_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("users.id"),
-            nullable=True,
-        ),
-        sa.Column(
-            "direcao",
-            sa.Enum(*_DIRECAO, name="direcao_mensagem", create_type=False),
-            nullable=False,
-        ),
-        sa.Column("texto", sa.Text(), nullable=False),
-        sa.Column(
-            "wuzapi_message_id", sa.String(length=100), nullable=True, unique=True
-        ),
-        sa.Column("tools_usadas", postgresql.JSON(), nullable=True),
-        sa.Column("tokens_prompt", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column(
-            "tokens_resposta", sa.Integer(), nullable=False, server_default="0"
-        ),
-        sa.Column("duracao_ms", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("erro", sa.Text(), nullable=True),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS whatsapp_mensagens (
+            id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            numero_e164         VARCHAR(20) NOT NULL,
+            user_id             UUID REFERENCES users(id),
+            direcao             direcao_mensagem NOT NULL,
+            texto               TEXT NOT NULL,
+            wuzapi_message_id   VARCHAR(100) UNIQUE,
+            tools_usadas        JSON,
+            tokens_prompt       INTEGER NOT NULL DEFAULT 0,
+            tokens_resposta     INTEGER NOT NULL DEFAULT 0,
+            duracao_ms          INTEGER NOT NULL DEFAULT 0,
+            erro                TEXT,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """
     )
-    op.create_index(
-        "ix_whatsapp_mensagens_numero_e164",
-        "whatsapp_mensagens",
-        ["numero_e164"],
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_whatsapp_mensagens_numero_e164 "
+        "ON whatsapp_mensagens (numero_e164);"
     )
-    op.create_index(
-        "ix_whatsapp_mensagens_user_id", "whatsapp_mensagens", ["user_id"]
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_whatsapp_mensagens_user_id "
+        "ON whatsapp_mensagens (user_id);"
     )
-    op.create_index(
-        "ix_whatsapp_mensagens_direcao", "whatsapp_mensagens", ["direcao"]
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_whatsapp_mensagens_direcao "
+        "ON whatsapp_mensagens (direcao);"
     )
-    op.create_index(
-        "ix_whatsapp_mensagens_created_at", "whatsapp_mensagens", ["created_at"]
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_whatsapp_mensagens_created_at "
+        "ON whatsapp_mensagens (created_at);"
     )
-    op.create_index(
-        "ix_whatsapp_mensagens_wuzapi_message_id",
-        "whatsapp_mensagens",
-        ["wuzapi_message_id"],
-        unique=True,
+    op.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_whatsapp_mensagens_wuzapi_message_id "
+        "ON whatsapp_mensagens (wuzapi_message_id);"
     )
 
-    op.create_table(
-        "whatsapp_instancias",
-        sa.Column(
-            "id",
-            postgresql.UUID(as_uuid=True),
-            primary_key=True,
-            server_default=sa.text("gen_random_uuid()"),
-        ),
-        sa.Column(
-            "wuzapi_instance_id", sa.String(length=100), nullable=False, unique=True
-        ),
-        sa.Column("wuzapi_token", sa.String(length=255), nullable=False),
-        sa.Column("numero_bot", sa.String(length=20), nullable=True),
-        sa.Column(
-            "status",
-            sa.Enum(
-                *_STATUS_INSTANCIA,
-                name="status_instancia_wpp",
-                create_type=False,
-            ),
-            nullable=False,
-            server_default="DESCONECTADA",
-        ),
-        sa.Column("ultimo_qr_base64", sa.Text(), nullable=True),
-        sa.Column("ultimo_qr_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column(
-            "ativa", sa.Boolean(), nullable=False, server_default=sa.true()
-        ),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS whatsapp_instancias (
+            id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            wuzapi_instance_id  VARCHAR(100) NOT NULL UNIQUE,
+            wuzapi_token        VARCHAR(255) NOT NULL,
+            numero_bot          VARCHAR(20),
+            status              status_instancia_wpp NOT NULL DEFAULT 'DESCONECTADA',
+            ultimo_qr_base64    TEXT,
+            ultimo_qr_at        TIMESTAMPTZ,
+            ativa               BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """
     )
 
 
 def downgrade() -> None:
-    op.drop_table("whatsapp_instancias")
-
-    op.drop_index(
-        "ix_whatsapp_mensagens_wuzapi_message_id", table_name="whatsapp_mensagens"
-    )
-    op.drop_index(
-        "ix_whatsapp_mensagens_created_at", table_name="whatsapp_mensagens"
-    )
-    op.drop_index("ix_whatsapp_mensagens_direcao", table_name="whatsapp_mensagens")
-    op.drop_index("ix_whatsapp_mensagens_user_id", table_name="whatsapp_mensagens")
-    op.drop_index(
-        "ix_whatsapp_mensagens_numero_e164", table_name="whatsapp_mensagens"
-    )
-    op.drop_table("whatsapp_mensagens")
-
-    op.drop_index("ix_whatsapp_users_numero_e164", table_name="whatsapp_users")
-    op.drop_index("ix_whatsapp_users_user_id", table_name="whatsapp_users")
-    op.drop_table("whatsapp_users")
-
-    sa.Enum(name="status_instancia_wpp").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="direcao_mensagem").drop(op.get_bind(), checkfirst=True)
+    op.execute("DROP TABLE IF EXISTS whatsapp_instancias;")
+    op.execute("DROP INDEX IF EXISTS ix_whatsapp_mensagens_wuzapi_message_id;")
+    op.execute("DROP INDEX IF EXISTS ix_whatsapp_mensagens_created_at;")
+    op.execute("DROP INDEX IF EXISTS ix_whatsapp_mensagens_direcao;")
+    op.execute("DROP INDEX IF EXISTS ix_whatsapp_mensagens_user_id;")
+    op.execute("DROP INDEX IF EXISTS ix_whatsapp_mensagens_numero_e164;")
+    op.execute("DROP TABLE IF EXISTS whatsapp_mensagens;")
+    op.execute("DROP INDEX IF EXISTS ix_whatsapp_users_numero_e164;")
+    op.execute("DROP INDEX IF EXISTS ix_whatsapp_users_user_id;")
+    op.execute("DROP TABLE IF EXISTS whatsapp_users;")
+    op.execute("DROP TYPE IF EXISTS status_instancia_wpp;")
+    op.execute("DROP TYPE IF EXISTS direcao_mensagem;")
