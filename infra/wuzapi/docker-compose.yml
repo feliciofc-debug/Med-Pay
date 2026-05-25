@@ -1,0 +1,48 @@
+services:
+  wuzapi-postgres:
+    image: postgres:14-alpine
+    container_name: wuzapi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${WUZAPI_DB_NAME:-wuzapi_db}
+      POSTGRES_USER: ${WUZAPI_DB_USER:-wuzapi_user}
+      POSTGRES_PASSWORD: ${WUZAPI_DB_PASSWORD}
+    volumes:
+      - wuzapi_postgres_data:/var/lib/postgresql/data
+    networks:
+      - wuzapi
+    # Mantém o Postgres acessível só pela rede interna
+    expose:
+      - "5432"
+
+  wuzapi:
+    image: ghcr.io/asternic/wuzapi:latest
+    container_name: wuzapi
+    restart: unless-stopped
+    depends_on:
+      - wuzapi-postgres
+    environment:
+      DB_HOST: wuzapi-postgres
+      DB_PORT: 5432
+      DB_USER: ${WUZAPI_DB_USER:-wuzapi_user}
+      DB_PASSWORD: ${WUZAPI_DB_PASSWORD}
+      DB_NAME: ${WUZAPI_DB_NAME:-wuzapi_db}
+      WUZAPI_ADMIN_TOKEN: ${WUZAPI_ADMIN_TOKEN}
+      WUZAPI_GLOBAL_ENCRYPTION_KEY: ${WUZAPI_ENCRYPTION_KEY}
+      WUZAPI_GLOBAL_HMAC_KEY: ${WUZAPI_HMAC_KEY}
+      LOG_LEVEL: info
+    volumes:
+      - wuzapi_data:/app/data
+    networks:
+      - wuzapi
+    # Expõe a API do Wuzapi pro mundo (proteja com firewall ou Nginx)
+    ports:
+      - "${WUZAPI_PORT:-8080}:8080"
+
+volumes:
+  wuzapi_postgres_data:
+  wuzapi_data:
+
+networks:
+  wuzapi:
+    driver: bridge

@@ -3,8 +3,11 @@ import { Link, useLocation } from "react-router-dom";
 import {
   ArrowLeftRight,
   BarChart3,
+  Bot,
   Briefcase,
   Building2,
+  Camera,
+  ClipboardList,
   FileSpreadsheet,
   Home,
   type LucideIcon,
@@ -28,8 +31,13 @@ interface NavItem {
 
 // Visibilidade do menu por role.
 //
+// COORDENADOR (funcionário interno que sobe fichas dos hospitais):
+// vê APENAS o painel próprio (fichas que ele subiu + banco de horas)
+// e a tela de subir nova ficha. Nada de operacional, financeiro ou
+// admin — isolamento por desenho.
+//
 // OPERADOR (Maria sobe planilha, corrige, NÃO aprova nem vê dados
-// financeiros do BPO): só Novo Lote + Lotes.
+// financeiros do BPO): Novo Lote + Lotes + Fichas.
 //
 // APROVADOR (Thiago e irmão diretores: aprovam, geram CNAB, inserem
 // token na Unicred): dashboards operacionais + Novo Lote + Lotes.
@@ -38,6 +46,13 @@ interface NavItem {
 // ADMIN (você, Felício, dono do BPO): tudo, incluindo configuração
 // comercial, equipe, empresa pagadora e relatórios estratégicos.
 const NAV_ITEMS: NavItem[] = [
+  {
+    to: "/app/coordenador",
+    label: "Meu Painel",
+    icon: ClipboardList,
+    exact: true,
+    roles: ["COORDENADOR"],
+  },
   {
     to: "/app",
     label: "Dashboard",
@@ -64,6 +79,12 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["ADMIN", "APROVADOR", "OPERADOR"],
   },
   {
+    to: "/app/fichas",
+    label: "Fichas (OCR)",
+    icon: Camera,
+    roles: ["ADMIN", "APROVADOR", "OPERADOR", "COORDENADOR"],
+  },
+  {
     to: "/app/lotes",
     label: "Lotes",
     icon: FileSpreadsheet,
@@ -74,6 +95,7 @@ const NAV_ITEMS: NavItem[] = [
 const ADMIN_ITEMS = [
   { to: "/app/admin/empresa-pagadora", label: "Empresa Pagadora", icon: Building2 },
   { to: "/app/admin/usuarios", label: "Equipe", icon: UserCog },
+  { to: "/app/admin/whatsapp", label: "Jarvis (WhatsApp)", icon: Bot },
   { to: "/app/admin/relatorio-erros", label: "Erros", icon: TrendingUp },
   { to: "/app/admin/devolucoes", label: "Devoluções", icon: ArrowLeftRight },
 ];

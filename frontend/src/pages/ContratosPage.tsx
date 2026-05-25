@@ -288,9 +288,18 @@ function EditarContratoModal({
 
   const mutation = useMutation({
     mutationFn: async (payload: ContratoConfig) => {
+      // Backend espera shape `SalvarContratoRequest` (sem cliente_id no body —
+      // ele já vai pela URL) e usa `vencimento` no formato ISO date.
+      const body = {
+        cobranca: payload.cobranca,
+        custo: payload.custo,
+        meta_mensal_centavos: payload.meta_mensal_centavos,
+        vencimento: payload.vencimento ? payload.vencimento.split("T")[0] : null,
+        observacoes: null,
+      };
       const { data } = await api.put<ContratoConfig>(
         `/api/contratos/${payload.cliente_id}`,
-        payload,
+        body,
       );
       return data;
     },

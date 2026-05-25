@@ -10,15 +10,21 @@ import { ContratosPage } from "@/pages/ContratosPage";
 import { UploadPage } from "@/pages/UploadPage";
 import { LoteDetalhePage } from "@/pages/LoteDetalhePage";
 import { LotesListPage } from "@/pages/LotesListPage";
+import { FichasListPage } from "@/pages/FichasListPage";
+import { FichaDetalhePage } from "@/pages/FichaDetalhePage";
+import { MeuPainelCoordenadorPage } from "@/pages/MeuPainelCoordenadorPage";
 import { AdminUsuariosPage } from "@/pages/AdminUsuariosPage";
 import { AdminRelatorioErrosPage } from "@/pages/AdminRelatorioErrosPage";
 import { AdminDevolucoesPage } from "@/pages/AdminDevolucoesPage";
 import { AdminEmpresaPagadoraPage } from "@/pages/AdminEmpresaPagadoraPage";
+import { AdminWhatsAppPage } from "@/pages/AdminWhatsAppPage";
 import type { UserRole } from "@/types";
 
 // Pra qual rota mandar o usuário quando ele cai em alguma sem permissão.
-// Operador não tem Dashboard, então vai direto pra tela de upload.
+// Operador não tem Dashboard → vai direto pra tela de upload.
+// Coordenador tem painel próprio → /app/coordenador.
 function rotaInicial(role: UserRole | undefined): string {
+  if (role === "COORDENADOR") return "/app/coordenador";
   if (role === "OPERADOR") return "/app/upload";
   return "/app";
 }
@@ -107,6 +113,30 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/app/fichas"
+        element={
+          <ProtectedRoute>
+            <FichasListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/fichas/:id"
+        element={
+          <ProtectedRoute>
+            <FichaDetalhePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/coordenador"
+        element={
+          <ProtectedRoute roles={["COORDENADOR", "ADMIN", "APROVADOR", "OPERADOR"]}>
+            <MeuPainelCoordenadorPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Área Admin (gestão do BPO) — restrita a role=ADMIN */}
       <Route
@@ -138,6 +168,14 @@ export default function App() {
         element={
           <AdminRoute>
             <AdminEmpresaPagadoraPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/app/admin/whatsapp"
+        element={
+          <AdminRoute>
+            <AdminWhatsAppPage />
           </AdminRoute>
         }
       />

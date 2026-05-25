@@ -1,6 +1,6 @@
 // Tipos compartilhados — espelham os schemas Pydantic do backend.
 
-export type UserRole = "ADMIN" | "APROVADOR" | "OPERADOR";
+export type UserRole = "ADMIN" | "APROVADOR" | "OPERADOR" | "COORDENADOR";
 
 export interface User {
   id: string;
@@ -350,19 +350,183 @@ export interface EmpresaPagadoraPayload {
   proximo_numero_sequencial: number;
 }
 
-export interface DashboardExecutivo {
-  periodo: string; // ex.: "Junho/2026"
-  receita_mes_centavos: number;
-  custo_mes_centavos: number;
-  lucro_mes_centavos: number;
-  margem_media_pct: number;
-  lucro_delta_pct: number; // vs mês anterior
-  meta_mes_centavos: number;
-  meta_atingida_pct: number;
+// =============================================================================
+// Jarvis — WhatsApp + LLM
+// =============================================================================
 
+export type DirecaoMensagemWpp = "INBOUND" | "OUTBOUND";
+export type StatusInstanciaWpp =
+  | "DESCONECTADA"
+  | "AGUARDANDO_QR"
+  | "CONECTADA"
+  | "ERRO";
+
+export interface WhatsAppUserOut {
+  id: string;
+  user_id: string;
+  user_nome: string;
+  user_email: string;
+  user_role: UserRole;
+  numero_e164: string;
+  apelido: string | null;
+  pode_aprovar_pagamento: boolean;
+  ativo: boolean;
+  created_at: string;
+}
+
+export interface WhatsAppMensagemOut {
+  id: string;
+  numero_e164: string;
+  user_id: string | null;
+  direcao: DirecaoMensagemWpp;
+  texto: string;
+  tools_usadas: Array<{ tool: string; args: Record<string, unknown>; resultado: unknown }> | null;
+  tokens_prompt: number;
+  tokens_resposta: number;
+  duracao_ms: number;
+  erro: string | null;
+  created_at: string;
+}
+
+export interface InstanciaWpp {
+  id: string;
+  wuzapi_instance_id: string;
+  numero_bot: string | null;
+  status: StatusInstanciaWpp;
+  ativa: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QRCodeWpp {
+  qr_base64: string | null;
+  status: StatusInstanciaWpp;
+}
+
+// =============================================================================
+// Fichas de Plantão — módulo OCR (substitui planilha do escalista)
+// =============================================================================
+
+export type StatusFicha =
+  | "RECEBIDA"
+  | "PROCESSANDO"
+  | "EXTRAIDA"
+  | "REVISADA"
+  | "CONVERTIDA"
+  | "ERRO";
+
+export interface LinhaExtraida {
+  cpf: string | null;
+  nome: string | null;
+  valor_centavos: number | null;
+  qtd_plantoes: number | null;
+  horas: number | null;
+  banco_codigo: string | null;
+  agencia: string | null;
+  conta: string | null;
+  chave_pix: string | null;
+  linha_origem: string;
+  avisos: string[];
+}
+
+export interface FichaResumo {
+  id: string;
+  cliente: ClienteResumo;
+  nome_arquivo: string;
+  mime_type: string;
+  tamanho_bytes: number;
+  status: StatusFicha;
+  paginas_ocr: number;
+  total_linhas: number;
+  valor_total_centavos: number;
+  mensagem_erro: string | null;
+  lote_gerado_id: string | null;
+  created_at: string;
+  revisado_at: string | null;
+}
+
+export interface FichaDetalhe extends FichaResumo {
+  texto_ocr: string | null;
+  linhas_extraidas: LinhaExtraida[];
+  metadados: Record<string, unknown> | null;
+}
+
+export interface KPIHero {
+  lucro_liquido_centavos: number;
+  receita_total_centavos: number;
+  custo_total_centavos: number;
+  margem_media_pct: number;
+  delta_lucro_pct: number;
+  meta_total_centavos: number;
+  meta_atingida_pct: number;
+}
+
+export interface DashboardExecutivo {
+  gerado_em: string;
+  mes_referencia: string; // ex.: "Junho/2026"
+  kpi_hero: KPIHero;
   contratos: ContratoFinanceiro[];
   projecao_12m: ProjecaoMensal[];
-  kpis: KPIOperacional;
+  kpi_operacional: KPIOperacional;
   alertas: Alerta[];
-  renovacoes: RenovacaoProxima[];
+  renovacoes_proximas: RenovacaoProxima[];
+  receita_prevista_centavos: number;
+  margem_prevista_centavos: number;
+}
+
+// =============================================================================
+// Painel do Coordenador
+// =============================================================================
+
+export interface FichaCoordenadorResumo {
+  id: string;
+  cliente_nome: string;
+  nome_arquivo: string;
+  competencia: string | null;
+  status: string;
+  total_linhas: number;
+  valor_total_centavos: number;
+  created_at: string;
+  duplicada_de_id: string | null;
+  motivo_duplicidade: string | null;
+}
+
+export interface BancoHorasMedico {
+  cpf_mascarado: string;
+  nome: string;
+  qtd_fichas: number;
+  horas_total: number;
+  valor_total_centavos: number;
+  competencias: string[];
+  ultima_ficha_id: string;
+  ultima_ficha_em: string;
+}
+
+export interface PainelCoordenador {
+  gerado_em: string;
+  fichas_recentes: FichaCoordenadorResumo[];
+  banco_horas: BancoHorasMedico[];
+  qtd_fichas_total: number;
+  qtd_fichas_mes: number;
+  qtd_lotes_gerados: number;
+  valor_total_mes_centavos: number;
+  duplicatas_potenciais: number;
+}
+
+// =============================================================================
+// Contratos (backend real, substitui mock do demo.ts)
+// =============================================================================
+
+export interface ContratoBackend extends ContratoConfig {
+  id: string;
+  vigencia_inicio: string; // ISO date
+  observacoes: string | null;
+}
+
+export interface SalvarContratoPayload {
+  cobranca: ConfiguracaoCobranca;
+  custo: ConfiguracaoCusto;
+  meta_mensal_centavos: number;
+  vencimento: string | null;
+  observacoes: string | null;
 }

@@ -13,20 +13,14 @@ import type {
   InternalAxiosRequestConfig,
 } from "axios";
 import type {
-  Alerta,
   AprovacaoResponse,
   Cliente,
   ConfiguracaoCobranca,
   ConfiguracaoCusto,
   ContratoConfig,
-  ContratoFinanceiro,
-  DashboardExecutivo,
-  KPIOperacional,
   LoteDetalhe,
   LoteResumo,
   Pagamento,
-  ProjecaoMensal,
-  RenovacaoProxima,
   User,
 } from "@/types";
 
@@ -395,248 +389,11 @@ const contratos: ContratoConfig[] = [
   },
 ];
 
-/**
- * Margem do mês anterior (mock fixo só pra simular delta no Dashboard).
- * Em produção isso vem do snapshot histórico do banco.
- */
-const margemMesAnterior: Record<string, number> = {
-  c1: 71,
-  c2: 70,
-  c3: 51,
-};
-
 // =============================================================================
-// Dashboard Executivo — usa o motor de cálculo + dados dos lotes
+// Dashboard Executivo — REMOVIDO do demo mode.
+// O dashboard agora vem 100% do backend real (/api/dashboard/executivo),
+// agregando lotes + fichas + contratos persistidos.
 // =============================================================================
-
-function montarDashboardExecutivo(): DashboardExecutivo {
-  const agora = new Date();
-  const mesAtual = agora.getMonth();
-  const anoAtual = agora.getFullYear();
-
-  const lotesAtivos = lotes.filter((l) => {
-    const created = new Date(l.created_at);
-    return (
-      (created.getMonth() === mesAtual && created.getFullYear() === anoAtual) ||
-      l.status === "AGUARDANDO_REVISAO" ||
-      l.status === "APROVADO" ||
-      l.status === "ENVIADO_BANCO"
-    );
-  });
-
-  const contratosFinanceiros: ContratoFinanceiro[] = clientes.map((cliente) => {
-    const config = contratos.find((c) => c.cliente_id === cliente.id)!;
-    const lotesCliente = lotesAtivos.filter((l) => l.cliente.id === cliente.id);
-    const pagamentosMes = lotesCliente.reduce(
-      (acc, l) => acc + l.total_pagamentos,
-      0,
-    );
-
-    const receita_mes_centavos = calcularReceitaContrato(
-      config.cobranca,
-      pagamentosMes,
-    );
-    const custo_mes_centavos = calcularCustoContrato(
-      config.custo,
-      receita_mes_centavos,
-    );
-    const lucro = receita_mes_centavos - custo_mes_centavos;
-    const margem_pct =
-      receita_mes_centavos > 0
-        ? Math.round((lucro / receita_mes_centavos) * 100)
-        : 0;
-    const margem_delta_pp =
-      margem_pct - (margemMesAnterior[cliente.id] ?? margem_pct);
-
-    let saude: ContratoFinanceiro["saude"] = "saudavel";
-    if (margem_pct < 40) saude = "critico";
-    else if (margem_pct < 55 || margem_delta_pp <= -5) saude = "atencao";
-
-    const ultimaAtividade =
-      lotesCliente.length > 0
-        ? lotesCliente
-            .map((l) => l.created_at)
-            .sort()
-            .reverse()[0]
-        : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
-    return {
-      cliente_id: cliente.id,
-      cliente_nome: cliente.nome,
-      receita_mes_centavos,
-      custo_mes_centavos,
-      margem_pct,
-      margem_delta_pp,
-      saude,
-      lotes_mes: lotesCliente.length,
-      pagamentos_mes: pagamentosMes,
-      ultima_atividade: ultimaAtividade,
-    };
-  });
-
-  const receita_total = contratosFinanceiros.reduce(
-    (acc, c) => acc + c.receita_mes_centavos,
-    0,
-  );
-  const custo_total = contratosFinanceiros.reduce(
-    (acc, c) => acc + c.custo_mes_centavos,
-    0,
-  );
-  const lucro_total = receita_total - custo_total;
-  const margem_media =
-    receita_total > 0 ? Math.round((lucro_total / receita_total) * 100) : 0;
-  const meta_mes = contratos.reduce(
-    (acc, c) => acc + c.meta_mensal_centavos,
-    0,
-  );
-
-  // Projeção 12 meses — usa receita do mês atual como base e adiciona crescimento
-  const meses = [
-    "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
-    "Jul", "Ago", "Set", "Out", "Nov", "Dez",
-  ];
-  const projecao_12m: ProjecaoMensal[] = [];
-  for (let i = -3; i < 9; i++) {
-    const data = new Date(anoAtual, mesAtual + i, 1);
-    const realizado = i <= 0;
-    // crescimento médio 8% ao mês a partir da base
-    const fator = realizado
-      ? 1 + 0.05 * i // meses passados crescem mais devagar
-      : Math.pow(1.08, i);
-    const receita = Math.round(receita_total * fator);
-    const meta = Math.round(meta_mes * Math.pow(1.05, i));
-    projecao_12m.push({
-      mes: `${meses[data.getMonth()]}/${String(data.getFullYear()).slice(-2)}`,
-      receita_centavos: receita,
-      meta_centavos: meta,
-      realizado,
-    });
-  }
-
-  // KPIs operacionais
-  const lotes_processados = lotes.filter((l) =>
-    ["APROVADO", "ENVIADO_BANCO", "CONCILIADO"].includes(l.status),
-  ).length;
-  const lotes_aguardando = lotes.filter((l) =>
-    l.status === "AGUARDANDO_REVISAO",
-  ).length;
-  const total_pgto_mes = contratosFinanceiros.reduce(
-    (acc, c) => acc + c.pagamentos_mes,
-    0,
-  );
-  const conciliados = lotes.filter((l) => l.status === "CONCILIADO").length;
-  const enviados = lotes.filter((l) =>
-    ["ENVIADO_BANCO", "CONCILIADO"].includes(l.status),
-  ).length;
-
-  const kpis: KPIOperacional = {
-    lotes_processados,
-    lotes_aguardando,
-    tempo_medio_processamento_min: 14,
-    taxa_erro_pct: 2.3,
-    pagamentos_mes: total_pgto_mes,
-    conciliados_pct: enviados > 0
-      ? Math.round((conciliados / enviados) * 100)
-      : 0,
-  };
-
-  // Alertas — derivados dos contratos com saúde ruim
-  const alertas: Alerta[] = [];
-  for (const contrato of contratosFinanceiros) {
-    if (contrato.saude === "critico") {
-      alertas.push({
-        id: `a-margin-${contrato.cliente_id}`,
-        severidade: "critico",
-        titulo: `Margem crítica: ${contrato.cliente_nome}`,
-        descricao: `Margem caiu pra ${contrato.margem_pct}% (${contrato.margem_delta_pp > 0 ? "+" : ""}${contrato.margem_delta_pp}pp vs mês anterior). Custo operacional desproporcional ao faturamento.`,
-        cliente_nome: contrato.cliente_nome,
-        acao_sugerida: "Renegociar contrato ou reduzir escopo de processamento",
-        created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      });
-    } else if (contrato.saude === "atencao" && contrato.margem_delta_pp <= -5) {
-      alertas.push({
-        id: `a-trend-${contrato.cliente_id}`,
-        severidade: "atencao",
-        titulo: `Tendência negativa: ${contrato.cliente_nome}`,
-        descricao: `Margem em queda — perdeu ${Math.abs(contrato.margem_delta_pp)}pp em 30 dias. Revisar volume e ticket médio.`,
-        cliente_nome: contrato.cliente_nome,
-        acao_sugerida: "Agendar reunião com o cliente",
-        created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-      });
-    }
-  }
-  // Alerta sobre anomalia de valor (mock)
-  alertas.push({
-    id: "a-anomaly-1",
-    severidade: "atencao",
-    titulo: "Valor anômalo detectado",
-    descricao:
-      "Dr. José Silva (Santa Casa) está com R$ 25.000 — média histórica é R$ 2.500. Provável erro de vírgula na linha 47.",
-    cliente_nome: "Hospital Santa Casa",
-    acao_sugerida: "Pausar lote e confirmar com o cliente",
-    created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-  });
-  alertas.push({
-    id: "a-bank-1",
-    severidade: "info",
-    titulo: "Itaú com latência elevada",
-    descricao:
-      "Tempo médio de retorno do Itaú está em 5h hoje (média histórica: 2h). 3 lotes aguardando.",
-    cliente_nome: null,
-    acao_sugerida: "Avisar clientes afetados sobre o atraso do banco",
-    created_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-  });
-
-  // Renovações próximas — recomendação derivada da saúde do contrato
-  const renovacoes: RenovacaoProxima[] = clientes.map((cliente) => {
-    const config = contratos.find((c) => c.cliente_id === cliente.id)!;
-    const financeiro = contratosFinanceiros.find(
-      (c) => c.cliente_id === cliente.id,
-    )!;
-    const venc = new Date(config.vencimento);
-    const dias = Math.round(
-      (venc.getTime() - Date.now()) / (24 * 60 * 60 * 1000),
-    );
-
-    let recomendacao: RenovacaoProxima["recomendacao"] = "manter";
-    let reajusteSugerido: number | null = null;
-    if (financeiro.saude === "critico") {
-      recomendacao = "renegociar_urgente";
-      reajusteSugerido = 25;
-    } else if (financeiro.saude === "atencao") {
-      recomendacao = "reajustar";
-      reajusteSugerido = 12;
-    }
-
-    return {
-      cliente_id: cliente.id,
-      cliente_nome: cliente.nome,
-      vencimento: config.vencimento,
-      dias_restantes: dias,
-      margem_atual_pct: financeiro.margem_pct,
-      recomendacao,
-      reajuste_sugerido_pct: reajusteSugerido,
-    };
-  });
-
-  return {
-    periodo: `${meses[mesAtual]}/${anoAtual}`,
-    receita_mes_centavos: receita_total,
-    custo_mes_centavos: custo_total,
-    lucro_mes_centavos: lucro_total,
-    margem_media_pct: margem_media,
-    lucro_delta_pct: 12, // mock
-    meta_mes_centavos: meta_mes,
-    meta_atingida_pct: meta_mes > 0
-      ? Math.round((receita_total / meta_mes) * 100)
-      : 0,
-    contratos: contratosFinanceiros,
-    projecao_12m,
-    kpis,
-    alertas,
-    renovacoes,
-  };
-}
 
 // =============================================================================
 // Adapter principal — intercepta todas as requests do axios
@@ -722,6 +479,32 @@ export const demoAdapter: AxiosAdapter = async (config) => {
       access_token: "demo-access-token-" + Date.now(),
       refresh_token: "demo-refresh-token-" + Date.now(),
     });
+  }
+
+  // -------- FICHAS (módulo OCR) --------
+  // Em modo demo, retornamos lista vazia: o módulo de fichas exige OCR real.
+  if (url.match(/\/api\/fichas\/?$/) && method === "get") {
+    return makeResponse(config, [] as unknown[]);
+  }
+  if (url.match(/\/api\/fichas\/upload$/) && method === "post") {
+    return makeResponse(
+      config,
+      {
+        error: {
+          code: "DEMO_INDISPONIVEL",
+          message:
+            "Upload de fichas não disponível no modo demonstração. Conecte-se ao ambiente real para usar o OCR.",
+        },
+      },
+      503,
+    );
+  }
+  if (url.match(/\/api\/fichas\/[^/?]+/) && method === "get") {
+    return makeResponse(
+      config,
+      { error: { code: "NOT_FOUND", message: "Ficha não encontrada (modo demo)" } },
+      404,
+    );
   }
 
   // -------- LOTES --------
@@ -890,11 +673,6 @@ export const demoAdapter: AxiosAdapter = async (config) => {
       custo: { ...contratos[idx].custo, ...(body.custo ?? {}) },
     };
     return makeResponse(config, contratos[idx]);
-  }
-
-  // -------- DASHBOARD EXECUTIVO --------
-  if (url.endsWith("/api/dashboard/executivo") && method === "get") {
-    return makeResponse(config, montarDashboardExecutivo());
   }
 
   // -------- FALLBACK --------

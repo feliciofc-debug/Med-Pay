@@ -34,10 +34,20 @@
     @apply btn bg-success text-white hover:bg-green-700
       focus:ring-green-500;
   }
+  .btn-ghost {
+    @apply btn bg-transparent text-slate-700 border border-slate-200
+      hover:bg-slate-100 focus:ring-slate-300;
+  }
   .input {
     @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm
       placeholder:text-slate-400
       focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200;
+  }
+  .input-mini {
+    @apply w-full rounded-md border border-slate-200 px-2 py-1 text-xs
+      placeholder:text-slate-300
+      focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-200
+      disabled:bg-slate-50 disabled:text-slate-500;
   }
   .card {
     @apply bg-white rounded-xl shadow-sm border border-slate-200 p-6;

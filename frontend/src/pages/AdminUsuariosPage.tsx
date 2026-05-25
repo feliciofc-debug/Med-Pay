@@ -29,12 +29,14 @@ const ROLE_LABEL: Record<UserRole, string> = {
   ADMIN: "Administrador",
   APROVADOR: "Aprovador",
   OPERADOR: "Operador",
+  COORDENADOR: "Coordenador",
 };
 
 const ROLE_COLOR: Record<UserRole, string> = {
   ADMIN: "bg-accent-100 text-accent-800 border-accent-300",
   APROVADOR: "bg-brand-100 text-brand-800 border-brand-300",
   OPERADOR: "bg-slate-100 text-slate-700 border-slate-300",
+  COORDENADOR: "bg-amber-100 text-amber-800 border-amber-300",
 };
 
 export function AdminUsuariosPage() {

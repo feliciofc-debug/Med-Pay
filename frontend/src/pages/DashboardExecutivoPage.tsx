@@ -47,7 +47,12 @@ export function DashboardExecutivoPage() {
 
   return (
     <div className="space-y-8">
-      <Header periodo={data.periodo} />
+      <Header
+        periodo={data.mes_referencia}
+        geradoEm={data.gerado_em}
+        receitaPrevista={data.receita_prevista_centavos}
+        margemPrevista={data.margem_prevista_centavos}
+      />
 
       <KPIHero data={data} />
 
@@ -55,12 +60,12 @@ export function DashboardExecutivoPage() {
         <div className="lg:col-span-2 space-y-6">
           <ReceitaPorContrato contratos={data.contratos} />
           <Projecao12Meses dados={data.projecao_12m} />
-          <KPIsOperacionais kpis={data.kpis} />
+          <KPIsOperacionais kpis={data.kpi_operacional} />
         </div>
 
         <div className="space-y-6">
           <AlertasCard alertas={data.alertas} />
-          <RenovacoesCard renovacoes={data.renovacoes} />
+          <RenovacoesCard renovacoes={data.renovacoes_proximas} />
         </div>
       </div>
     </div>
@@ -71,9 +76,23 @@ export function DashboardExecutivoPage() {
 // Header
 // =============================================================================
 
-function Header({ periodo }: { periodo: string }) {
+function Header({
+  periodo,
+  geradoEm,
+  receitaPrevista,
+  margemPrevista,
+}: {
+  periodo: string;
+  geradoEm: string;
+  receitaPrevista: number;
+  margemPrevista: number;
+}) {
+  const horario = new Date(geradoEm).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   return (
-    <div className="flex items-end justify-between border-b border-brand-100 pb-6">
+    <div className="flex items-end justify-between border-b border-brand-100 pb-6 gap-4 flex-wrap">
       <div>
         <div className="flex items-center gap-2 text-xs font-semibold tracking-[0.15em] text-accent-700 uppercase mb-2">
           <Sparkles size={14} className="text-accent-500" />
@@ -83,13 +102,23 @@ function Header({ periodo }: { periodo: string }) {
           Visão financeira da operação
         </h1>
         <p className="text-sm text-brand-700 mt-1">
-          Período: <strong className="text-brand-950">{periodo}</strong> · atualizado em
-          tempo real
+          Período: <strong className="text-brand-950">{periodo}</strong> · atualizado{" "}
+          {horario}
         </p>
       </div>
-      <div className="text-xs text-brand-600 px-3 py-2 rounded-full bg-brand-50 border border-brand-100">
-        Modo demonstração · dados gerados localmente
-      </div>
+      {receitaPrevista > 0 && (
+        <div className="text-xs px-4 py-2 rounded-xl bg-gradient-to-br from-brand-50 to-accent-50 border border-accent-200">
+          <div className="text-[10px] uppercase tracking-wider text-brand-600 font-bold">
+            Em pipeline (fichas)
+          </div>
+          <div className="text-sm font-bold text-brand-950 mt-0.5">
+            +{formatBRL(receitaPrevista)}{" "}
+            <span className="text-emerald-700 font-semibold text-xs">
+              · margem ~{formatBRL(margemPrevista)}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -99,40 +128,41 @@ function Header({ periodo }: { periodo: string }) {
 // =============================================================================
 
 function KPIHero({ data }: { data: DashboardExecutivo }) {
+  const k = data.kpi_hero;
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
       <KpiHeroCard
         label="Lucro líquido (mês)"
-        value={formatBRL(data.lucro_mes_centavos)}
+        value={formatBRL(k.lucro_liquido_centavos)}
         icon={Wallet}
-        delta={data.lucro_delta_pct}
+        delta={k.delta_lucro_pct}
         deltaLabel="vs mês anterior"
         primary
       />
       <KpiHeroCard
         label="Receita total"
-        value={formatBRL(data.receita_mes_centavos)}
+        value={formatBRL(k.receita_total_centavos)}
         icon={TrendingUp}
         delta={null}
-        deltaLabel={`Custo: ${formatBRL(data.custo_mes_centavos)}`}
+        deltaLabel={`Custo: ${formatBRL(k.custo_total_centavos)}`}
       />
       <KpiHeroCard
         label="Margem média"
-        value={`${data.margem_media_pct}%`}
-        icon={data.margem_media_pct >= 50 ? TrendingUp : TrendingDown}
+        value={`${k.margem_media_pct}%`}
+        icon={k.margem_media_pct >= 50 ? TrendingUp : TrendingDown}
         delta={null}
         deltaLabel={
-          data.margem_media_pct >= 50
+          k.margem_media_pct >= 50
             ? "Operação saudável"
             : "Atenção: margem baixa"
         }
       />
       <KpiHeroCard
         label="Meta do mês"
-        value={`${data.meta_atingida_pct}%`}
+        value={`${k.meta_atingida_pct}%`}
         icon={Target}
         delta={null}
-        deltaLabel={`Meta: ${formatBRL(data.meta_mes_centavos)}`}
+        deltaLabel={`Meta: ${formatBRL(k.meta_total_centavos)}`}
       />
     </div>
   );
@@ -418,7 +448,7 @@ function Projecao12Meses({ dados }: { dados: ProjecaoMensal[] }) {
 function KPIsOperacionais({
   kpis,
 }: {
-  kpis: DashboardExecutivo["kpis"];
+  kpis: DashboardExecutivo["kpi_operacional"];
 }) {
   const items = [
     {

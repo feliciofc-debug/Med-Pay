@@ -23,14 +23,19 @@ if TYPE_CHECKING:
 class UserRole(str, Enum):
     """Papéis disponíveis no sistema.
 
+    - ADMIN: gerencia usuários, clientes, configurações, vê o Executivo
     - APROVADOR: pode aprovar lotes e gerar CNAB (Thiago, dono)
-    - OPERADOR: pode revisar lotes, mas não aprova (funcionário)
-    - ADMIN: gerencia usuários, clientes, configurações
+    - OPERADOR: pode revisar lotes (4 olhos antes da aprovação)
+    - COORDENADOR: funcionário interno que SOBE fichas/planilhas dos
+      hospitais. Tem visão restrita: só vê o que ele mesmo subiu, um
+      "extrato" do banco de horas pra evitar duplicatas, e não aprova
+      nada. É o ponto de entrada da operação.
     """
 
     ADMIN = "ADMIN"
     APROVADOR = "APROVADOR"
     OPERADOR = "OPERADOR"
+    COORDENADOR = "COORDENADOR"
 
 
 class User(Base):

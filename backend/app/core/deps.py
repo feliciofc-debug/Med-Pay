@@ -128,9 +128,48 @@ def require_admin(
     return current_user
 
 
+def require_pode_subir_ficha(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Pode subir ficha/planilha: ADMIN, OPERADOR, APROVADOR e COORDENADOR.
+
+    O COORDENADOR é o ponto de entrada da operação — ele leva as fichas
+    do hospital pra plataforma. Demais roles também podem porque cada
+    um pode revisar/corrigir o que está em andamento.
+    """
+    permitidos = {
+        UserRole.ADMIN,
+        UserRole.APROVADOR,
+        UserRole.OPERADOR,
+        UserRole.COORDENADOR,
+    }
+    if current_user.role not in permitidos:
+        raise PermissaoNegadaError(
+            "Sem permissão pra subir fichas. Contate o administrador."
+        )
+    return current_user
+
+
+def require_visao_executiva(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Visão executiva (Executivo, Equipe, Erros, Devoluções, Empresa).
+
+    COORDENADOR é EXCLUÍDO de propósito — ele só vê o painel dele com
+    as fichas que ele subiu. Operador/Aprovador/Admin têm visão geral.
+    """
+    if current_user.role == UserRole.COORDENADOR:
+        raise PermissaoNegadaError(
+            "Coordenador não tem acesso à visão executiva. Use seu painel próprio."
+        )
+    return current_user
+
+
 __all__ = [
     "get_current_user",
     "get_db",
     "require_admin",
     "require_aprovador",
+    "require_pode_subir_ficha",
+    "require_visao_executiva",
 ]
