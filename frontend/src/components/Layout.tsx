@@ -9,6 +9,7 @@ import {
   Camera,
   ClipboardList,
   FileSpreadsheet,
+  HeartPulse,
   Home,
   type LucideIcon,
   LogOut,
@@ -83,6 +84,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Fichas (OCR)",
     icon: Camera,
     roles: ["ADMIN", "APROVADOR", "OPERADOR", "COORDENADOR"],
+  },
+  {
+    to: "/app/equipes",
+    label: "Equipes",
+    icon: HeartPulse,
+    roles: ["ADMIN", "APROVADOR", "OPERADOR"],
   },
   {
     to: "/app/lotes",

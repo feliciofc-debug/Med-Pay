@@ -2,14 +2,15 @@
 
 Gera 5 fichas no estilo "documento carimbado pelo hospital" que o
 coordenador subiria pelo upload manual. Cada ficha tem cabeçalho do
-hospital, tabela de plantões (médico + categoria + data + horas),
-totais, e um carimbo simulado.
+hospital, lista de pagamentos formatada para o parser atual reconhecer
+(CPF + valor + dados bancários por linha), totais, e carimbo simulado.
 
 Os dados foram pensados pra exercitar o motor de cálculo:
     Hospital Santa Casa    → 18% MedPag (volume alto)
     Clínica Santa Luiza    → 27% MedPag (volume baixo)
 
-Categorias e valor/hora hipotéticos:
+Categorias e valor/hora (apenas pra calcular o valor — NÃO aparece
+explicitamente na ficha em formato que ofuscaria o parser):
     Santa Casa:
         Cirurgião       R$ 250/h
         Anestesista     R$ 200/h
@@ -51,14 +52,16 @@ COR_CARIMBO = (140, 30, 30)       # vermelho carimbo
 
 
 @dataclass
-class Plantao:
-    medico: str
-    crm: str
+class Pagamento:
+    nome: str
+    cpf: str  # formato 000.000.000-00
     categoria: str
-    data: str
-    hora_inicio: str
-    hora_fim: str
-    total_horas: float
+    horas: int
+    valor_centavos: int
+    banco_codigo: str | None = None
+    agencia: str | None = None
+    conta: str | None = None
+    pix: str | None = None
 
 
 @dataclass
@@ -68,255 +71,187 @@ class Ficha:
     cnpj_hospital: str
     competencia: str
     coordenador: str
-    plantoes: list[Plantao]
+    pagamentos: list[Pagamento]
 
 
-# ---------------------------------------------------------------------------
-# Fontes — tenta carregar fontes do sistema; cai pro default se não achar
-# ---------------------------------------------------------------------------
+# ============================================================
+# CPF — gerador com checksum válido
+# ============================================================
 
-def _carregar_fontes() -> dict[str, ImageFont.FreeTypeFont | ImageFont.ImageFont]:
-    fontes_candidatas = [
+
+def _calc_dv(base: list[int]) -> int:
+    pesos = list(range(len(base) + 1, 1, -1))
+    soma = sum(d * p for d, p in zip(base, pesos))
+    resto = soma % 11
+    return 0 if resto < 2 else 11 - resto
+
+
+def gerar_cpf_valido(rng: random.Random) -> str:
+    base = [rng.randint(0, 9) for _ in range(9)]
+    dv1 = _calc_dv(base)
+    dv2 = _calc_dv(base + [dv1])
+    digitos = base + [dv1, dv2]
+    return f"{digitos[0]}{digitos[1]}{digitos[2]}.{digitos[3]}{digitos[4]}{digitos[5]}.{digitos[6]}{digitos[7]}{digitos[8]}-{digitos[9]}{digitos[10]}"
+
+
+def gerar_dados_bancarios(rng: random.Random) -> tuple[str, str, str]:
+    bancos = [("341", "Itaú"), ("237", "Bradesco"), ("001", "Banco do Brasil"), ("033", "Santander"), ("104", "Caixa")]
+    codigo, _ = rng.choice(bancos)
+    agencia = f"{rng.randint(1, 9999):04d}"
+    conta = f"{rng.randint(10000, 999999)}-{rng.randint(0, 9)}"
+    return codigo, agencia, conta
+
+
+# ============================================================
+# Fontes
+# ============================================================
+
+
+def _carregar_fontes() -> dict:
+    candidatas_regular = [
         "C:/Windows/Fonts/arial.ttf",
         "C:/Windows/Fonts/calibri.ttf",
         "C:/Windows/Fonts/segoeui.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/System/Library/Fonts/Helvetica.ttc",
     ]
-    bold_candidatas = [
+    candidatas_bold = [
         "C:/Windows/Fonts/arialbd.ttf",
         "C:/Windows/Fonts/calibrib.ttf",
         "C:/Windows/Fonts/seguibl.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     ]
+    # Mono dá um look de "ficha digitada" e ajuda o OCR a separar campos
+    candidatas_mono = [
+        "C:/Windows/Fonts/consola.ttf",
+        "C:/Windows/Fonts/cour.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    ]
 
-    def primeiro_existente(paths: list[str]) -> str | None:
-        for p in paths:
-            if os.path.exists(p):
-                return p
-        return None
+    def primeiro(paths: list[str]) -> str | None:
+        return next((p for p in paths if os.path.exists(p)), None)
 
-    regular_path = primeiro_existente(fontes_candidatas)
-    bold_path = primeiro_existente(bold_candidatas)
+    regular = primeiro(candidatas_regular)
+    bold = primeiro(candidatas_bold)
+    mono = primeiro(candidatas_mono) or regular
 
-    if regular_path is None:
+    if regular is None:
         return {
-            "titulo": ImageFont.load_default(),
-            "subtitulo": ImageFont.load_default(),
-            "texto": ImageFont.load_default(),
-            "pequeno": ImageFont.load_default(),
-            "carimbo": ImageFont.load_default(),
+            k: ImageFont.load_default()
+            for k in ("titulo", "subtitulo", "texto", "texto_bold", "mono", "mono_bold", "pequeno", "carimbo")
         }
 
     return {
-        "titulo": ImageFont.truetype(bold_path or regular_path, 36),
-        "subtitulo": ImageFont.truetype(bold_path or regular_path, 22),
-        "texto": ImageFont.truetype(regular_path, 18),
-        "texto_bold": ImageFont.truetype(bold_path or regular_path, 18),
-        "pequeno": ImageFont.truetype(regular_path, 14),
-        "carimbo": ImageFont.truetype(bold_path or regular_path, 18),
+        "titulo": ImageFont.truetype(bold or regular, 34),
+        "subtitulo": ImageFont.truetype(bold or regular, 22),
+        "texto": ImageFont.truetype(regular, 18),
+        "texto_bold": ImageFont.truetype(bold or regular, 18),
+        "mono": ImageFont.truetype(mono, 17),
+        "mono_bold": ImageFont.truetype(mono, 18),
+        "pequeno": ImageFont.truetype(regular, 14),
+        "carimbo": ImageFont.truetype(bold or regular, 18),
     }
 
 
-# ---------------------------------------------------------------------------
+# ============================================================
 # Renderização
-# ---------------------------------------------------------------------------
+# ============================================================
+
+
+def _formatar_brl(centavos: int) -> str:
+    reais = centavos / 100
+    s = f"{reais:,.2f}"
+    # vira padrão BR: 1,234.56 -> 1.234,56
+    s = s.replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {s}"
+
 
 def _cabecalho(draw: ImageDraw.ImageDraw, ficha: Ficha, fontes: dict) -> int:
-    # Faixa superior
-    draw.rectangle(
-        [(0, 0), (LARGURA, 18)],
-        fill=COR_CABECALHO,
-    )
+    draw.rectangle([(0, 0), (LARGURA, 14)], fill=COR_CABECALHO)
 
     y = MARGEM
-    draw.text(
-        (MARGEM, y),
-        ficha.hospital.upper(),
-        fill=COR_CABECALHO,
-        font=fontes["titulo"],
-    )
-    y += 50
+    draw.text((MARGEM, y), ficha.hospital.upper(), fill=COR_CABECALHO, font=fontes["titulo"])
+    y += 46
 
-    draw.text(
-        (MARGEM, y),
-        f"CNPJ: {ficha.cnpj_hospital}",
-        fill=COR_TEXTO_FRACO,
-        font=fontes["pequeno"],
-    )
-    y += 30
+    draw.text((MARGEM, y), f"CNPJ: {ficha.cnpj_hospital}", fill=COR_TEXTO_FRACO, font=fontes["pequeno"])
+    y += 28
 
-    # Linha divisora
-    draw.line(
-        [(MARGEM, y), (LARGURA - MARGEM, y)],
-        fill=COR_CABECALHO,
-        width=2,
-    )
-    y += 25
+    draw.line([(MARGEM, y), (LARGURA - MARGEM, y)], fill=COR_CABECALHO, width=2)
+    y += 22
 
-    draw.text(
-        (MARGEM, y),
-        "FICHA DE PLANTÕES MÉDICOS",
-        fill=COR_TEXTO,
-        font=fontes["subtitulo"],
-    )
-    y += 35
-
-    draw.text(
-        (MARGEM, y),
-        f"Competência: {ficha.competencia}",
-        fill=COR_TEXTO,
-        font=fontes["texto"],
-    )
-    y += 25
-    draw.text(
-        (MARGEM, y),
-        f"Coordenador: {ficha.coordenador}",
-        fill=COR_TEXTO,
-        font=fontes["texto"],
-    )
-    y += 40
-
+    draw.text((MARGEM, y), "FICHA DE PLANTÕES MÉDICOS", fill=COR_TEXTO, font=fontes["subtitulo"])
+    y += 32
+    draw.text((MARGEM, y), f"Competência: {ficha.competencia}", fill=COR_TEXTO, font=fontes["texto"])
+    y += 24
+    draw.text((MARGEM, y), f"Coordenador: {ficha.coordenador}", fill=COR_TEXTO, font=fontes["texto"])
+    y += 36
     return y
 
 
-def _tabela(
+def _bloco_pagamento(
     draw: ImageDraw.ImageDraw,
-    plantoes: list[Plantao],
-    y_inicio: int,
+    pag: Pagamento,
+    y: int,
     fontes: dict,
 ) -> int:
-    # Cabeçalho da tabela
-    cols = [
-        ("Médico", 0, 320),
-        ("CRM", 320, 100),
-        ("Categoria", 420, 220),
-        ("Data", 640, 110),
-        ("Início", 750, 80),
-        ("Fim", 830, 80),
-        ("Horas", 910, 80),
-    ]
-    x_base = MARGEM
-
-    altura_linha = 38
-    y = y_inicio
-
-    # Faixa do cabeçalho
-    draw.rectangle(
-        [(x_base, y), (x_base + 990, y + altura_linha)],
-        fill=COR_CABECALHO,
+    """Renderiza um único pagamento como 2 linhas:
+    linha 1: NOME + CPF + horas + valor
+    linha 2: dados bancários ou PIX
+    Esse formato em texto contínuo (não tabela) ajuda o OCR a manter
+    todos os campos juntos numa mesma linha lógica.
+    """
+    # Linha 1 — dados principais
+    linha1 = (
+        f"{pag.nome.upper():<32}  "
+        f"CPF: {pag.cpf}   "
+        f"{pag.categoria:<14}  "
+        f"{pag.horas:>3}h   "
+        f"{_formatar_brl(pag.valor_centavos):>14}"
     )
-    for nome, dx, _ in cols:
-        draw.text(
-            (x_base + dx + 8, y + 10),
-            nome,
-            fill=(255, 255, 255),
-            font=fontes["texto_bold"],
-        )
-    y += altura_linha
+    draw.text((MARGEM, y), linha1, fill=COR_TEXTO, font=fontes["mono"])
+    y += 22
 
-    # Linhas
-    for idx, p in enumerate(plantoes):
-        if idx % 2 == 1:
-            draw.rectangle(
-                [(x_base, y), (x_base + 990, y + altura_linha)],
-                fill=(245, 245, 240),
-            )
-        valores = [
-            p.medico,
-            p.crm,
-            p.categoria,
-            p.data,
-            p.hora_inicio,
-            p.hora_fim,
-            f"{p.total_horas:.1f}h",
-        ]
-        for (_, dx, _), val in zip(cols, valores):
-            draw.text(
-                (x_base + dx + 8, y + 10),
-                val,
-                fill=COR_TEXTO,
-                font=fontes["texto"],
-            )
-        y += altura_linha
+    # Linha 2 — pagamento (banco ou PIX)
+    if pag.pix:
+        pgto = f"PIX: {pag.pix}"
+    else:
+        pgto = f"Banco: {pag.banco_codigo}   Ag: {pag.agencia}   C/C: {pag.conta}"
+    draw.text((MARGEM + 26, y), pgto, fill=COR_TEXTO_FRACO, font=fontes["mono"])
+    y += 28
 
-    # Linha de fechamento
-    draw.line(
-        [(x_base, y), (x_base + 990, y)],
-        fill=COR_LINHA,
-        width=1,
-    )
-    y += 15
+    # Linha divisora fina
+    draw.line([(MARGEM, y), (LARGURA - MARGEM, y)], fill=COR_LINHA, width=1)
+    y += 12
+    return y
 
-    # Total
-    total_horas = sum(p.total_horas for p in plantoes)
+
+def _rodape_ficha(draw: ImageDraw.ImageDraw, ficha: Ficha, y: int, fontes: dict) -> None:
+    total = sum(p.valor_centavos for p in ficha.pagamentos)
+    horas = sum(p.horas for p in ficha.pagamentos)
+    y += 14
     draw.text(
-        (x_base, y),
-        f"Total de plantões: {len(plantoes)}     Horas totais: {total_horas:.1f}h",
+        (MARGEM, y),
+        f"Plantões pagos: {len(ficha.pagamentos)}     Horas totais: {horas}h     Total: {_formatar_brl(total)}",
         fill=COR_TEXTO,
         font=fontes["texto_bold"],
     )
-    return y + 50
 
-
-def _carimbo(draw: ImageDraw.ImageDraw, ficha: Ficha, y: int, fontes: dict) -> None:
-    # Caixa do carimbo (em diagonal, estilo manuscrito)
+    # Carimbo
     cx = LARGURA - MARGEM - 280
-    cy = y + 40
+    cy = y + 60
+    draw.rectangle([(cx, cy), (cx + 260, cy + 130)], outline=COR_CARIMBO, width=3)
+    draw.rectangle([(cx + 6, cy + 6), (cx + 254, cy + 124)], outline=COR_CARIMBO, width=1)
+    draw.text((cx + 18, cy + 14), "CONFERIDO E APROVADO", fill=COR_CARIMBO, font=fontes["carimbo"])
+    draw.text((cx + 18, cy + 42), f"Em: {ficha.competencia}", fill=COR_CARIMBO, font=fontes["pequeno"])
+    draw.text((cx + 18, cy + 64), ficha.hospital[:30], fill=COR_CARIMBO, font=fontes["pequeno"])
+    draw.text((cx + 18, cy + 86), "Diretoria Médica", fill=COR_CARIMBO, font=fontes["pequeno"])
+    draw.text((cx + 18, cy + 104), ficha.coordenador, fill=COR_CARIMBO, font=fontes["pequeno"])
 
-    draw.rectangle(
-        [(cx, cy), (cx + 260, cy + 130)],
-        outline=COR_CARIMBO,
-        width=3,
-    )
-    # Linha interna estilo selo
-    draw.rectangle(
-        [(cx + 6, cy + 6), (cx + 254, cy + 124)],
-        outline=COR_CARIMBO,
-        width=1,
-    )
-
+    # Rodapé final
+    yr = ALTURA - 40
+    draw.line([(MARGEM, yr - 10), (LARGURA - MARGEM, yr - 10)], fill=COR_LINHA, width=1)
     draw.text(
-        (cx + 18, cy + 14),
-        "CONFERIDO E APROVADO",
-        fill=COR_CARIMBO,
-        font=fontes["carimbo"],
-    )
-    draw.text(
-        (cx + 18, cy + 42),
-        f"Em: {ficha.competencia}",
-        fill=COR_CARIMBO,
-        font=fontes["pequeno"],
-    )
-    draw.text(
-        (cx + 18, cy + 64),
-        f"{ficha.hospital[:30]}",
-        fill=COR_CARIMBO,
-        font=fontes["pequeno"],
-    )
-    draw.text(
-        (cx + 18, cy + 86),
-        "Diretoria Médica",
-        fill=COR_CARIMBO,
-        font=fontes["pequeno"],
-    )
-    draw.text(
-        (cx + 18, cy + 104),
-        ficha.coordenador,
-        fill=COR_CARIMBO,
-        font=fontes["pequeno"],
-    )
-
-
-def _rodape(draw: ImageDraw.ImageDraw, fontes: dict) -> None:
-    y = ALTURA - 40
-    draw.line(
-        [(MARGEM, y - 10), (LARGURA - MARGEM, y - 10)],
-        fill=COR_LINHA,
-        width=1,
-    )
-    draw.text(
-        (MARGEM, y),
+        (MARGEM, yr),
         "Documento gerado pelo sistema interno do hospital — uso restrito",
         fill=COR_TEXTO_FRACO,
         font=fontes["pequeno"],
@@ -329,180 +264,212 @@ def renderizar_ficha(ficha: Ficha, destino: Path) -> Path:
     fontes = _carregar_fontes()
 
     y = _cabecalho(draw, ficha, fontes)
-    y = _tabela(draw, ficha.plantoes, y, fontes)
-    _carimbo(draw, ficha, y, fontes)
-    _rodape(draw, fontes)
+    draw.text((MARGEM, y), "PAGAMENTOS:", fill=COR_TEXTO, font=fontes["texto_bold"])
+    y += 30
+    for pag in ficha.pagamentos:
+        y = _bloco_pagamento(draw, pag, y, fontes)
+    _rodape_ficha(draw, ficha, y, fontes)
 
     caminho = destino / ficha.nome_arquivo
     img.save(caminho, format="PNG", dpi=(150, 150))
     return caminho
 
 
-# ---------------------------------------------------------------------------
-# Conjunto de fichas
-# ---------------------------------------------------------------------------
+# ============================================================
+# Conjunto de fichas demo
+# ============================================================
 
-_MEDICOS_BANCO = [
-    ("Dr. Carlos Silva", "CRM 45821-RJ"),
-    ("Dra. Marina Costa", "CRM 38492-RJ"),
-    ("Dr. Roberto Lima", "CRM 51203-RJ"),
-    ("Dra. Patrícia Mello", "CRM 27834-RJ"),
-    ("Dr. Eduardo Pires", "CRM 49301-RJ"),
-    ("Dra. Juliana Souza", "CRM 33872-RJ"),
-    ("Dr. Felipe Andrade", "CRM 60411-RJ"),
-    ("Dra. Camila Reis", "CRM 41209-RJ"),
-    ("Enf. Sandra Vieira", "COREN 234897-RJ"),
-    ("Enf. Marcos Oliveira", "COREN 198765-RJ"),
-    ("Dr. Tiago Faria", "CRM 55720-RJ"),
-    ("Dra. Beatriz Mota", "CRM 29384-RJ"),
+
+_NOMES_MEDICOS = [
+    "Carlos Silva",
+    "Marina Costa",
+    "Roberto Lima",
+    "Patrícia Mello",
+    "Eduardo Pires",
+    "Juliana Souza",
+    "Felipe Andrade",
+    "Camila Reis",
+    "Tiago Faria",
+    "Beatriz Mota",
+    "Rafael Cunha",
+    "Letícia Barros",
+    "Gustavo Vieira",
+    "Larissa Antunes",
+]
+
+_NOMES_ENFERMEIROS = [
+    "Sandra Vieira",
+    "Marcos Oliveira",
+    "Patrícia Soares",
+    "André Ramos",
 ]
 
 
-def _gerar_plantao(
-    medico: str,
-    crm: str,
-    categoria: str,
-    dia: int,
-    mes: str,
-    inicio_hora: int,
-    duracao_h: int,
-) -> Plantao:
-    fim_hora = (inicio_hora + duracao_h) % 24
-    return Plantao(
-        medico=medico,
-        crm=crm,
-        categoria=categoria,
-        data=f"{dia:02d}/{mes}",
-        hora_inicio=f"{inicio_hora:02d}:00",
-        hora_fim=f"{fim_hora:02d}:00",
-        total_horas=float(duracao_h),
-    )
+_VALOR_HORA_SANTA_CASA = {
+    "Cirurgião": 25000,
+    "Anestesista": 20000,
+    "Plantonista": 12000,
+    "Enfermeiro": 4500,
+}
+
+_VALOR_HORA_SANTA_LUIZA = {
+    "Plantonista": 15000,
+    "Anestesista": 22000,
+    "Enfermeiro": 5500,
+}
 
 
-def _ficha_santa_casa_cirurgia(seed: int) -> Ficha:
-    rng = random.Random(seed)
-    plantoes: list[Plantao] = []
-    medicos_cirurgia = [
-        ("Dr. Carlos Silva", "CRM 45821-RJ", "Cirurgião"),
-        ("Dr. Roberto Lima", "CRM 51203-RJ", "Cirurgião"),
-        ("Dra. Marina Costa", "CRM 38492-RJ", "Anestesista"),
-        ("Dra. Patrícia Mello", "CRM 27834-RJ", "Anestesista"),
-    ]
-    for dia in [3, 5, 8, 10, 12, 15, 17, 19, 22, 24]:
-        m = rng.choice(medicos_cirurgia)
-        plantoes.append(
-            _gerar_plantao(m[0], m[1], m[2], dia, "06/2026", rng.choice([7, 13, 19]), 12),
+def _criar_pagamentos(
+    rng: random.Random,
+    medicos_categorias: list[tuple[str, str]],
+    valor_hora: dict[str, int],
+    horas_min: int,
+    horas_max: int,
+    pct_pix: float = 0.4,
+) -> list[Pagamento]:
+    pagamentos: list[Pagamento] = []
+    for nome, categoria in medicos_categorias:
+        horas = rng.randint(horas_min, horas_max)
+        valor = horas * valor_hora[categoria]
+        prefixo = "Dr. " if not nome.split()[-1].endswith("a") else "Dra. "
+        if categoria == "Enfermeiro":
+            prefixo = "Enf. "
+        nome_full = f"{prefixo}{nome}"
+        cpf = gerar_cpf_valido(rng)
+
+        if rng.random() < pct_pix:
+            pix = rng.choice([cpf, f"{nome.split()[0].lower()}.{nome.split()[-1].lower()}@email.com"])
+            banco_codigo = agencia = conta = None
+        else:
+            banco_codigo, agencia, conta = gerar_dados_bancarios(rng)
+            pix = None
+
+        pagamentos.append(
+            Pagamento(
+                nome=nome_full,
+                cpf=cpf,
+                categoria=categoria,
+                horas=horas,
+                valor_centavos=valor,
+                banco_codigo=banco_codigo,
+                agencia=agencia,
+                conta=conta,
+                pix=pix,
+            )
         )
+    return pagamentos
+
+
+def _ficha_santa_casa_cirurgia() -> Ficha:
+    rng = random.Random(101)
+    medicos = [
+        ("Carlos Silva", "Cirurgião"),
+        ("Roberto Lima", "Cirurgião"),
+        ("Marina Costa", "Anestesista"),
+        ("Patrícia Mello", "Anestesista"),
+        ("Felipe Andrade", "Cirurgião"),
+        ("Juliana Souza", "Anestesista"),
+        ("Rafael Cunha", "Cirurgião"),
+    ]
+    pagamentos = _criar_pagamentos(rng, medicos, _VALOR_HORA_SANTA_CASA, 24, 72)
     return Ficha(
         nome_arquivo="01_santa_casa_cirurgia_jun2026.png",
         hospital="Hospital Santa Casa de Misericórdia",
         cnpj_hospital="33.481.804/0001-44",
         competencia="Junho / 2026",
         coordenador="Ana Paula Mendes — RH",
-        plantoes=plantoes,
+        pagamentos=pagamentos,
     )
 
 
-def _ficha_santa_casa_uti(seed: int) -> Ficha:
-    rng = random.Random(seed)
-    plantoes: list[Plantao] = []
-    medicos_uti = [
-        ("Dr. Eduardo Pires", "CRM 49301-RJ", "Plantonista"),
-        ("Dra. Juliana Souza", "CRM 33872-RJ", "Plantonista"),
-        ("Dr. Felipe Andrade", "CRM 60411-RJ", "Plantonista"),
-        ("Dra. Marina Costa", "CRM 38492-RJ", "Anestesista"),
+def _ficha_santa_casa_uti() -> Ficha:
+    rng = random.Random(102)
+    medicos = [
+        ("Eduardo Pires", "Plantonista"),
+        ("Juliana Souza", "Plantonista"),
+        ("Felipe Andrade", "Plantonista"),
+        ("Camila Reis", "Plantonista"),
+        ("Marina Costa", "Anestesista"),
+        ("Letícia Barros", "Plantonista"),
+        ("Gustavo Vieira", "Plantonista"),
     ]
-    for dia in [1, 2, 4, 6, 7, 9, 11, 13, 14, 16, 18, 20]:
-        m = rng.choice(medicos_uti)
-        plantoes.append(
-            _gerar_plantao(m[0], m[1], m[2], dia, "06/2026", rng.choice([7, 19]), 12),
-        )
+    pagamentos = _criar_pagamentos(rng, medicos, _VALOR_HORA_SANTA_CASA, 36, 96)
     return Ficha(
         nome_arquivo="02_santa_casa_uti_jun2026.png",
         hospital="Hospital Santa Casa de Misericórdia",
         cnpj_hospital="33.481.804/0001-44",
         competencia="Junho / 2026",
         coordenador="Ana Paula Mendes — RH",
-        plantoes=plantoes,
+        pagamentos=pagamentos,
     )
 
 
-def _ficha_santa_casa_enfermagem(seed: int) -> Ficha:
-    rng = random.Random(seed)
-    plantoes: list[Plantao] = []
+def _ficha_santa_casa_enfermagem() -> Ficha:
+    rng = random.Random(103)
     enf = [
-        ("Enf. Sandra Vieira", "COREN 234897-RJ", "Enfermeiro"),
-        ("Enf. Marcos Oliveira", "COREN 198765-RJ", "Enfermeiro"),
+        ("Sandra Vieira", "Enfermeiro"),
+        ("Marcos Oliveira", "Enfermeiro"),
+        ("Patrícia Soares", "Enfermeiro"),
+        ("André Ramos", "Enfermeiro"),
     ]
-    for dia in range(1, 21):
-        m = rng.choice(enf)
-        plantoes.append(
-            _gerar_plantao(m[0], m[1], m[2], dia, "06/2026", rng.choice([7, 19]), 12),
-        )
+    pagamentos = _criar_pagamentos(rng, enf, _VALOR_HORA_SANTA_CASA, 120, 200, pct_pix=0.6)
     return Ficha(
         nome_arquivo="03_santa_casa_enfermagem_jun2026.png",
         hospital="Hospital Santa Casa de Misericórdia",
         cnpj_hospital="33.481.804/0001-44",
         competencia="Junho / 2026",
         coordenador="Ana Paula Mendes — RH",
-        plantoes=plantoes[:14],  # limita pra caber na página
+        pagamentos=pagamentos,
     )
 
 
-def _ficha_santa_luiza_clinica(seed: int) -> Ficha:
-    rng = random.Random(seed)
-    plantoes: list[Plantao] = []
+def _ficha_santa_luiza_clinica() -> Ficha:
+    rng = random.Random(104)
     medicos = [
-        ("Dr. Tiago Faria", "CRM 55720-RJ", "Plantonista"),
-        ("Dra. Beatriz Mota", "CRM 29384-RJ", "Plantonista"),
-        ("Dra. Camila Reis", "CRM 41209-RJ", "Anestesista"),
+        ("Tiago Faria", "Plantonista"),
+        ("Beatriz Mota", "Plantonista"),
+        ("Camila Reis", "Anestesista"),
+        ("Larissa Antunes", "Plantonista"),
+        ("Gustavo Vieira", "Anestesista"),
     ]
-    for dia in [2, 5, 7, 9, 12, 14, 16, 19, 21, 23, 26, 28]:
-        m = rng.choice(medicos)
-        plantoes.append(
-            _gerar_plantao(m[0], m[1], m[2], dia, "06/2026", rng.choice([8, 20]), 12),
-        )
+    pagamentos = _criar_pagamentos(rng, medicos, _VALOR_HORA_SANTA_LUIZA, 36, 84)
     return Ficha(
         nome_arquivo="04_clinica_santa_luiza_jun2026.png",
         hospital="Clínica Santa Luiza",
         cnpj_hospital="42.198.302/0001-09",
         competencia="Junho / 2026",
         coordenador="Felipe Rocha — Coord. Médico",
-        plantoes=plantoes,
+        pagamentos=pagamentos,
     )
 
 
-def _ficha_santa_luiza_mai(seed: int) -> Ficha:
-    rng = random.Random(seed)
-    plantoes: list[Plantao] = []
+def _ficha_santa_luiza_mai() -> Ficha:
+    rng = random.Random(105)
     medicos = [
-        ("Dr. Tiago Faria", "CRM 55720-RJ", "Plantonista"),
-        ("Dra. Beatriz Mota", "CRM 29384-RJ", "Plantonista"),
-        ("Dra. Camila Reis", "CRM 41209-RJ", "Anestesista"),
-        ("Enf. Sandra Vieira", "COREN 234897-RJ", "Enfermeiro"),
+        ("Tiago Faria", "Plantonista"),
+        ("Beatriz Mota", "Plantonista"),
+        ("Camila Reis", "Anestesista"),
+        ("Sandra Vieira", "Enfermeiro"),
+        ("Larissa Antunes", "Plantonista"),
     ]
-    for dia in [3, 6, 8, 10, 13, 15, 17, 20, 22, 25, 27, 29]:
-        m = rng.choice(medicos)
-        plantoes.append(
-            _gerar_plantao(m[0], m[1], m[2], dia, "05/2026", rng.choice([8, 20]), 12),
-        )
+    pagamentos = _criar_pagamentos(rng, medicos, _VALOR_HORA_SANTA_LUIZA, 24, 72)
     return Ficha(
         nome_arquivo="05_clinica_santa_luiza_mai2026.png",
         hospital="Clínica Santa Luiza",
         cnpj_hospital="42.198.302/0001-09",
         competencia="Maio / 2026",
         coordenador="Felipe Rocha — Coord. Médico",
-        plantoes=plantoes,
+        pagamentos=pagamentos,
     )
 
 
 def montar_fichas() -> list[Ficha]:
     return [
-        _ficha_santa_casa_cirurgia(1),
-        _ficha_santa_casa_uti(2),
-        _ficha_santa_casa_enfermagem(3),
-        _ficha_santa_luiza_clinica(4),
-        _ficha_santa_luiza_mai(5),
+        _ficha_santa_casa_cirurgia(),
+        _ficha_santa_casa_uti(),
+        _ficha_santa_casa_enfermagem(),
+        _ficha_santa_luiza_clinica(),
+        _ficha_santa_luiza_mai(),
     ]
 
 
@@ -512,7 +479,7 @@ def main() -> None:
         "--saida",
         type=Path,
         default=Path.home() / "Desktop" / "fichas-demo",
-        help="Pasta de saída. Default: Desktop/fichas-demo",
+        help="Pasta de saida. Default: Desktop/fichas-demo",
     )
     args = parser.parse_args()
 
@@ -521,7 +488,10 @@ def main() -> None:
     print(f"Gerando {len(fichas)} fichas em {args.saida} ...")
     for ficha in fichas:
         caminho = renderizar_ficha(ficha, args.saida)
-        print(f"  [OK] {caminho.name}  ({len(ficha.plantoes)} plantoes)")
+        total = sum(p.valor_centavos for p in ficha.pagamentos) / 100
+        print(
+            f"  [OK] {caminho.name}  ({len(ficha.pagamentos)} pagamentos, R$ {total:,.2f})"
+        )
     print()
     print(f"Pronto! Pasta: {args.saida}")
 

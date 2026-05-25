@@ -2,6 +2,87 @@
 
 export type UserRole = "ADMIN" | "APROVADOR" | "OPERADOR" | "COORDENADOR";
 
+// ============================================================
+// Equipe Flex (banco de horas compartilhado)
+// ============================================================
+
+export type ModoCobranca = "PERCENTUAL_REPASSE" | "MENSALIDADE_SAAS";
+
+export interface MembroEquipe {
+  id: string;
+  nome: string;
+  cpf: string;
+  crm_ou_registro: string | null;
+  chave_pix: string | null;
+  banco_codigo: string | null;
+  agencia: string | null;
+  conta: string | null;
+  ativo: boolean;
+}
+
+export interface MembroEquipePayload {
+  nome: string;
+  cpf: string;
+  crm_ou_registro?: string | null;
+  chave_pix?: string | null;
+  banco_codigo?: string | null;
+  agencia?: string | null;
+  conta?: string | null;
+  ativo?: boolean;
+}
+
+export interface EquipeFlex {
+  id: string;
+  cliente: { id: string; nome: string; cnpj: string | null };
+  nome: string;
+  categoria: string;
+  valor_hora_centavos: number;
+  ativa: boolean;
+  observacoes: string | null;
+  qtd_membros: number;
+  qtd_membros_ativos: number;
+  membros: MembroEquipe[];
+  created_at: string;
+}
+
+export interface EquipePayload {
+  cliente_id: string;
+  nome: string;
+  categoria: string;
+  valor_hora_centavos: number;
+  ativa: boolean;
+  observacoes?: string | null;
+}
+
+export interface FechamentoEquipePayload {
+  equipe_id: string;
+  competencia: string; // "YYYY-MM"
+  horas_total: number;
+  origem?: "DIGITACAO" | "FICHA_OCR";
+  ficha_id?: string | null;
+  confirmar?: boolean;
+  observacoes?: string | null;
+}
+
+export interface FechamentoEquipe {
+  id: string | null;
+  equipe_id: string;
+  competencia: string;
+  horas_total: number;
+  valor_hora_centavos: number;
+  valor_bruto_centavos: number;
+  desconto_medpag_centavos: number;
+  valor_liquido_centavos: number;
+  qtd_membros: number;
+  valor_por_membro_centavos: number;
+  origem: string;
+  ficha_id: string | null;
+  lote_id: string | null;
+  aprovado_at: string | null;
+  observacoes: string | null;
+  created_at: string | null;
+}
+
 export interface User {
   id: string;
   email: string;

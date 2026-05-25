@@ -12,6 +12,8 @@ import { LoteDetalhePage } from "@/pages/LoteDetalhePage";
 import { LotesListPage } from "@/pages/LotesListPage";
 import { FichasListPage } from "@/pages/FichasListPage";
 import { FichaDetalhePage } from "@/pages/FichaDetalhePage";
+import { EquipesPage } from "@/pages/EquipesPage";
+import { EquipeDetalhePage } from "@/pages/EquipeDetalhePage";
 import { MeuPainelCoordenadorPage } from "@/pages/MeuPainelCoordenadorPage";
 import { AdminUsuariosPage } from "@/pages/AdminUsuariosPage";
 import { AdminRelatorioErrosPage } from "@/pages/AdminRelatorioErrosPage";
@@ -126,6 +128,22 @@ export default function App() {
         element={
           <ProtectedRoute>
             <FichaDetalhePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/equipes"
+        element={
+          <ProtectedRoute roles={["ADMIN", "APROVADOR", "OPERADOR"]}>
+            <EquipesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/equipes/:id"
+        element={
+          <ProtectedRoute roles={["ADMIN", "APROVADOR", "OPERADOR"]}>
+            <EquipeDetalhePage />
           </ProtectedRoute>
         }
       />

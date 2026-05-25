@@ -26,10 +26,11 @@ contratual e drill-down).
 from __future__ import annotations
 
 from datetime import date, datetime
+from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -38,6 +39,21 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.cliente import Cliente
+
+
+class ModoCobranca(str, Enum):
+    """Como o MedPag cobra esse hospital.
+
+    PERCENTUAL_REPASSE — MedPag desconta X% do valor pago aos médicos
+        antes de repassar (modelo privado, ex.: Santa Casa 18%).
+
+    MENSALIDADE_SAAS — Hospital paga uma mensalidade fixa pelo software,
+        100% do valor vai pros médicos sem desconto MedPag (modelo
+        público, ex.: Hospital do Cérebro com verba apertada).
+    """
+
+    PERCENTUAL_REPASSE = "PERCENTUAL_REPASSE"
+    MENSALIDADE_SAAS = "MENSALIDADE_SAAS"
 
 
 class ContratoHospital(Base):
@@ -54,6 +70,19 @@ class ContratoHospital(Base):
         ForeignKey("clientes.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
+    )
+
+    # Define a regra de cobrança. Ver `ModoCobranca`.
+    modo_cobranca: Mapped[ModoCobranca] = mapped_column(
+        SAEnum(
+            ModoCobranca,
+            name="modo_cobranca_hospital",
+            values_callable=lambda x: [e.value for e in x],
+            create_type=False,  # criamos o type via migration idempotente
+        ),
+        nullable=False,
+        default=ModoCobranca.PERCENTUAL_REPASSE,
+        server_default=ModoCobranca.PERCENTUAL_REPASSE.value,
     )
 
     # ===== COBRANÇA (o que o MedPag fatura do hospital) =====
