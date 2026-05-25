@@ -56,11 +56,47 @@ class Settings(BaseSettings):
     JWT_REFRESH_EXPIRE_DAYS: int = 7
 
     # ===== CORS =====
+    # Lista explícita de origens (separadas por vírgula).
     CORS_ORIGINS: str = "http://localhost:5173"
+    # Regex adicional pra matchar qualquer preview deploy (ex.: Vercel cria
+    # subdomínios novos a cada PR/branch como med-pay-91t6.vercel.app).
+    # Default: aceita localhost dev + qualquer *.vercel.app do projeto.
+    CORS_ORIGIN_REGEX: str = (
+        r"^(http://localhost:\d+|https://([a-z0-9-]+\.)*vercel\.app)$"
+    )
 
     # ===== Upload =====
     MAX_UPLOAD_SIZE_MB: int = 50
     ALLOWED_UPLOAD_EXTENSIONS: tuple[str, ...] = (".xlsx", ".xls", ".csv")
+
+    # ===== OCR =====
+    # Chave gratuita: https://ocr.space/ocrapi (25k páginas/mês).
+    # Sem ela, o módulo de fichas escaneadas fica indisponível —
+    # a API retorna 503 OCR_INDISPONIVEL ao tentar usar.
+    OCR_SPACE_API_KEY: str | None = None
+    OCR_MAX_FILE_MB: int = 5  # Limite do plano free do OCR.space
+
+    # ===== Jarvis (Groq + WhatsApp via Wuzapi) =====
+    # Groq: 14.4k req/dia grátis em modelos grandes — suficiente pro Jarvis.
+    # https://console.groq.com/keys
+    GROQ_API_KEY: str | None = None
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_TEMPERATURE: float = 0.2
+    GROQ_MAX_TOKENS: int = 1024
+
+    # Wuzapi (WhatsApp não oficial, rodado em VPS Contabo)
+    WUZAPI_URL: str | None = None  # ex: http://seuvps:8080
+    WUZAPI_ADMIN_TOKEN: str | None = None  # Bearer admin
+    WUZAPI_INSTANCE_TOKEN: str | None = None  # Token da instância
+
+    # Segredo compartilhado pra autenticar webhooks vindos do Wuzapi
+    # (configurado no provisionamento, header X-Webhook-Secret).
+    WUZAPI_WEBHOOK_SECRET: str | None = None
+
+    # Janela máxima de histórico que o Jarvis carrega como contexto
+    # (mensagens das últimas N horas, máximo M mensagens).
+    JARVIS_HISTORICO_HORAS: int = 6
+    JARVIS_HISTORICO_MAX: int = 12
 
     # ===== Negócio =====
     # Range típico de valores (em centavos) — fora disso é "suspeito"
