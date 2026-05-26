@@ -10,6 +10,7 @@ import {
   Fingerprint,
   Hourglass,
   Lock,
+  type LucideIcon,
   MessageCircle,
   Scale,
   ShieldCheck,
@@ -596,7 +597,7 @@ function CardSeg({
   title,
   desc,
 }: {
-  icon: React.ComponentType<{ size?: number }>;
+  icon: LucideIcon;
   title: string;
   desc: string;
 }) {
