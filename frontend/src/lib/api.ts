@@ -51,6 +51,11 @@ api.interceptors.request.use((config) => {
 
 // Interceptor: redireciona em 401 (sessão expirada)
 // e em 403 USUARIO_INATIVO (admin bloqueou esse usuário enquanto ele estava logado)
+//
+// IMPORTANTE: o redirect só acontece em rotas autenticadas (`/app/*`). Em
+// rotas públicas (`/`, `/crm`, `/login`, `/anestesista/*`) o `AuthProvider`
+// dispara um `GET /api/auth/me` especulativo no mount — se cair 401, NÃO
+// devemos jogar o usuário pra /login, ele nem queria estar logado.
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<{ error?: { code?: string; message?: string } }>) => {
@@ -62,9 +67,10 @@ api.interceptors.response.use(
 
     if (sessaoMorta) {
       const path = window.location.pathname;
-      if (path !== "/login") {
-        localStorage.removeItem("medpag_access_token");
-        // Mensagem amigável pra quando o admin bloqueia em tempo real
+      const emRotaProtegida = path.startsWith("/app");
+      // Sempre limpa o token expirado, mesmo em rota pública
+      localStorage.removeItem("medpag_access_token");
+      if (emRotaProtegida && path !== "/login") {
         if (code === "USUARIO_INATIVO") {
           alert(
             "Seu acesso foi suspenso pelo administrador da plataforma. Em caso de dúvida, entre em contato.",
