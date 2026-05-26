@@ -136,7 +136,7 @@ function Hero() {
             Seu honorário,
             <br />
             <span className="bg-gradient-to-r from-accent-300 via-accent-200 to-accent-400 bg-clip-text text-transparent">
-              sem planilha. Sem fofoca.
+              sem planilha. Sem espera.
             </span>
           </h1>
 
