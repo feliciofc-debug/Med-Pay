@@ -8,9 +8,11 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronLeft,
+  Download,
   Edit3,
   FileSpreadsheet,
   Filter,
+  Info,
   Plus,
   Search,
   Upload,
@@ -93,6 +95,16 @@ export function PrestadoresPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <a
+            href={`${api.defaults.baseURL ?? ""}/api/beneficiarios/template.xlsx`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-2 text-sm rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center gap-2"
+            title="Baixa um Excel pronto pra preencher (com cabecalhos certos e exemplo)"
+          >
+            <Download size={16} />
+            Template Excel
+          </a>
           <button
             type="button"
             onClick={() => setTab("importar")}
@@ -143,6 +155,10 @@ export function PrestadoresPage() {
           </button>
         )}
       </div>
+
+      {tab === "lista" && (
+        <ComoFuncionaBanner />
+      )}
 
       {tab === "lista" && (
         <ListaPrestadores
@@ -355,6 +371,46 @@ function ListaPrestadores({
   );
 }
 
+function ComoFuncionaBanner() {
+  return (
+    <div className="bg-gradient-to-r from-brand-50 to-accent-50 border border-brand-100 rounded-xl p-4 text-sm">
+      <div className="flex items-start gap-3">
+        <Info size={18} className="text-accent-700 shrink-0 mt-0.5" />
+        <div className="space-y-1.5">
+          <p className="font-semibold text-brand-900">
+            Como o cadastro mestre funciona
+          </p>
+          <p className="text-brand-800/80">
+            Quando o coordenador emite uma ficha pelo WhatsApp ou pela tela
+            de fichas, o sistema cruza o <strong>CPF</strong> com este cadastro:
+          </p>
+          <ul className="list-disc list-inside text-brand-800/90 space-y-0.5 ml-1">
+            <li>
+              <strong>Achou e dados batem</strong> → pagamento sai pelo CNAB
+              com os dados cadastrados (a verdade da operação).
+            </li>
+            <li>
+              <strong>Achou mas dados divergem</strong> → o sistema usa o
+              cadastro e mostra alerta pra revisão.
+            </li>
+            <li>
+              <strong>Não achou</strong> → cria automaticamente como{" "}
+              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-xs font-medium">
+                PENDENTE
+              </span>{" "}
+              e bloqueia o pagamento até um aprovador validar.
+            </li>
+          </ul>
+          <p className="text-brand-800/70 mt-1 text-xs">
+            Comece subindo a base completa via <strong>Template Excel</strong>{" "}
+            → <strong>Importar planilha</strong>.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EstadoVazio({
   statusFilter,
 }: {
@@ -491,7 +547,9 @@ function WizardImportacao({
   return (
     <div className="space-y-4">
       <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900">
-        <p className="font-medium mb-1">Formato esperado</p>
+        <p className="font-medium mb-1 flex items-center gap-2">
+          <Info size={16} /> Formato esperado
+        </p>
         <p className="text-accent-800/90">
           Arquivo XLSX, XLS ou CSV. Colunas obrigatórias:{" "}
           <code className="bg-white/60 px-1">CPF</code> e{" "}
@@ -500,6 +558,14 @@ function WizardImportacao({
           Banco, Agência, Conta, PIX, Tipo PIX, Valor padrão. Os cabeçalhos
           aceitam variações (ex.: "C P F", "Cód. Banco", "Chave PIX").
         </p>
+        <a
+          href={`${api.defaults.baseURL ?? ""}/api/beneficiarios/template.xlsx`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 inline-flex items-center gap-1 text-accent-900 underline text-sm font-medium"
+        >
+          <Download size={14} /> Baixar template oficial (XLSX)
+        </a>
       </div>
 
       <label className="block">

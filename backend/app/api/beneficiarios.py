@@ -15,6 +15,7 @@ Permissão:
 
 from __future__ import annotations
 
+import io
 from uuid import UUID
 
 import structlog
@@ -29,6 +30,9 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import (
@@ -82,6 +86,145 @@ async def listar_beneficiarios(
         search=search,
         page=page,
         per_page=per_page,
+    )
+
+
+@router.get("/template.xlsx")
+async def baixar_template_planilha(
+    _: User = Depends(require_visao_executiva),
+) -> StreamingResponse:
+    """Baixa um template XLSX com os cabecalhos esperados e 2 linhas de exemplo.
+
+    Util pra dar ao hospital uma planilha pronta de preencher antes de
+    importar a base. Os cabecalhos batem com os aliases reconhecidos
+    em `BeneficiarioService._ALIASES_BENEFICIARIO` (case + acento
+    insensitive).
+    """
+    wb = Workbook()
+    ws = wb.active
+    if ws is None:
+        ws = wb.create_sheet("Prestadores")
+    else:
+        ws.title = "Prestadores"
+
+    cabecalhos = [
+        "CPF",
+        "Nome",
+        "CRM",
+        "Categoria",
+        "Especialidade",
+        "Email",
+        "Telefone",
+        "Banco",
+        "Agencia",
+        "Conta",
+        "Tipo PIX",
+        "Chave PIX",
+        "Valor padrao (R$)",
+        "Observacoes",
+    ]
+
+    fonte_cab = Font(bold=True, color="FFFFFF")
+    preench_cab = PatternFill(start_color="1F2937", end_color="1F2937", fill_type="solid")
+    centralizar = Alignment(horizontal="center")
+
+    for col_idx, cab in enumerate(cabecalhos, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=cab)
+        cell.font = fonte_cab
+        cell.fill = preench_cab
+        cell.alignment = centralizar
+
+    # Larguras razoaveis pra leitura
+    larguras = [16, 32, 12, 18, 22, 30, 16, 8, 10, 14, 12, 32, 16, 32]
+    for i, w in enumerate(larguras, start=1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+
+    # Linhas de exemplo (vamos deixar 2 pra ficar claro o formato)
+    exemplos = [
+        [
+            "123.456.789-09",
+            "MARIA SOUZA DA SILVA",
+            "CRM-RJ 123456",
+            "Medico",
+            "Cardiologia",
+            "maria.silva@exemplo.com.br",
+            "(21) 98765-4321",
+            "341",
+            "1234",
+            "56789-0",
+            "CPF",
+            "12345678909",
+            "1500.00",
+            "Plantao 12h fixo",
+        ],
+        [
+            "987.654.321-00",
+            "JOAO PEREIRA SANTOS",
+            "CRM-RJ 654321",
+            "Medico",
+            "Cirurgia Geral",
+            "joao.santos@exemplo.com.br",
+            "(21) 99999-0000",
+            "237",
+            "0001",
+            "12345-6",
+            "EMAIL",
+            "joao.santos@exemplo.com.br",
+            "1800.00",
+            "",
+        ],
+    ]
+    for r_idx, linha in enumerate(exemplos, start=2):
+        for c_idx, valor in enumerate(linha, start=1):
+            ws.cell(row=r_idx, column=c_idx, value=valor)
+
+    # Aba auxiliar com instrucoes (ajuda muito quando alguem nao tecnico abre)
+    ws_help = wb.create_sheet("Instrucoes")
+    ws_help.column_dimensions["A"].width = 22
+    ws_help.column_dimensions["B"].width = 90
+
+    instrucoes = [
+        ("Coluna", "Como preencher"),
+        ("CPF", "Obrigatorio. Aceita 000.000.000-00 ou 00000000000."),
+        ("Nome", "Obrigatorio. Nome completo do prestador."),
+        ("CRM", "Opcional. Conselho profissional (CRM, COREN, CRO etc)."),
+        ("Categoria", "Opcional. Ex: Medico, Enfermeiro, Limpeza, RH."),
+        ("Especialidade", "Opcional. Ex: Cardiologia, UTI, Pediatria."),
+        ("Email", "Opcional."),
+        ("Telefone", "Opcional. (DDD) numero, com ou sem mascara."),
+        ("Banco", "Codigo FEBRABAN de 3 digitos. Ex: 341 (Itau), 237 (Bradesco), 136 (Unicred)."),
+        ("Agencia", "Numero da agencia (4-5 digitos)."),
+        ("Conta", "Numero da conta com digito (ex: 12345-6)."),
+        ("Tipo PIX", "CPF, CNPJ, EMAIL, TELEFONE ou ALEATORIA."),
+        ("Chave PIX", "A chave em si. Para CPF/TELEFONE pode ser sem mascara."),
+        ("Valor padrao (R$)", "Opcional. Aceita 1500.00 ou 1500,00 ou 150000 (centavos)."),
+        ("Observacoes", "Texto livre."),
+        ("", ""),
+        ("DICA", "Se o CPF ja existir no cadastro, a planilha ATUALIZA o registro."),
+        (
+            "DICA",
+            "Caso voce envie a planilha sem dados bancarios, o prestador entra como ATIVO mas nao recebe pagamento ate completar.",
+        ),
+    ]
+    for r_idx, (a, b) in enumerate(instrucoes, start=1):
+        cell_a = ws_help.cell(row=r_idx, column=1, value=a)
+        cell_b = ws_help.cell(row=r_idx, column=2, value=b)
+        if r_idx == 1:
+            cell_a.font = Font(bold=True)
+            cell_b.font = Font(bold=True)
+        if a == "DICA":
+            cell_a.font = Font(bold=True, color="B45309")
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    headers = {
+        "Content-Disposition": 'attachment; filename="medpag_prestadores_template.xlsx"',
+    }
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
     )
 
 
