@@ -24,7 +24,7 @@ from uuid import UUID
 
 import pandas as pd
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -210,15 +210,20 @@ async def atualizar_equipe(
     return _equipe_para_out(eq)
 
 
-@router.delete("/{equipe_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{equipe_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
 async def deletar_equipe(
     equipe_id: UUID,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
-) -> None:
+) -> Response:
     eq = await _carregar_equipe(db, equipe_id)
     await db.delete(eq)
     await db.flush()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ============================================================
@@ -299,13 +304,14 @@ async def atualizar_membro(
 @router.delete(
     "/{equipe_id}/membros/{membro_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
 )
 async def remover_membro(
     equipe_id: UUID,
     membro_id: UUID,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_aprovador),
-) -> None:
+) -> Response:
     q = await db.execute(
         select(MembroEquipe).where(
             MembroEquipe.id == membro_id,
@@ -317,6 +323,7 @@ async def remover_membro(
         raise _nao_encontrado("Membro não encontrado nesta equipe")
     await db.delete(membro)
     await db.flush()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ============================================================
