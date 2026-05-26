@@ -10,10 +10,12 @@ from app.models.beneficiario import (
     StatusBeneficiario,
 )
 from app.models.cliente import Cliente
+from app.models.codigo_servico import CodigoServico
 from app.models.contrato_hospital import ContratoHospital, ModoCobranca
 from app.models.empresa_config import BancoEmissor, EmpresaConfig, TipoInscricao
 from app.models.equipe_flex import EquipeFlex, FechamentoEquipe, MembroEquipe
 from app.models.ficha_plantao import FichaPlantao, StatusFicha
+from app.models.lancamento_servico import LancamentoServico, StatusLancamento
 from app.models.lote import Lote, StatusLote
 from app.models.pagamento import Pagamento, StatusPagamento
 from app.models.user import User, UserRole
@@ -30,12 +32,14 @@ __all__ = [
     "BancoEmissor",
     "Beneficiario",
     "Cliente",
+    "CodigoServico",
     "ContratoHospital",
     "DirecaoMensagem",
     "EmpresaConfig",
     "EquipeFlex",
     "FechamentoEquipe",
     "FichaPlantao",
+    "LancamentoServico",
     "Lote",
     "MembroEquipe",
     "ModoCobranca",
@@ -44,6 +48,7 @@ __all__ = [
     "StatusBeneficiario",
     "StatusFicha",
     "StatusInstancia",
+    "StatusLancamento",
     "StatusLote",
     "StatusPagamento",
     "TipoInscricao",

@@ -1,18 +1,25 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Eye, EyeOff, Sparkles } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Sparkles, Stethoscope } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useAnestesistaSession } from "@/hooks/useAnestesistaSession";
 import { getErrorMessage } from "@/lib/api";
+import { getAnestesistaErrorMessage } from "@/lib/anestesistaApi";
 import { DEMO_MODE } from "@/lib/demo";
 
 export function LoginPage() {
   const { login } = useAuth();
+  const { loginPorCrm } = useAnestesistaSession();
   const navigate = useNavigate();
   const [email, setEmail] = useState(DEMO_MODE ? "demo@medpag.local" : "");
   const [password, setPassword] = useState(DEMO_MODE ? "demo123" : "");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const [crm, setCrm] = useState("");
+  const [erroCrm, setErroCrm] = useState<string | null>(null);
+  const [loadingCrm, setLoadingCrm] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,6 +33,20 @@ export function LoginPage() {
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCrmSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErroCrm(null);
+    setLoadingCrm(true);
+    try {
+      await loginPorCrm(crm);
+      navigate("/anestesista");
+    } catch (err) {
+      setErroCrm(getAnestesistaErrorMessage(err));
+    } finally {
+      setLoadingCrm(false);
     }
   }
 
@@ -144,6 +165,50 @@ export function LoginPage() {
           >
             {loading ? "Entrando..." : "Entrar"}
           </button>
+        </form>
+
+        {/* Caixinha do anestesista (acesso direto por CRM) */}
+        <form
+          onSubmit={handleCrmSubmit}
+          className="mt-5 rounded-xl border border-brand-100 bg-white/70 backdrop-blur shadow-sm p-4"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-7 h-7 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center">
+              <Stethoscope size={14} />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-brand-900 leading-tight">
+                Sou Anestesista
+              </p>
+              <p className="text-xs text-brand-700/70 leading-tight">
+                Acesso rápido com seu CRM
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={crm}
+              onChange={(e) => setCrm(e.target.value)}
+              placeholder="Ex: 12345/SP"
+              className="input uppercase tracking-wide"
+              autoComplete="off"
+            />
+            <button
+              type="submit"
+              disabled={loadingCrm || !crm.trim()}
+              className="btn-primary shrink-0 px-4"
+            >
+              {loadingCrm ? "..." : "Entrar"}
+            </button>
+          </div>
+
+          {erroCrm && (
+            <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-1.5 mt-2">
+              {erroCrm}
+            </p>
+          )}
         </form>
 
         <p className="text-xs text-brand-700/50 text-center mt-6 tracking-wide">

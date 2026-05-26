@@ -792,3 +792,66 @@ export interface SalvarContratoPayload {
   vencimento: string | null;
   observacoes: string | null;
 }
+
+// =============================================================================
+// Anestesista (autoatendimento por CRM)
+// =============================================================================
+
+export type StatusLancamento =
+  | "LANCADO"
+  | "CONFERIDO"
+  | "INCLUIDO_EM_LOTE"
+  | "PAGO"
+  | "CANCELADO";
+
+export interface MedicoAnestesista {
+  id: string;
+  nome: string;
+  crm: string | null;
+  especialidade: string | null;
+  cliente_id: string;
+  cliente_nome: string;
+}
+
+export interface CrmLoginResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  medico: MedicoAnestesista;
+}
+
+export interface CodigoServico {
+  id: string;
+  codigo: string;
+  descricao: string;
+  valor_centavos: number;
+  categoria: string | null;
+  porte: string | null;
+}
+
+export interface LancamentoServico {
+  id: string;
+  data_servico: string; // ISO date
+  codigo_snapshot: string;
+  descricao_snapshot: string;
+  valor_centavos: number;
+  hospital_local: string | null;
+  paciente_iniciais: string | null;
+  observacoes: string | null;
+  status: StatusLancamento;
+  created_at: string;
+}
+
+export interface LancamentosListResponse {
+  items: LancamentoServico[];
+  total: number;
+  total_centavos: number;
+}
+
+export interface LancamentoCreatePayload {
+  codigo: string;
+  data_servico: string; // ISO date (yyyy-mm-dd)
+  hospital_local?: string | null;
+  paciente_iniciais?: string | null;
+  observacoes?: string | null;
+}

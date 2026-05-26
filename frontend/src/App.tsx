@@ -21,6 +21,9 @@ import { AdminRelatorioErrosPage } from "@/pages/AdminRelatorioErrosPage";
 import { AdminDevolucoesPage } from "@/pages/AdminDevolucoesPage";
 import { AdminEmpresaPagadoraPage } from "@/pages/AdminEmpresaPagadoraPage";
 import { AdminWhatsAppPage } from "@/pages/AdminWhatsAppPage";
+import { AnestesistaLancarPage } from "@/pages/AnestesistaLancarPage";
+import { AnestesistaMeusLancamentosPage } from "@/pages/AnestesistaMeusLancamentosPage";
+import { CrmLandingPage } from "@/pages/CrmLandingPage";
 import type { UserRole } from "@/types";
 
 // Pra qual rota mandar o usuário quando ele cai em alguma sem permissão.
@@ -66,6 +69,15 @@ export default function App() {
       {/* Público */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
+      {/* Landing universal de médicos (entrada por CRM) */}
+      <Route path="/crm" element={<CrmLandingPage />} />
+
+      {/* Área do médico (sessão leve por CRM, sem User no sistema) */}
+      <Route path="/anestesista" element={<AnestesistaLancarPage />} />
+      <Route
+        path="/anestesista/meus-lancamentos"
+        element={<AnestesistaMeusLancamentosPage />}
+      />
 
       {/* Área autenticada */}
       <Route

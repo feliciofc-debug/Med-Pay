@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 
 import App from "./App";
+import { AnestesistaSessionProvider } from "./hooks/useAnestesistaSession";
 import { AuthProvider } from "./hooks/useAuth";
 import "./index.css";
 
@@ -22,7 +23,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <App />
+          <AnestesistaSessionProvider>
+            <App />
+          </AnestesistaSessionProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

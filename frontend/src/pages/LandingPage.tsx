@@ -20,6 +20,7 @@ import {
   Shield,
   ShieldCheck,
   Sparkles,
+  Stethoscope,
   TrendingUp,
   Upload,
   Users,
@@ -81,6 +82,13 @@ function Header() {
         </nav>
 
         <div className="flex items-center gap-3">
+          <Link
+            to="/crm"
+            className="text-sm font-medium text-brand-800 hover:text-brand-900 transition hidden sm:inline-flex items-center gap-1.5"
+          >
+            <Stethoscope size={14} />
+            Sou médico
+          </Link>
           <Link
             to="/login"
             className="text-sm font-medium text-brand-800 hover:text-brand-900 transition hidden sm:block"
