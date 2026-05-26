@@ -8,9 +8,12 @@ Habilita o fluxo de autoatendimento por CRM:
 
 Sem mudanças destrutivas. Idempotente para suportar redeploy.
 
-Revision ID: 012_anestesista_codigos_lancamentos
+Revision ID: 012_anestesista_codigos
 Revises: 011_beneficiario_cadastro_mestre
 Create Date: 2026-05-26 16:00:00 UTC
+
+Nota: revision ID encurtado para caber em alembic_version.version_num
+(VARCHAR(32) no Postgres). Nome anterior tinha 35 chars e estourava.
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "012_anestesista_codigos_lancamentos"
+revision: str = "012_anestesista_codigos"
 down_revision: str | None = "011_beneficiario_cadastro_mestre"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
