@@ -54,6 +54,8 @@ from app.schemas.executivo import (
     PainelCoordenadorOut,
     ProjecaoMensal,
     RenovacaoProxima,
+    ResumoOperacaoMes,
+    ResumoPipelineHospital,
     SalvarContratoRequest,
 )
 
@@ -402,6 +404,11 @@ async def dashboard_executivo(
     # 7) Receita prevista de fichas em pipeline
     receita_prevista, margem_prevista = await _pipeline_fichas(db, inicio, fim)
 
+    # 7b) Resumo "programação vs realizado" — sempre populado, mesmo sem contratos
+    operacao_mes, pipeline_hospitais = await _pipeline_completo(
+        db, inicio, fim, contratos
+    )
+
     # 8) Alertas (margem crítica + renovações vencendo)
     alertas: list[AlertaExecutivo] = []
     renovacoes: list[RenovacaoProxima] = []
@@ -480,6 +487,9 @@ async def dashboard_executivo(
         renovacoes_proximas=renovacoes,
         receita_prevista_centavos=receita_prevista,
         margem_prevista_centavos=margem_prevista,
+        operacao_mes=operacao_mes,
+        pipeline_hospitais=pipeline_hospitais,
+        sem_contratos_configurados=len(contratos) == 0,
     )
 
 
@@ -642,6 +652,188 @@ async def _kpi_operacional(
     )
 
 
+async def _pipeline_completo(
+    db: AsyncSession,
+    inicio: date,
+    fim: date,
+    contratos: list[ContratoHospital],
+) -> tuple[ResumoOperacaoMes, list[ResumoPipelineHospital]]:
+    """Agrega "programação de pagamento" vs "pagamentos realizados" do mês.
+
+    A diferença pra `_query_volume_por_cliente` (que vai pra cálculo de
+    receita do contrato) é que aqui o objetivo é mostrar TUDO que está
+    em movimento — mesmo sem contrato configurado. Isso garante que o
+    Executivo nunca fica em branco quando há atividade no sistema.
+
+    Programação:  fichas pendentes + lotes em revisão/aprovados
+    Realizado:    lotes enviados ao banco / conciliados
+    """
+    inicio_dt = datetime.combine(inicio, datetime.min.time(), UTC)
+    fim_dt = datetime.combine(fim, datetime.min.time(), UTC)
+
+    contratos_por_cliente = {c.cliente_id: c for c in contratos}
+
+    # Carrega clientes com qualquer atividade no mês
+    clientes_q = await db.execute(
+        select(Cliente).order_by(Cliente.nome)
+    )
+    clientes = list(clientes_q.scalars().all())
+    clientes_por_id = {c.id: c for c in clientes}
+
+    # Lotes do mês agrupados por status + cliente
+    lotes_q = await db.execute(
+        select(
+            Lote.cliente_id,
+            Lote.status,
+            func.count(Lote.id).label("qtd"),
+            func.coalesce(func.sum(Lote.valor_total_centavos), 0).label("total"),
+            func.max(Lote.created_at).label("ultima"),
+        )
+        .where(
+            Lote.created_at >= inicio_dt,
+            Lote.created_at < fim_dt,
+        )
+        .group_by(Lote.cliente_id, Lote.status)
+    )
+
+    # estrutura: agregador[cliente_id][bucket] = (qtd, valor)
+    agregador: dict[UUID, dict[str, tuple[int, int]]] = defaultdict(dict)
+    ultima_atividade_por_cliente: dict[UUID, datetime] = {}
+
+    for row in lotes_q:
+        cid = row.cliente_id
+        status_lote = row.status
+        qtd = int(row.qtd or 0)
+        valor = int(row.total or 0)
+
+        if status_lote in (StatusLote.AGUARDANDO_REVISAO,):
+            bucket = "revisao"
+        elif status_lote in (StatusLote.APROVADO, StatusLote.PROCESSANDO):
+            bucket = "aprovado"
+        elif status_lote == StatusLote.ENVIADO_BANCO:
+            bucket = "enviado"
+        elif status_lote == StatusLote.CONCILIADO:
+            bucket = "conciliado"
+        else:
+            continue
+
+        atual_qtd, atual_valor = agregador[cid].get(bucket, (0, 0))
+        agregador[cid][bucket] = (atual_qtd + qtd, atual_valor + valor)
+        if row.ultima:
+            ant = ultima_atividade_por_cliente.get(cid)
+            if not ant or row.ultima > ant:
+                ultima_atividade_por_cliente[cid] = row.ultima
+
+    # Fichas pendentes (extraídas/revisadas que ainda NÃO viraram lote)
+    # Carregamos as fichas pra somar valor em Python — `valor_total_centavos`
+    # é uma @property derivada de `linhas_extraidas` (JSON), não coluna SQL.
+    fichas_pend_q = await db.execute(
+        select(FichaPlantao).where(
+            FichaPlantao.created_at >= inicio_dt,
+            FichaPlantao.created_at < fim_dt,
+            FichaPlantao.status.in_(
+                [StatusFicha.EXTRAIDA, StatusFicha.REVISADA]
+            ),
+            FichaPlantao.lote_gerado_id.is_(None),
+        )
+    )
+    fichas_pend = list(fichas_pend_q.scalars().all())
+    fichas_por_cliente: dict[UUID, tuple[int, int]] = defaultdict(lambda: (0, 0))
+    for f in fichas_pend:
+        atual_qtd, atual_valor = fichas_por_cliente[f.cliente_id]
+        fichas_por_cliente[f.cliente_id] = (
+            atual_qtd + 1,
+            atual_valor + (f.valor_total_centavos or 0),
+        )
+        ant = ultima_atividade_por_cliente.get(f.cliente_id)
+        if not ant or f.created_at > ant:
+            ultima_atividade_por_cliente[f.cliente_id] = f.created_at
+
+    # Quem é "ativo" no mês? Quem tem lote OU ficha pendente
+    cliente_ids_ativos = set(agregador.keys()) | set(fichas_por_cliente.keys())
+
+    pipelines: list[ResumoPipelineHospital] = []
+    total_ficha_qtd = 0
+    total_ficha_valor = 0
+    total_revisao_qtd = 0
+    total_revisao_valor = 0
+    total_aprovado_qtd = 0
+    total_aprovado_valor = 0
+    total_enviado_qtd = 0
+    total_enviado_valor = 0
+    total_conciliado_qtd = 0
+    total_conciliado_valor = 0
+
+    for cid in cliente_ids_ativos:
+        cliente = clientes_por_id.get(cid)
+        if cliente is None:
+            continue
+        buckets = agregador.get(cid, {})
+        revisao_qtd, revisao_valor = buckets.get("revisao", (0, 0))
+        aprovado_qtd, aprovado_valor = buckets.get("aprovado", (0, 0))
+        enviado_qtd, enviado_valor = buckets.get("enviado", (0, 0))
+        conciliado_qtd, conciliado_valor = buckets.get("conciliado", (0, 0))
+        ficha_qtd, ficha_valor = fichas_por_cliente.get(cid, (0, 0))
+
+        volume_total = (
+            ficha_valor + revisao_valor + aprovado_valor + enviado_valor + conciliado_valor
+        )
+
+        pipelines.append(
+            ResumoPipelineHospital(
+                cliente_id=cid,
+                cliente_nome=cliente.nome,
+                tem_contrato=cid in contratos_por_cliente,
+                fichas_pendentes=ficha_qtd,
+                valor_fichas_pendentes_centavos=ficha_valor,
+                lotes_em_revisao=revisao_qtd,
+                valor_lotes_em_revisao_centavos=revisao_valor,
+                lotes_aprovados=aprovado_qtd,
+                valor_lotes_aprovados_centavos=aprovado_valor,
+                lotes_enviados=enviado_qtd,
+                valor_lotes_enviados_centavos=enviado_valor,
+                lotes_conciliados=conciliado_qtd,
+                valor_lotes_conciliados_centavos=conciliado_valor,
+                volume_total_mes_centavos=volume_total,
+                ultima_atividade=ultima_atividade_por_cliente.get(cid),
+            )
+        )
+
+        total_ficha_qtd += ficha_qtd
+        total_ficha_valor += ficha_valor
+        total_revisao_qtd += revisao_qtd
+        total_revisao_valor += revisao_valor
+        total_aprovado_qtd += aprovado_qtd
+        total_aprovado_valor += aprovado_valor
+        total_enviado_qtd += enviado_qtd
+        total_enviado_valor += enviado_valor
+        total_conciliado_qtd += conciliado_qtd
+        total_conciliado_valor += conciliado_valor
+
+    pipelines.sort(key=lambda p: p.volume_total_mes_centavos, reverse=True)
+
+    operacao = ResumoOperacaoMes(
+        qtd_fichas_pendentes=total_ficha_qtd,
+        valor_fichas_pendentes_centavos=total_ficha_valor,
+        qtd_lotes_programados=total_revisao_qtd + total_aprovado_qtd,
+        valor_lotes_programados_centavos=total_revisao_valor + total_aprovado_valor,
+        qtd_lotes_enviados=total_enviado_qtd,
+        valor_lotes_enviados_centavos=total_enviado_valor,
+        qtd_lotes_conciliados=total_conciliado_qtd,
+        valor_lotes_conciliados_centavos=total_conciliado_valor,
+        volume_total_mes_centavos=(
+            total_ficha_valor
+            + total_revisao_valor
+            + total_aprovado_valor
+            + total_enviado_valor
+            + total_conciliado_valor
+        ),
+        qtd_clientes_ativos=len(cliente_ids_ativos),
+    )
+
+    return operacao, pipelines
+
+
 async def _pipeline_fichas(
     db: AsyncSession, inicio: date, fim: date
 ) -> tuple[int, int]:
@@ -654,19 +846,20 @@ async def _pipeline_fichas(
     inicio_dt = datetime.combine(inicio, datetime.min.time(), UTC)
     fim_dt = datetime.combine(fim, datetime.min.time(), UTC)
 
-    valor = (
-        await db.scalar(
-            select(func.coalesce(func.sum(FichaPlantao.valor_total_centavos), 0)).where(
-                FichaPlantao.created_at >= inicio_dt,
-                FichaPlantao.created_at < fim_dt,
-                FichaPlantao.status.in_(
-                    [StatusFicha.EXTRAIDA, StatusFicha.REVISADA]
-                ),
-                FichaPlantao.lote_gerado_id.is_(None),  # ainda não virou lote
-            )
+    # `valor_total_centavos` é @property derivada de `linhas_extraidas` (JSON),
+    # então precisamos somar em Python.
+    fichas_q = await db.execute(
+        select(FichaPlantao).where(
+            FichaPlantao.created_at >= inicio_dt,
+            FichaPlantao.created_at < fim_dt,
+            FichaPlantao.status.in_(
+                [StatusFicha.EXTRAIDA, StatusFicha.REVISADA]
+            ),
+            FichaPlantao.lote_gerado_id.is_(None),
         )
-    ) or 0
-    valor = int(valor)
+    )
+    fichas = list(fichas_q.scalars().all())
+    valor = sum(f.valor_total_centavos or 0 for f in fichas)
     margem_estimada = round(valor * 0.6)
     return valor, margem_estimada
 

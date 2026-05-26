@@ -542,6 +542,37 @@ export interface KPIHero {
   meta_atingida_pct: number;
 }
 
+export interface ResumoOperacaoMes {
+  qtd_fichas_pendentes: number;
+  valor_fichas_pendentes_centavos: number;
+  qtd_lotes_programados: number;
+  valor_lotes_programados_centavos: number;
+  qtd_lotes_enviados: number;
+  valor_lotes_enviados_centavos: number;
+  qtd_lotes_conciliados: number;
+  valor_lotes_conciliados_centavos: number;
+  volume_total_mes_centavos: number;
+  qtd_clientes_ativos: number;
+}
+
+export interface ResumoPipelineHospital {
+  cliente_id: string;
+  cliente_nome: string;
+  tem_contrato: boolean;
+  fichas_pendentes: number;
+  valor_fichas_pendentes_centavos: number;
+  lotes_em_revisao: number;
+  valor_lotes_em_revisao_centavos: number;
+  lotes_aprovados: number;
+  valor_lotes_aprovados_centavos: number;
+  lotes_enviados: number;
+  valor_lotes_enviados_centavos: number;
+  lotes_conciliados: number;
+  valor_lotes_conciliados_centavos: number;
+  volume_total_mes_centavos: number;
+  ultima_atividade: string | null;
+}
+
 export interface DashboardExecutivo {
   gerado_em: string;
   mes_referencia: string; // ex.: "Junho/2026"
@@ -553,6 +584,9 @@ export interface DashboardExecutivo {
   renovacoes_proximas: RenovacaoProxima[];
   receita_prevista_centavos: number;
   margem_prevista_centavos: number;
+  operacao_mes: ResumoOperacaoMes | null;
+  pipeline_hospitais: ResumoPipelineHospital[];
+  sem_contratos_configurados: boolean;
 }
 
 // =============================================================================

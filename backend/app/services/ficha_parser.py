@@ -1,8 +1,9 @@
 """Parser do texto extraído pelo OCR de uma ficha de plantão.
 
 O OCR devolve texto bruto, geralmente com ruído (carimbos sobrepondo
-linhas, tabelas que viram colunas mal alinhadas, abreviações). Este
-módulo tenta extrair os campos estruturados que viram pagamentos:
+linhas, tabelas que viram colunas mal alinhadas, abreviações, perda
+de caixa alta). Este módulo tenta extrair os campos estruturados que
+viram pagamentos:
 
     - CPF (validado pelo `validators.cpf`)
     - Nome
@@ -10,6 +11,18 @@ módulo tenta extrair os campos estruturados que viram pagamentos:
     - Quantidade de plantões / horas (informativo)
     - Banco / agência / conta (se aparecerem)
     - Chave PIX (se aparecer)
+
+Estratégia atual:
+    1. Lê linha por linha e marca candidatas (linha COM cpf é "mãe",
+       linha SÓ com banco/agência/conta é "continuação").
+    2. Quando uma linha "mãe" não tem nome detectável dentro dela,
+       tenta:
+       a. Pegar tudo antes do CPF como possível nome (DR./DRA./ENF.
+          + 2 a 5 palavras)
+       b. Olhar a linha imediatamente anterior se for puramente texto.
+    3. Faz merge das linhas de continuação (banco/agência/conta) com
+       a linha-mãe imediatamente anterior.
+    4. Deduplica por CPF.
 
 Quando o parser não consegue inferir um campo, ele DEIXA EM BRANCO.
 O aprovador completa na tela de revisão antes de virar lote.
@@ -33,11 +46,14 @@ from app.validators.cpf import limpar_cpf, validar_cpf
 # CPF formatado ou não: 123.456.789-01 ou 12345678901
 _CPF_REGEX = re.compile(r"\b(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b")
 
-# Valor monetário brasileiro: R$ 1.234,56 / 1234,56 / R$ 1.234,00 / R$1234
-_VALOR_REGEX = re.compile(
-    r"R?\$?\s*"
-    r"(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2}|\d+\.\d{2}|\d{3,})",
-    re.IGNORECASE,
+# Valor monetário brasileiro: R$ 1.234,56 / 1234,56 / R$ 1.234,00.
+# Exigimos vírgula decimal (formato BR) ou R$ explícito pra evitar
+# confundir com agências, contas, ou pedaços de CPF/PIX.
+_VALOR_REGEX_BR = re.compile(
+    r"R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})", re.IGNORECASE
+)
+_VALOR_REGEX_VIRGULA = re.compile(
+    r"(?<![\d.,])(\d{1,3}(?:\.\d{3})+,\d{2}|\d+,\d{2})(?![\d])"
 )
 
 # Quantidade de plantões: "4 plantões", "Plantões: 4", "4 PT"
@@ -90,11 +106,41 @@ _COORDENADOR_REGEX = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
-# Nomes em CAIXA ALTA são candidatos a nome do beneficiário (típico em fichas)
-_NOME_UPPER_REGEX = re.compile(
-    r"\b((?:DR\.?\s+|DRA\.?\s+)?(?:[A-ZÁÉÍÓÚÂÊÔÃÕÇ]{2,}\s+){1,5}"
-    r"[A-ZÁÉÍÓÚÂÊÔÃÕÇ]{2,})\b"
+# Linhas de continuação começam com banco/ag/conta/pix
+_LINHA_CONTINUACAO_REGEX = re.compile(
+    r"^\s*(?:banco|c[oó]d\.?|ag(?:[eê]ncia)?\.?|c\.?[/.]?c\.?|conta|pix)\s*[:\-]",
+    re.IGNORECASE,
 )
+
+# Prefixos profissionais que aparecem antes do nome (case-insensitive)
+_PREFIXO_PROFISSIONAL = re.compile(
+    r"^(dr\.?|dra\.?|sr\.?|sra\.?|enf\.?|enfermeir[oa]|t[eé]cnic[oa])\s+",
+    re.IGNORECASE,
+)
+
+# Token "candidato a nome": uma sequência de 2-6 palavras com letras
+# (aceita acentos, hífen). Permite caixa alta OU baixa.
+_NOME_REGEX_FLEX = re.compile(
+    r"((?:dr\.?|dra\.?|sr\.?|sra\.?|enf\.?)\s+)?"
+    r"([A-Za-zÁÉÍÓÚÂÊÔÃÕÇáéíóúâêôãõç]{2,}"
+    r"(?:[\s\-'][A-Za-zÁÉÍÓÚÂÊÔÃÕÇáéíóúâêôãõç]{2,}){1,5})",
+    re.IGNORECASE,
+)
+
+# Palavras-chave que NUNCA são nome (pra filtrar falsos positivos)
+_PALAVRAS_BLACKLIST = {
+    "cpf", "cnpj", "ag", "agencia", "agência", "conta", "banco", "pix",
+    "hospital", "clinica", "clínica", "competencia", "competência",
+    "coordenador", "coordenadora", "ficha", "plantoes", "plantões",
+    "valor", "horas", "data", "inicio", "início", "fim", "categoria",
+    "diretoria", "medica", "médica", "recibo", "responsavel", "responsável",
+    "rh", "anestesista", "cirurgiao", "cirurgião", "plantonista", "enfermeiro",
+    "enfermeira", "clinico", "clínico", "geral", "uti", "ps",
+    "documento", "documentos", "uso", "restrito", "interno", "sistema",
+    "total", "totais", "pagos", "pagamentos", "conferido", "aprovado",
+    "junho", "julho", "agosto", "setembro", "outubro", "novembro",
+    "dezembro", "janeiro", "fevereiro", "março", "marco", "abril", "maio",
+}
 
 
 # ============================================================
@@ -155,14 +201,11 @@ def _valor_para_centavos(texto: str) -> int | None:
     if not s:
         return None
 
-    # 1.234,56 → padrão brasileiro
     if "," in s:
         s = s.replace(".", "").replace(",", ".")
     elif s.count(".") == 1 and len(s.split(".")[-1]) == 2:
-        # 1234.56 → padrão americano com 2 decimais
         pass
     else:
-        # "350" / "1234" → reais inteiros
         s = s.replace(".", "")
     try:
         valor_reais = float(s)
@@ -192,21 +235,89 @@ def _extrair_metadados(texto: str) -> dict[str, Any]:
     return metadados
 
 
+def _candidato_nome_eh_valido(candidato: str) -> bool:
+    """Filtra falsos positivos (cabeçalhos da ficha como 'CPF VALOR' etc.)."""
+    candidato_limpo = candidato.strip()
+    if len(candidato_limpo) < 5:
+        return False
+    palavras = candidato_limpo.lower().split()
+    if not palavras:
+        return False
+    # Mais de metade das palavras é blacklist? não é nome.
+    blacklisted = sum(1 for p in palavras if p.strip(".,:") in _PALAVRAS_BLACKLIST)
+    if blacklisted >= max(1, len(palavras) // 2):
+        return False
+    # Pelo menos 2 palavras com 3+ letras
+    if sum(1 for p in palavras if len(p) >= 3) < 2:
+        return False
+    return True
+
+
+def _formatar_nome(candidato: str) -> str:
+    """Normaliza pra 'Title Case' preservando prefixos comuns."""
+    candidato = candidato.strip().rstrip(":,.;").strip()
+
+    # Se começa com prefixo profissional, capitaliza separado
+    m = _PREFIXO_PROFISSIONAL.match(candidato)
+    prefixo = ""
+    resto = candidato
+    if m:
+        prefixo = m.group(1).rstrip(".").capitalize() + ". "
+        resto = candidato[m.end():]
+    return (prefixo + resto.title()).strip()
+
+
+def _extrair_nome_da_linha(linha: str, posicao_cpf: int = -1) -> str | None:
+    """Tenta extrair nome — duas estratégias:
+
+    1. Se tem CPF, pega o pedaço antes do CPF como candidato.
+    2. Senão, pega o melhor match do regex flexível na linha inteira.
+    """
+    linha_strip = linha.strip()
+
+    if posicao_cpf > 0:
+        prefixo = linha_strip[:posicao_cpf]
+        # Remove "CPF:" ou "CPF" no final do prefixo
+        prefixo = re.sub(r"\bcpf\s*[:\-]?\s*$", "", prefixo, flags=re.IGNORECASE)
+        prefixo = prefixo.strip().rstrip(":,.;").strip()
+
+        if _candidato_nome_eh_valido(prefixo):
+            return _formatar_nome(prefixo)
+
+    # Tenta pelo regex flexível
+    melhor: str | None = None
+    for m in _NOME_REGEX_FLEX.finditer(linha):
+        texto_full = m.group(0).strip()
+        if _candidato_nome_eh_valido(texto_full):
+            if not melhor or len(texto_full) > len(melhor):
+                melhor = texto_full
+    return _formatar_nome(melhor) if melhor else None
+
+
 def _extrair_de_linha(linha: str) -> LinhaExtraida | None:
     """Extrai campos de uma única linha de texto da ficha.
 
-    A heurística: uma linha vira candidata se tiver pelo menos um CPF
-    válido OU um valor monetário + um nome em caixa alta.
+    Retorna candidata se a linha tem:
+        - CPF (linha "mãe"), ou
+        - banco/agência/conta sem CPF (linha "continuação"), ou
+        - nome + valor (linha completa sem CPF)
     """
+    linha_original = linha
     linha = linha.strip()
     if len(linha) < 5:
         return None
 
     extraida = LinhaExtraida(linha_origem=linha)
 
-    # 1. CPF
-    if m := _CPF_REGEX.search(linha):
+    # Detecta se é linha de continuação (banco/ag/cc/pix puro).
+    # Nessas linhas, qualquer CPF encontrado é chave PIX — não cpf do beneficiário.
+    eh_continuacao = bool(_LINHA_CONTINUACAO_REGEX.match(linha))
+
+    # 1. CPF (só se NÃO for linha de continuação PIX)
+    posicao_cpf = -1
+    if not eh_continuacao and (m := _CPF_REGEX.search(linha)):
         cpf_bruto = m.group(1)
+        posicao_cpf = m.start()
         resultado = validar_cpf(cpf_bruto)
         if resultado.cpf_limpo and len(resultado.cpf_limpo) == 11:
             extraida.cpf = resultado.cpf_limpo
@@ -219,26 +330,24 @@ def _extrair_de_linha(linha: str) -> LinhaExtraida | None:
         else:
             extraida.avisos.append("CPF não pôde ser limpo")
 
-    # 2. Valor (pega o MAIOR valor da linha — geralmente o pagamento total)
-    valores = []
-    for m in _VALOR_REGEX.finditer(linha):
+    # 2. Valor (preferimos R$ explícito; senão, valor com vírgula decimal)
+    # Importante: limpa CPFs da linha antes pra não capturar dígitos do CPF.
+    linha_sem_cpf = _CPF_REGEX.sub(" ", linha)
+    valores: list[int] = []
+    for m in _VALOR_REGEX_BR.finditer(linha_sem_cpf):
         cents = _valor_para_centavos(m.group(1))
-        if cents and cents >= 100:  # ignora R$ 0,xx
+        if cents and cents >= 100:
             valores.append(cents)
+    if not valores:
+        for m in _VALOR_REGEX_VIRGULA.finditer(linha_sem_cpf):
+            cents = _valor_para_centavos(m.group(1))
+            if cents and cents >= 100:
+                valores.append(cents)
     if valores:
         extraida.valor_centavos = max(valores)
 
-    # 3. Nome — pega a maior sequência em CAIXA ALTA da linha,
-    # mas remove tokens que são CPF/valores
-    nome_candidato = None
-    for m in _NOME_UPPER_REGEX.finditer(linha):
-        candidato = m.group(1).strip()
-        # Filtros: deve ter ao menos uma palavra com 3+ chars
-        if any(len(p) >= 3 for p in candidato.split()):
-            if not nome_candidato or len(candidato) > len(nome_candidato):
-                nome_candidato = candidato
-    if nome_candidato:
-        extraida.nome = nome_candidato.title().strip()
+    # 3. Nome
+    extraida.nome = _extrair_nome_da_linha(linha, posicao_cpf)
 
     # 4. Plantões / horas
     if m := _PLANTOES_REGEX.search(linha):
@@ -271,11 +380,20 @@ def _extrair_de_linha(linha: str) -> LinhaExtraida | None:
     if m := _PIX_REGEX.search(linha):
         extraida.chave_pix = m.group(1).strip()
 
-    # Critério mínimo pra considerar candidata:
-    # tem CPF OU (nome + valor)
+    # Critérios pra ser candidata:
+    # - tem CPF (linha "mãe"), ou
+    # - tem banco/ag/conta/pix (linha "continuação"), ou
+    # - tem nome + valor (registro completo sem cpf legível)
     tem_cpf = bool(extraida.cpf)
+    tem_dado_bancario = bool(
+        extraida.banco_codigo
+        or extraida.agencia
+        or extraida.conta
+        or extraida.chave_pix
+    )
     tem_par = bool(extraida.nome and extraida.valor_centavos)
-    if not (tem_cpf or tem_par):
+
+    if not (tem_cpf or tem_dado_bancario or tem_par):
         return None
 
     return extraida
@@ -284,11 +402,15 @@ def _extrair_de_linha(linha: str) -> LinhaExtraida | None:
 def _consolidar_linhas_proximas(
     linhas: list[LinhaExtraida],
 ) -> list[LinhaExtraida]:
-    """Junta linhas adjacentes que parecem pertencer ao mesmo registro.
+    """Junta linhas adjacentes que pertencem ao mesmo registro.
 
-    Regra: se uma linha tem CPF mas não tem nome (ou vice-versa), e a
-    linha anterior tem o oposto, mergeamos. Não faz nada sofisticado:
-    o aprovador valida na revisão.
+    Casos cobertos:
+        a. Linha-mãe com CPF mas sem nome + linha anterior puro texto
+           que parece ser o nome → fundimos.
+        b. Linha-mãe com CPF + linha seguinte só com dados bancários
+           (banco/ag/cc/pix) → mergeamos os dados bancários na mãe.
+        c. Linhas duplicadas com CPF aparecendo 2x sem outro registro
+           no meio (ruído de OCR) — tratado em deduplicação.
     """
     consolidadas: list[LinhaExtraida] = []
     for atual in linhas:
@@ -297,16 +419,41 @@ def _consolidar_linhas_proximas(
             continue
 
         anterior = consolidadas[-1]
-        # Se o registro anterior está incompleto (sem CPF) e o atual
-        # só tem CPF, fundimos.
-        if not anterior.cpf and atual.cpf and not atual.nome and not anterior.nome:
-            anterior.cpf = atual.cpf
-            anterior.avisos.extend(atual.avisos)
+
+        # CASO B: linha "filha" só com dados bancários — funde na mãe
+        atual_so_bancario = (
+            not atual.cpf
+            and not atual.nome
+            and not atual.valor_centavos
+            and (
+                atual.banco_codigo
+                or atual.agencia
+                or atual.conta
+                or atual.chave_pix
+            )
+        )
+        if atual_so_bancario:
+            if anterior.banco_codigo is None and atual.banco_codigo:
+                anterior.banco_codigo = atual.banco_codigo
+            if anterior.agencia is None and atual.agencia:
+                anterior.agencia = atual.agencia
+            if anterior.conta is None and atual.conta:
+                anterior.conta = atual.conta
+            if anterior.chave_pix is None and atual.chave_pix:
+                anterior.chave_pix = atual.chave_pix
             anterior.linha_origem += " | " + atual.linha_origem
+            anterior.avisos.extend(atual.avisos)
             continue
+
+        # CASO A: cpf sem nome + atual tem nome sem cpf → mantemos
+        # (resolvido pela linha anterior ter pegado o nome via _extrair_nome_da_linha)
         if anterior.cpf and not anterior.nome and atual.nome and not atual.cpf:
             anterior.nome = atual.nome
-            anterior.avisos.extend(atual.avisos)
+            anterior.linha_origem += " | " + atual.linha_origem
+            continue
+
+        if not anterior.cpf and atual.cpf and not atual.nome and not anterior.nome:
+            anterior.cpf = atual.cpf
             anterior.linha_origem += " | " + atual.linha_origem
             continue
 
@@ -315,13 +462,55 @@ def _consolidar_linhas_proximas(
     return consolidadas
 
 
+def _aplicar_lookback_de_nomes(
+    candidatas: list[LinhaExtraida], todas_linhas: list[str]
+) -> None:
+    """Para linhas com CPF mas sem nome, tenta achar nome em linhas vizinhas.
+
+    Olha a linha de origem da candidata no texto bruto, e checa as
+    1-2 linhas anteriores. Se uma dessas linhas vizinhas tem um padrão
+    nome (sem CPF), usa.
+    """
+    # Indexa as linhas brutas pra busca rápida
+    indices: dict[str, int] = {}
+    for idx, l in enumerate(todas_linhas):
+        indices.setdefault(l.strip(), idx)
+
+    for candidata in candidatas:
+        if candidata.nome or not candidata.cpf:
+            continue
+
+        # Pega a primeira parte da linha_origem (pode ter sido fundida com " | ")
+        chave = candidata.linha_origem.split(" | ")[0].strip()
+        idx = indices.get(chave)
+        if idx is None or idx == 0:
+            continue
+
+        # Olha 2 linhas anteriores
+        for offset in (1, 2):
+            if idx - offset < 0:
+                break
+            linha_anterior = todas_linhas[idx - offset].strip()
+            if not linha_anterior:
+                continue
+            # Se a linha anterior tem CPF, é outro registro — para
+            if _CPF_REGEX.search(linha_anterior):
+                break
+            nome = _extrair_nome_da_linha(linha_anterior)
+            if nome:
+                candidata.nome = nome
+                candidata.linha_origem = linha_anterior + " | " + candidata.linha_origem
+                break
+
+
 def _deduplicar_por_cpf(
     linhas: list[LinhaExtraida],
 ) -> list[LinhaExtraida]:
-    """Remove duplicatas pelo CPF (somando valores se repetir).
+    """Remove duplicatas pelo CPF.
 
-    Útil porque o OCR às vezes lê a mesma linha duas vezes (linhas
-    duplas em tabelas).
+    Quando o OCR lê a mesma linha duas vezes, valores idênticos
+    são tratados como repetição (ignora). Valores diferentes são
+    somados (com aviso) — ainda há chance de erro mas é defensivo.
     """
     por_cpf: dict[str, LinhaExtraida] = {}
     sem_cpf: list[LinhaExtraida] = []
@@ -334,8 +523,6 @@ def _deduplicar_por_cpf(
             por_cpf[linha.cpf] = linha
         else:
             existente = por_cpf[linha.cpf]
-            # Se valores forem iguais, é duplicata pura → ignora
-            # Se forem diferentes, soma e avisa
             if (
                 linha.valor_centavos
                 and existente.valor_centavos
@@ -366,16 +553,18 @@ def parsear_ficha(texto_ocr: str) -> ResultadoParse:
 
     metadados = _extrair_metadados(texto_ocr)
 
+    todas_linhas = texto_ocr.splitlines()
     candidatas: list[LinhaExtraida] = []
-    for linha in texto_ocr.splitlines():
+    for linha in todas_linhas:
         extraida = _extrair_de_linha(linha)
         if extraida:
             candidatas.append(extraida)
 
     candidatas = _consolidar_linhas_proximas(candidatas)
+    _aplicar_lookback_de_nomes(candidatas, todas_linhas)
     candidatas = _deduplicar_por_cpf(candidatas)
 
-    # Última limpeza: remover linhas claramente sem dados úteis
+    # Filtro final — descarta linhas só com banco/agência sem CPF nem nome+valor
     final = [
         linha
         for linha in candidatas
@@ -388,6 +577,6 @@ def parsear_ficha(texto_ocr: str) -> ResultadoParse:
 __all__ = [
     "LinhaExtraida",
     "ResultadoParse",
-    "limpar_cpf",  # re-export pra conveniência
+    "limpar_cpf",
     "parsear_ficha",
 ]

@@ -3,17 +3,22 @@ import {
   AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
+  Banknote,
   Bell,
+  Building2,
   CalendarClock,
   CheckCircle2,
   Clock,
+  FileSpreadsheet,
   Info,
+  Send,
   Sparkles,
   Target,
   TrendingDown,
   TrendingUp,
   Wallet,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { api } from "@/lib/api";
 import { cn, formatBRL } from "@/lib/utils";
@@ -23,6 +28,8 @@ import type {
   DashboardExecutivo,
   ProjecaoMensal,
   RenovacaoProxima,
+  ResumoOperacaoMes,
+  ResumoPipelineHospital,
 } from "@/types";
 
 export function DashboardExecutivoPage() {
@@ -45,6 +52,11 @@ export function DashboardExecutivoPage() {
     );
   }
 
+  const semDados =
+    data.contratos.length === 0 &&
+    data.pipeline_hospitais.length === 0 &&
+    (!data.operacao_mes || data.operacao_mes.volume_total_mes_centavos === 0);
+
   return (
     <div className="space-y-8">
       <Header
@@ -54,20 +66,339 @@ export function DashboardExecutivoPage() {
         margemPrevista={data.margem_prevista_centavos}
       />
 
-      <KPIHero data={data} />
+      {data.sem_contratos_configurados && data.pipeline_hospitais.length > 0 && (
+        <SemContratosBanner />
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <ReceitaPorContrato contratos={data.contratos} />
-          <Projecao12Meses dados={data.projecao_12m} />
-          <KPIsOperacionais kpis={data.kpi_operacional} />
+      {semDados ? (
+        <EstadoVazio />
+      ) : (
+        <>
+          <KPIHero data={data} />
+
+          {data.operacao_mes && (
+            <OperacaoMesCard operacao={data.operacao_mes} />
+          )}
+
+          {data.pipeline_hospitais.length > 0 && (
+            <PipelineHospitaisCard pipeline={data.pipeline_hospitais} />
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              {data.contratos.length > 0 && (
+                <ReceitaPorContrato contratos={data.contratos} />
+              )}
+              <Projecao12Meses dados={data.projecao_12m} />
+              <KPIsOperacionais kpis={data.kpi_operacional} />
+            </div>
+
+            <div className="space-y-6">
+              <AlertasCard alertas={data.alertas} />
+              <RenovacoesCard renovacoes={data.renovacoes_proximas} />
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
+// Estado vazio (nada cadastrado ainda)
+// =============================================================================
+
+function EstadoVazio() {
+  return (
+    <div className="bg-white border border-brand-100 rounded-xl p-10 text-center shadow-sm">
+      <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-brand-50 mb-4">
+        <Sparkles className="text-brand-700" size={26} />
+      </div>
+      <h2 className="text-lg font-bold text-brand-950 mb-2">
+        Sem operação registrada neste mês
+      </h2>
+      <p className="text-sm text-brand-700 max-w-lg mx-auto mb-5">
+        Assim que o coordenador subir as primeiras fichas (ou planilhas
+        gerarem lotes), os números aparecem aqui em tempo real:
+        programação de pagamento, valores a executar e pagamentos
+        conciliados por hospital.
+      </p>
+      <div className="flex items-center gap-3 justify-center">
+        <Link
+          to="/app/fichas"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-900 text-white text-sm font-semibold hover:bg-brand-800 transition"
+        >
+          <FileSpreadsheet size={16} />
+          Subir uma ficha
+        </Link>
+        <Link
+          to="/app/contratos"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-brand-200 text-sm font-semibold text-brand-800 hover:bg-brand-50 transition"
+        >
+          Configurar contratos
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Banner — sem contratos cadastrados (mas tem atividade)
+// =============================================================================
+
+function SemContratosBanner() {
+  return (
+    <div className="rounded-xl border border-accent-200 bg-gradient-to-r from-accent-50 to-amber-50 p-4 flex items-start gap-3">
+      <AlertTriangle className="text-accent-600 flex-shrink-0 mt-0.5" size={18} />
+      <div className="flex-1">
+        <p className="font-semibold text-brand-950 text-sm">
+          Sem contratos comerciais cadastrados
+        </p>
+        <p className="text-xs text-brand-700 mt-0.5">
+          Há hospitais com atividade neste mês mas sem contrato configurado
+          no MedPag. As métricas de receita só aparecem após você cadastrar
+          a remuneração do contrato (mensalidade, taxa por pagamento ou %
+          sobre volume).
+        </p>
+      </div>
+      <Link
+        to="/app/contratos"
+        className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-accent-600 text-white hover:bg-accent-700 transition flex-shrink-0"
+      >
+        Configurar agora
+      </Link>
+    </div>
+  );
+}
+
+// =============================================================================
+// Programação x Realizado (sempre populado quando há atividade)
+// =============================================================================
+
+function OperacaoMesCard({ operacao }: { operacao: ResumoOperacaoMes }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="rounded-xl bg-gradient-to-br from-accent-50 via-white to-white border border-accent-200 p-5">
+        <div className="flex items-center gap-2 text-xs font-bold tracking-[0.1em] text-accent-700 uppercase mb-3">
+          <Clock size={14} />
+          Programação de pagamento
         </div>
-
-        <div className="space-y-6">
-          <AlertasCard alertas={data.alertas} />
-          <RenovacoesCard renovacoes={data.renovacoes_proximas} />
+        <div className="grid grid-cols-2 gap-3">
+          <Bloco
+            icon={FileSpreadsheet}
+            label="Fichas pendentes"
+            qtd={operacao.qtd_fichas_pendentes}
+            valor={operacao.valor_fichas_pendentes_centavos}
+            sub="extraídas/em revisão"
+          />
+          <Bloco
+            icon={Send}
+            label="Lotes a executar"
+            qtd={operacao.qtd_lotes_programados}
+            valor={operacao.valor_lotes_programados_centavos}
+            sub="aprovação + revisão"
+          />
         </div>
       </div>
+
+      <div className="rounded-xl bg-gradient-to-br from-emerald-50 via-white to-white border border-emerald-200 p-5">
+        <div className="flex items-center gap-2 text-xs font-bold tracking-[0.1em] text-emerald-700 uppercase mb-3">
+          <CheckCircle2 size={14} />
+          Pagamentos realizados
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Bloco
+            icon={Banknote}
+            label="Enviados ao banco"
+            qtd={operacao.qtd_lotes_enviados}
+            valor={operacao.valor_lotes_enviados_centavos}
+            sub="aguardando conciliação"
+          />
+          <Bloco
+            icon={CheckCircle2}
+            label="Conciliados"
+            qtd={operacao.qtd_lotes_conciliados}
+            valor={operacao.valor_lotes_conciliados_centavos}
+            sub={`${operacao.qtd_clientes_ativos} hospitais ativos`}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Bloco({
+  icon: Icon,
+  label,
+  qtd,
+  valor,
+  sub,
+}: {
+  icon: React.ElementType;
+  label: string;
+  qtd: number;
+  valor: number;
+  sub: string;
+}) {
+  return (
+    <div className="bg-white/70 border border-brand-100 rounded-lg p-3">
+      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-600 mb-1">
+        <Icon size={12} />
+        {label}
+      </div>
+      <div className="text-2xl font-bold text-brand-950 leading-tight">{qtd}</div>
+      <div className="text-sm font-semibold text-brand-800 mt-0.5">
+        {formatBRL(valor)}
+      </div>
+      <div className="text-[10px] text-brand-600 mt-1">{sub}</div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Pipeline por hospital
+// =============================================================================
+
+function PipelineHospitaisCard({
+  pipeline,
+}: {
+  pipeline: ResumoPipelineHospital[];
+}) {
+  const max = Math.max(...pipeline.map((p) => p.volume_total_mes_centavos), 1);
+
+  return (
+    <Card
+      title={
+        <span className="flex items-center gap-2">
+          <Building2 size={16} className="text-brand-700" />
+          Volume por hospital — programação x realizado
+        </span>
+      }
+      subtitle="Cada barra mostra o volume operado este mês, dividido por estado"
+    >
+      <div className="space-y-3">
+        {pipeline.map((h) => (
+          <PipelineHospitalRow key={h.cliente_id} hospital={h} max={max} />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function PipelineHospitalRow({
+  hospital,
+  max,
+}: {
+  hospital: ResumoPipelineHospital;
+  max: number;
+}) {
+  const total = Math.max(hospital.volume_total_mes_centavos, 1);
+  const widthPct = (hospital.volume_total_mes_centavos / max) * 100;
+  const segs = [
+    {
+      key: "fichas",
+      pct: (hospital.valor_fichas_pendentes_centavos / total) * 100,
+      cls: "bg-accent-300",
+    },
+    {
+      key: "revisao",
+      pct: (hospital.valor_lotes_em_revisao_centavos / total) * 100,
+      cls: "bg-accent-500",
+    },
+    {
+      key: "aprovado",
+      pct: (hospital.valor_lotes_aprovados_centavos / total) * 100,
+      cls: "bg-brand-600",
+    },
+    {
+      key: "enviado",
+      pct: (hospital.valor_lotes_enviados_centavos / total) * 100,
+      cls: "bg-emerald-500",
+    },
+    {
+      key: "conciliado",
+      pct: (hospital.valor_lotes_conciliados_centavos / total) * 100,
+      cls: "bg-emerald-700",
+    },
+  ];
+  return (
+    <div className="border border-brand-100 rounded-lg p-3 bg-white">
+      <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <strong className="text-sm text-brand-950">{hospital.cliente_nome}</strong>
+          {!hospital.tem_contrato && (
+            <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded bg-accent-100 text-accent-800 border border-accent-200">
+              SEM CONTRATO
+            </span>
+          )}
+        </div>
+        <div className="text-sm font-bold text-brand-950">
+          {formatBRL(hospital.volume_total_mes_centavos)}
+        </div>
+      </div>
+
+      <div
+        className="h-3 bg-brand-50 rounded-full overflow-hidden flex"
+        style={{ width: `${widthPct}%`, minWidth: "20%" }}
+      >
+        {segs.map((s) =>
+          s.pct > 0 ? (
+            <div
+              key={s.key}
+              className={cn("h-full", s.cls)}
+              style={{ width: `${s.pct}%` }}
+            />
+          ) : null,
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-2 text-[11px]">
+        <SegLabel
+          dot="bg-accent-300"
+          label={`${hospital.fichas_pendentes} fichas`}
+          valor={hospital.valor_fichas_pendentes_centavos}
+        />
+        <SegLabel
+          dot="bg-accent-500"
+          label={`${hospital.lotes_em_revisao} em revisão`}
+          valor={hospital.valor_lotes_em_revisao_centavos}
+        />
+        <SegLabel
+          dot="bg-brand-600"
+          label={`${hospital.lotes_aprovados} aprovados`}
+          valor={hospital.valor_lotes_aprovados_centavos}
+        />
+        <SegLabel
+          dot="bg-emerald-500"
+          label={`${hospital.lotes_enviados} enviados`}
+          valor={hospital.valor_lotes_enviados_centavos}
+        />
+        <SegLabel
+          dot="bg-emerald-700"
+          label={`${hospital.lotes_conciliados} pagos`}
+          valor={hospital.valor_lotes_conciliados_centavos}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SegLabel({
+  dot,
+  label,
+  valor,
+}: {
+  dot: string;
+  label: string;
+  valor: number;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
+      <span className="text-brand-700 truncate">
+        {label}{" "}
+        <strong className="text-brand-900">{formatBRL(valor)}</strong>
+      </span>
     </div>
   );
 }

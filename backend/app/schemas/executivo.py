@@ -130,6 +130,52 @@ class KPIHero(BaseModel):
     meta_atingida_pct: float
 
 
+class ResumoPipelineHospital(BaseModel):
+    """Cliente com atividade no mês (independente de ter contrato)."""
+
+    cliente_id: UUID
+    cliente_nome: str
+    tem_contrato: bool
+
+    # "Programação de pagamento" — ainda não foi enviado pro banco
+    fichas_pendentes: int  # extraídas/revisadas sem virar lote
+    valor_fichas_pendentes_centavos: int
+    lotes_em_revisao: int
+    valor_lotes_em_revisao_centavos: int
+    lotes_aprovados: int
+    valor_lotes_aprovados_centavos: int
+
+    # "Pagamentos realizados" — saiu pro banco / foi conciliado
+    lotes_enviados: int
+    valor_lotes_enviados_centavos: int
+    lotes_conciliados: int
+    valor_lotes_conciliados_centavos: int
+
+    # Totais auxiliares
+    volume_total_mes_centavos: int  # soma de tudo do mês (programado+realizado)
+    ultima_atividade: datetime | None
+
+
+class ResumoOperacaoMes(BaseModel):
+    """Resumo agregado da operação no mês — programação vs realizado."""
+
+    # Programação (a fazer)
+    qtd_fichas_pendentes: int
+    valor_fichas_pendentes_centavos: int
+    qtd_lotes_programados: int  # em revisão + aprovado
+    valor_lotes_programados_centavos: int
+
+    # Realizado (já saiu do MedPag)
+    qtd_lotes_enviados: int
+    valor_lotes_enviados_centavos: int
+    qtd_lotes_conciliados: int
+    valor_lotes_conciliados_centavos: int
+
+    # Totais
+    volume_total_mes_centavos: int
+    qtd_clientes_ativos: int
+
+
 class DashboardExecutivo(BaseModel):
     """Resposta completa do Dashboard Executivo."""
 
@@ -143,6 +189,11 @@ class DashboardExecutivo(BaseModel):
     renovacoes_proximas: list[RenovacaoProxima]
     receita_prevista_centavos: int = 0  # vinda das fichas em revisão
     margem_prevista_centavos: int = 0
+
+    # Novos campos: programação x realizado (sempre populados, mesmo sem contrato)
+    operacao_mes: ResumoOperacaoMes | None = None
+    pipeline_hospitais: list[ResumoPipelineHospital] = Field(default_factory=list)
+    sem_contratos_configurados: bool = False
 
 
 # ============================================================
