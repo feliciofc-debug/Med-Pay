@@ -14,6 +14,7 @@ import { FichasListPage } from "@/pages/FichasListPage";
 import { FichaDetalhePage } from "@/pages/FichaDetalhePage";
 import { EquipesPage } from "@/pages/EquipesPage";
 import { EquipeDetalhePage } from "@/pages/EquipeDetalhePage";
+import { PrestadoresPage } from "@/pages/PrestadoresPage";
 import { MeuPainelCoordenadorPage } from "@/pages/MeuPainelCoordenadorPage";
 import { AdminUsuariosPage } from "@/pages/AdminUsuariosPage";
 import { AdminRelatorioErrosPage } from "@/pages/AdminRelatorioErrosPage";
@@ -128,6 +129,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <FichaDetalhePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/prestadores"
+        element={
+          <ProtectedRoute roles={["ADMIN", "APROVADOR", "OPERADOR"]}>
+            <PrestadoresPage />
           </ProtectedRoute>
         }
       />

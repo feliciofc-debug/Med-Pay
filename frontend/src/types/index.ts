@@ -3,6 +3,135 @@
 export type UserRole = "ADMIN" | "APROVADOR" | "OPERADOR" | "COORDENADOR";
 
 // ============================================================
+// Beneficiário (cadastro mestre de prestadores)
+// ============================================================
+
+export type StatusBeneficiario = "PENDENTE" | "ATIVO" | "INATIVO";
+export type OrigemCadastroBeneficiario =
+  | "PLANILHA"
+  | "MANUAL"
+  | "FICHA_OCR"
+  | "LOTE"
+  | "SEED";
+
+export interface Beneficiario {
+  id: string;
+  cliente_id: string;
+  nome: string;
+  cpf_mascarado: string;
+  crm: string | null;
+  categoria: string | null;
+  especialidade: string | null;
+  email: string | null;
+  telefone: string | null;
+  banco_codigo: string | null;
+  agencia_mascarada: string | null;
+  conta_mascarada: string | null;
+  pix_tipo: string | null;
+  pix_chave_mascarada: string | null;
+  valor_padrao_centavos: number | null;
+  status: StatusBeneficiario;
+  origem_cadastro: OrigemCadastroBeneficiario;
+  observacoes: string | null;
+  total_pagamentos: number;
+  valor_medio_centavos: number;
+  valor_min_centavos: number;
+  valor_max_centavos: number;
+  ultimo_pagamento_at: string | null;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BeneficiarioListResponse {
+  items: Beneficiario[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
+
+export interface BeneficiarioPayload {
+  cliente_id: string;
+  nome: string;
+  cpf: string;
+  crm?: string | null;
+  categoria?: string | null;
+  especialidade?: string | null;
+  email?: string | null;
+  telefone?: string | null;
+  banco_codigo?: string | null;
+  agencia?: string | null;
+  conta?: string | null;
+  pix_tipo?: string | null;
+  pix_chave?: string | null;
+  valor_padrao_centavos?: number | null;
+  observacoes?: string | null;
+  status?: StatusBeneficiario;
+}
+
+export interface BeneficiarioUpdatePayload {
+  nome?: string | null;
+  crm?: string | null;
+  categoria?: string | null;
+  especialidade?: string | null;
+  email?: string | null;
+  telefone?: string | null;
+  banco_codigo?: string | null;
+  agencia?: string | null;
+  conta?: string | null;
+  pix_tipo?: string | null;
+  pix_chave?: string | null;
+  valor_padrao_centavos?: number | null;
+  observacoes?: string | null;
+  status?: StatusBeneficiario | null;
+}
+
+export type StatusLinhaImport = "OK" | "DUPLICADO" | "ATUALIZA" | "ERRO";
+
+export interface LinhaImportPreview {
+  linha_planilha: number;
+  nome: string | null;
+  cpf_mascarado: string | null;
+  crm: string | null;
+  email: string | null;
+  telefone: string | null;
+  banco_codigo: string | null;
+  agencia_mascarada: string | null;
+  conta_mascarada: string | null;
+  pix_tipo: string | null;
+  pix_chave_mascarada: string | null;
+  valor_padrao_centavos: number | null;
+  status: StatusLinhaImport;
+  erros: string[];
+  avisos: string[];
+  beneficiario_id_existente: string | null;
+}
+
+export interface ImportPreviewResponse {
+  cliente_id: string;
+  total_linhas: number;
+  qtd_ok: number;
+  qtd_duplicados: number;
+  qtd_atualiza: number;
+  qtd_erro: number;
+  linhas: LinhaImportPreview[];
+  token: string;
+}
+
+export interface ImportConfirmPayload {
+  token: string;
+  politica_atualizacao: "IGNORAR" | "ATUALIZAR";
+}
+
+export interface ImportConfirmResponse {
+  qtd_criados: number;
+  qtd_atualizados: number;
+  qtd_ignorados: number;
+  qtd_erros: number;
+}
+
+// ============================================================
 // Equipe Flex (banco de horas compartilhado)
 // ============================================================
 

@@ -4,7 +4,11 @@ Importar TODOS os models aqui para que o Alembic os descubra automaticamente.
 """
 
 from app.models.auditoria import Auditoria
-from app.models.beneficiario import Beneficiario
+from app.models.beneficiario import (
+    Beneficiario,
+    OrigemCadastroBeneficiario,
+    StatusBeneficiario,
+)
 from app.models.cliente import Cliente
 from app.models.contrato_hospital import ContratoHospital, ModoCobranca
 from app.models.empresa_config import BancoEmissor, EmpresaConfig, TipoInscricao
@@ -35,7 +39,9 @@ __all__ = [
     "Lote",
     "MembroEquipe",
     "ModoCobranca",
+    "OrigemCadastroBeneficiario",
     "Pagamento",
+    "StatusBeneficiario",
     "StatusFicha",
     "StatusInstancia",
     "StatusLote",

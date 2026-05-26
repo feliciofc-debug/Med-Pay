@@ -16,6 +16,7 @@ import {
   TrendingUp,
   Upload,
   UserCog,
+  Users,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
@@ -84,6 +85,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Fichas (OCR)",
     icon: Camera,
     roles: ["ADMIN", "APROVADOR", "OPERADOR", "COORDENADOR"],
+  },
+  {
+    to: "/app/prestadores",
+    label: "Prestadores",
+    icon: Users,
+    roles: ["ADMIN", "APROVADOR", "OPERADOR"],
   },
   {
     to: "/app/equipes",

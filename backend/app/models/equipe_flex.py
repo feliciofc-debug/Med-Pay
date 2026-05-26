@@ -42,6 +42,7 @@ from sqlalchemy.sql import func
 from app.core.database import Base
 
 if TYPE_CHECKING:
+    from app.models.beneficiario import Beneficiario
     from app.models.cliente import Cliente
     from app.models.lote import Lote
     from app.models.user import User
@@ -114,10 +115,25 @@ class MembroEquipe(Base):
         nullable=False,
         index=True,
     )
+    # FK pro cadastro mestre de prestadores. Os dados bancários e PIX
+    # vêm do Beneficiario — assim, atualizar a conta de um médico
+    # corrige automaticamente todos os pagamentos das equipes que ele
+    # pertence. Por enquanto opcional (nullable) pra permitir migração
+    # gradual; novos cadastros sempre referenciam Beneficiario.
+    beneficiario_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("beneficiarios.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # Snapshot dos dados no momento do cadastro do membro. Se
+    # beneficiario_id estiver preenchido, usar os campos do Beneficiario
+    # como fonte de verdade. Estes campos só existem como fallback p/
+    # registros antigos sem beneficiario_id.
     nome: Mapped[str] = mapped_column(String(200), nullable=False)
     cpf: Mapped[str] = mapped_column(String(11), nullable=False)
     crm_ou_registro: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    # Pagamento — o membro pode usar PIX OU dados bancários
     chave_pix: Mapped[str | None] = mapped_column(String(120), nullable=True)
     banco_codigo: Mapped[str | None] = mapped_column(String(3), nullable=True)
     agencia: Mapped[str | None] = mapped_column(String(10), nullable=True)
@@ -137,6 +153,9 @@ class MembroEquipe(Base):
     )
 
     equipe: Mapped["EquipeFlex"] = relationship("EquipeFlex", back_populates="membros")
+    beneficiario: Mapped["Beneficiario | None"] = relationship(
+        "Beneficiario", lazy="joined"
+    )
 
     __table_args__ = (
         UniqueConstraint("equipe_id", "cpf", name="uq_membro_equipe_cpf"),

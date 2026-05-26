@@ -158,6 +158,7 @@ def create_app() -> FastAPI:
     from app.api import (
         admin,
         auth,
+        beneficiarios,
         clientes,
         equipes,
         executivo,
@@ -169,6 +170,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+    app.include_router(beneficiarios.router)  # já tem prefix="/api/beneficiarios"
     app.include_router(clientes.router, prefix="/api/clientes", tags=["clientes"])
     app.include_router(equipes.router, prefix="/api/equipes", tags=["equipes"])
     app.include_router(fichas.router, prefix="/api/fichas", tags=["fichas"])
