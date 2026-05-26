@@ -381,6 +381,22 @@ export interface RelatorioDevolucoes {
 
 export type TipoInscricao = "CPF" | "CNPJ";
 
+export type BancoEmissor = "UNICRED" | "ITAU" | "BRADESCO";
+
+/** Mapa do enum BancoEmissor pro código FEBRABAN de 3 dígitos. */
+export const CODIGO_BANCO_POR_EMISSOR: Record<BancoEmissor, string> = {
+  UNICRED: "136",
+  ITAU: "341",
+  BRADESCO: "237",
+};
+
+/** Label legível para UI. */
+export const LABEL_BANCO_EMISSOR: Record<BancoEmissor, string> = {
+  UNICRED: "Unicred (136)",
+  ITAU: "Itaú Unibanco (341)",
+  BRADESCO: "Bradesco (237)",
+};
+
 export interface EmpresaPagadora {
   id: string;
   razao_social: string;
@@ -388,6 +404,7 @@ export interface EmpresaPagadora {
   tipo_inscricao: TipoInscricao;
   cnpj_cpf: string;
 
+  banco_emissor: BancoEmissor;
   banco_codigo: string;
   agencia: string;
   agencia_dv: string | null;
@@ -414,6 +431,7 @@ export interface EmpresaPagadoraPayload {
   tipo_inscricao: TipoInscricao;
   cnpj_cpf: string;
 
+  banco_emissor: BancoEmissor;
   banco_codigo: string;
   agencia: string;
   agencia_dv?: string | null;

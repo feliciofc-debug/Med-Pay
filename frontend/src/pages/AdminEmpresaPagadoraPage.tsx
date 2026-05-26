@@ -12,7 +12,12 @@ import {
 } from "lucide-react";
 
 import { api, getErrorMessage } from "@/lib/api";
+import {
+  CODIGO_BANCO_POR_EMISSOR,
+  LABEL_BANCO_EMISSOR,
+} from "@/types";
 import type {
+  BancoEmissor,
   EmpresaPagadora,
   EmpresaPagadoraPayload,
   TipoInscricao,
@@ -32,6 +37,7 @@ const DEFAULTS_AURIS: EmpresaPagadoraPayload = {
   nome_fantasia: null,
   tipo_inscricao: "CNPJ",
   cnpj_cpf: "40.917.845/0001-60",
+  banco_emissor: "UNICRED",
   banco_codigo: "136",
   agencia: "1214",
   agencia_dv: "7",
@@ -53,6 +59,7 @@ function empresaToPayload(e: EmpresaPagadora): EmpresaPagadoraPayload {
     nome_fantasia: e.nome_fantasia,
     tipo_inscricao: e.tipo_inscricao,
     cnpj_cpf: e.cnpj_cpf,
+    banco_emissor: e.banco_emissor,
     banco_codigo: e.banco_codigo,
     agencia: e.agencia,
     agencia_dv: e.agencia_dv,
@@ -264,14 +271,45 @@ export function AdminEmpresaPagadoraPage() {
           </Field>
         </Section>
 
-        {/* Dados Unicred */}
-        <Section title="Conta Unicred" icon={<CreditCard size={18} />}>
-          <Field label="Banco">
+        {/* Banco emissor + dados da conta */}
+        <Section title="Conta bancária e CNAB" icon={<CreditCard size={18} />}>
+          <Field
+            label="Banco emissor do CNAB *"
+            colSpan={3}
+          >
+            <select
+              value={form.banco_emissor}
+              onChange={(e) => {
+                const banco = e.target.value as BancoEmissor;
+                setForm((prev) => ({
+                  ...prev,
+                  banco_emissor: banco,
+                  // sincroniza o código de 3 dígitos automaticamente
+                  banco_codigo: CODIGO_BANCO_POR_EMISSOR[banco],
+                }));
+              }}
+              className="input"
+            >
+              {(Object.keys(LABEL_BANCO_EMISSOR) as BancoEmissor[]).map(
+                (b) => (
+                  <option key={b} value={b}>
+                    {LABEL_BANCO_EMISSOR[b]}
+                  </option>
+                ),
+              )}
+            </select>
+            <p className="text-xs text-slate-500 mt-1">
+              Define o layout do arquivo CNAB 240 gerado. Cada banco usa
+              versões e formato de convênio próprios — escolha o banco onde
+              a empresa tem o convênio CNAB ativo.
+            </p>
+          </Field>
+          <Field label="Código FEBRABAN">
             <input
               type="text"
               value={form.banco_codigo}
-              onChange={(e) => update("banco_codigo", e.target.value)}
-              className="input bg-slate-50"
+              readOnly
+              className="input bg-slate-50 font-mono"
               maxLength={3}
             />
           </Field>
@@ -325,19 +363,30 @@ export function AdminEmpresaPagadoraPage() {
               className="input font-mono"
             />
           </Field>
-          <Field label="Código de convênio Unicred *" colSpan={3}>
+          <Field label="Código de convênio *" colSpan={3}>
             <input
               type="text"
               required
               maxLength={20}
-              placeholder="9845046"
+              placeholder={
+                form.banco_emissor === "ITAU"
+                  ? "Convênio Itaú (ou deixe que o sistema monta a partir da conta)"
+                  : form.banco_emissor === "BRADESCO"
+                    ? "ID do convênio Bradesco (até 6 dígitos)"
+                    : "9845046"
+              }
               value={form.codigo_convenio}
               onChange={(e) => update("codigo_convenio", e.target.value)}
               className="input font-mono"
             />
             <p className="text-xs text-slate-500 mt-1">
-              Fornecido pela Unicred no contrato. Aparece no Header de Lote
-              do CNAB e identifica a empresa no SPB.
+              Fornecido pelo banco no contrato CNAB.{" "}
+              {form.banco_emissor === "UNICRED" &&
+                "Unicred: 7 dígitos típicos."}
+              {form.banco_emissor === "ITAU" &&
+                "Itaú: até 8 dígitos; o resto do campo é montado a partir da agência/conta."}
+              {form.banco_emissor === "BRADESCO" &&
+                "Bradesco: ID numérico de até 6 dígitos."}
             </p>
           </Field>
         </Section>

@@ -31,7 +31,8 @@ from app.models.lote import Lote, StatusLote
 from app.models.pagamento import Pagamento, StatusPagamento
 from app.models.user import User
 from app.services.auditoria import AuditoriaService
-from app.services.cnab_generator import CNABGenerator, CNABResult
+from app.services.cnab_generator import CNABResult
+from app.services.cnab_factory import criar_gerador_cnab
 from app.services.importacao import (
     ResultadoImportacao,
     importar_planilha,
@@ -243,8 +244,8 @@ class LoteService:
                 "Cadastre os dados Unicred antes de aprovar lotes."
             )
 
-        # Gera CNAB
-        gerador = CNABGenerator(
+        # Gera CNAB usando o adapter do banco emissor configurado na empresa
+        gerador = criar_gerador_cnab(
             lote=lote,
             pagamentos=pagamentos_aprovaveis,
             empresa=empresa,
@@ -344,7 +345,7 @@ class LoteService:
                 "Configuração da empresa pagadora não encontrada"
             )
 
-        gerador = CNABGenerator(
+        gerador = criar_gerador_cnab(
             lote=lote,
             pagamentos=pagamentos_aprovados,
             empresa=empresa,

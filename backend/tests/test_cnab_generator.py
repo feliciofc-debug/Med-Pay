@@ -302,5 +302,8 @@ class TestCNABGerar:
             agora=datetime(2026, 5, 19, 14, 30, 25),
         )
         resultado = gen.gerar()
-        assert resultado.nome_arquivo.startswith("medpag_lote_")
-        assert resultado.nome_arquivo.endswith("_20260519_143025.rem")
+        # Formato atual aceito pela Unicred: MEDPAG{seq:6}{YYYYMMDDHHMMSS}.REM
+        # — só caracteres alfanuméricos e ponto, sem hífen/underscore.
+        assert resultado.nome_arquivo.startswith("MEDPAG")
+        assert resultado.nome_arquivo.endswith("20260519143025.REM")
+        assert "000001" in resultado.nome_arquivo  # sequencial 1 zero-padded

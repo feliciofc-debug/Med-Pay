@@ -33,6 +33,20 @@ class TipoInscricao(str, Enum):
     CNPJ = "CNPJ"
 
 
+class BancoEmissor(str, Enum):
+    """Banco que vai emitir o arquivo CNAB de remessa.
+
+    Cada banco tem um adapter próprio no `cnab_factory`. O código de
+    convênio armazenado na empresa deve estar no formato esperado pelo
+    banco escolhido (cada banco usa as 20 posições do campo de forma
+    diferente — ver `cnab_itau.py` / `cnab_bradesco.py`).
+    """
+
+    UNICRED = "UNICRED"  # banco 136 — layout MVP original
+    ITAU = "ITAU"        # banco 341
+    BRADESCO = "BRADESCO"  # banco 237
+
+
 class EmpresaConfig(Base):
     """Dados da empresa pagadora (vai no Header do CNAB).
 
@@ -55,7 +69,17 @@ class EmpresaConfig(Base):
     )
     cnpj_cpf: Mapped[str] = mapped_column(String(14), nullable=False, unique=True)
 
-    # ===== Dados Unicred =====
+    # ===== Banco emissor do CNAB =====
+    # Define qual adapter (cnab_unicred / cnab_itau / cnab_bradesco) será
+    # usado para gerar o arquivo de remessa. O `banco_codigo` (3 dígitos
+    # FEBRABAN) é derivado automaticamente pelo adapter, mas mantemos a
+    # coluna por compatibilidade com versões antigas dos dados.
+    banco_emissor: Mapped[BancoEmissor] = mapped_column(
+        SAEnum(BancoEmissor, name="banco_emissor_cnab"),
+        nullable=False,
+        default=BancoEmissor.UNICRED,
+        server_default=BancoEmissor.UNICRED.value,
+    )
     banco_codigo: Mapped[str] = mapped_column(String(3), nullable=False, default="136")
     agencia: Mapped[str] = mapped_column(String(5), nullable=False)
     agencia_dv: Mapped[str | None] = mapped_column(String(1), nullable=True)

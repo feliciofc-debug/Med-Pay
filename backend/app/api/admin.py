@@ -903,6 +903,7 @@ async def salvar_empresa_pagadora(
             nome_fantasia=(payload.nome_fantasia or None),
             tipo_inscricao=payload.tipo_inscricao,
             cnpj_cpf=cnpj_limpo,
+            banco_emissor=payload.banco_emissor,
             banco_codigo=payload.banco_codigo,
             agencia=payload.agencia,
             agencia_dv=payload.agencia_dv,
@@ -926,6 +927,7 @@ async def salvar_empresa_pagadora(
         empresa.nome_fantasia = payload.nome_fantasia or None
         empresa.tipo_inscricao = payload.tipo_inscricao
         empresa.cnpj_cpf = cnpj_limpo
+        empresa.banco_emissor = payload.banco_emissor
         empresa.banco_codigo = payload.banco_codigo
         empresa.agencia = payload.agencia
         empresa.agencia_dv = payload.agencia_dv

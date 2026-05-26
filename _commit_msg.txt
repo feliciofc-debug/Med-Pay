@@ -1,0 +1,44 @@
+feat(cnab): suporte multi-banco (Itau + Bradesco) via adapter pattern
+
+Antes: o gerador de CNAB era hardcoded pra Unicred (banco 136). Pra
+viabilizar a operacao do Sandro (Hospital do Cerebro), que vai usar
+Itau e Bradesco em paralelo, o gerador agora escolhe o adapter certo
+em funcao do banco emissor configurado na empresa pagadora.
+
+Arquitetura:
+  - cnab_base.py        Esqueleto FEBRABAN 240 com hooks (codigo banco,
+                        versao layout, formato do convenio).
+  - cnab_unicred.py     Adapter Unicred (banco 136) — mantem layout MVP.
+  - cnab_itau.py        Adapter Itau (banco 341), versao 040/030,
+                        convenio 8+4+6+2.
+  - cnab_bradesco.py    Adapter Bradesco (banco 237), versao 089/045,
+                        convenio 9 zeros + 6 ID + 5 brancos.
+  - cnab_factory.py     criar_gerador_cnab() decide pelo enum
+                        empresa.banco_emissor.
+  - cnab_generator.py   Reduzido a re-exports pra preservar backcompat
+                        de quem importava CNABGenerator (alias do
+                        Unicred).
+
+Backend / DB:
+  - EmpresaConfig ganha coluna banco_emissor (enum UNICRED/ITAU/BRADESCO,
+    default UNICRED). Migration 010 idempotente (CREATE TYPE com
+    EXCEPTION duplicate_object).
+  - Schema EmpresaPagadoraRequest/Out aceita e expoe banco_emissor.
+  - lote.py usa criar_gerador_cnab() ao aprovar e ao regerar arquivo.
+
+Frontend:
+  - Tipo BancoEmissor + mapas CODIGO_BANCO_POR_EMISSOR e
+    LABEL_BANCO_EMISSOR centralizados.
+  - AdminEmpresaPagadoraPage: dropdown de banco emissor na secao
+    "Conta bancaria e CNAB", sincroniza banco_codigo automaticamente,
+    placeholder/help do convenio adaptam ao banco escolhido.
+
+Testes (25 verdes):
+  - Adapter correto por enum, largura 240 em todas as linhas, codigo
+    do banco em todas as posicoes 1-3, trailer batendo soma+qtd, prefixo
+    de nome de arquivo distinto por banco.
+
+Limitacao conhecida: implementado pelo padrao FEBRABAN 240 publico
+sem manuais oficiais Itau/Bradesco. Quando o Sandro mandar o manual
+do banco confirmamos campos especificos das posicoes livres (codigo
+empresa lider Bradesco, finalidade Itau etc).

@@ -20,7 +20,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models.empresa_config import TipoInscricao
+from app.models.empresa_config import BancoEmissor, TipoInscricao
 from app.models.user import UserRole
 
 
@@ -206,6 +206,7 @@ class EmpresaPagadoraOut(BaseModel):
     tipo_inscricao: TipoInscricao
     cnpj_cpf: str
 
+    banco_emissor: BancoEmissor
     banco_codigo: str
     agencia: str
     agencia_dv: str | None
@@ -243,6 +244,10 @@ class EmpresaPagadoraRequest(BaseModel):
         description="CPF (11) ou CNPJ (14) sem formatação — pode vir com pontos",
     )
 
+    banco_emissor: BancoEmissor = Field(
+        default=BancoEmissor.UNICRED,
+        description="Qual adapter de CNAB usar: UNICRED, ITAU ou BRADESCO",
+    )
     banco_codigo: str = Field(default="136", min_length=3, max_length=3)
     agencia: str = Field(min_length=1, max_length=5)
     agencia_dv: str | None = Field(default=None, max_length=1)

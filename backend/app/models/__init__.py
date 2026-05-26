@@ -7,7 +7,7 @@ from app.models.auditoria import Auditoria
 from app.models.beneficiario import Beneficiario
 from app.models.cliente import Cliente
 from app.models.contrato_hospital import ContratoHospital, ModoCobranca
-from app.models.empresa_config import EmpresaConfig, TipoInscricao
+from app.models.empresa_config import BancoEmissor, EmpresaConfig, TipoInscricao
 from app.models.equipe_flex import EquipeFlex, FechamentoEquipe, MembroEquipe
 from app.models.ficha_plantao import FichaPlantao, StatusFicha
 from app.models.lote import Lote, StatusLote
@@ -23,6 +23,7 @@ from app.models.whatsapp import (
 
 __all__ = [
     "Auditoria",
+    "BancoEmissor",
     "Beneficiario",
     "Cliente",
     "ContratoHospital",
