@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   ArrowLeftRight,
+  Activity,
   BarChart3,
   Bot,
   Briefcase,
@@ -102,6 +103,12 @@ const NAV_ITEMS: NavItem[] = [
     to: "/app/lotes",
     label: "Lotes",
     icon: FileSpreadsheet,
+    roles: ["ADMIN", "APROVADOR", "OPERADOR"],
+  },
+  {
+    to: "/app/vital",
+    label: "MedPag Vital",
+    icon: Activity,
     roles: ["ADMIN", "APROVADOR", "OPERADOR"],
   },
 ];

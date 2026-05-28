@@ -19,6 +19,15 @@ from app.models.lancamento_servico import LancamentoServico, StatusLancamento
 from app.models.lote import Lote, StatusLote
 from app.models.pagamento import Pagamento, StatusPagamento
 from app.models.user import User, UserRole
+from app.models.vital import (
+    AmbienteMonitorado,
+    EventoVital,
+    NoVital,
+    StatusNo,
+    TipoAmbiente,
+    TipoEvento,
+    TipoSensor,
+)
 from app.models.whatsapp import (
     DirecaoMensagem,
     StatusInstancia,
@@ -28,6 +37,7 @@ from app.models.whatsapp import (
 )
 
 __all__ = [
+    "AmbienteMonitorado",
     "Auditoria",
     "BancoEmissor",
     "Beneficiario",
@@ -37,12 +47,14 @@ __all__ = [
     "DirecaoMensagem",
     "EmpresaConfig",
     "EquipeFlex",
+    "EventoVital",
     "FechamentoEquipe",
     "FichaPlantao",
     "LancamentoServico",
     "Lote",
     "MembroEquipe",
     "ModoCobranca",
+    "NoVital",
     "OrigemCadastroBeneficiario",
     "Pagamento",
     "StatusBeneficiario",
@@ -50,8 +62,12 @@ __all__ = [
     "StatusInstancia",
     "StatusLancamento",
     "StatusLote",
+    "StatusNo",
     "StatusPagamento",
+    "TipoAmbiente",
+    "TipoEvento",
     "TipoInscricao",
+    "TipoSensor",
     "User",
     "UserRole",
     "WhatsAppInstancia",

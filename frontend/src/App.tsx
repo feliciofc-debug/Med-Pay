@@ -24,6 +24,7 @@ import { AdminWhatsAppPage } from "@/pages/AdminWhatsAppPage";
 import { AnestesistaLancarPage } from "@/pages/AnestesistaLancarPage";
 import { AnestesistaMeusLancamentosPage } from "@/pages/AnestesistaMeusLancamentosPage";
 import { CrmLandingPage } from "@/pages/CrmLandingPage";
+import { VitalDashboardPage } from "@/pages/VitalDashboardPage";
 import type { UserRole } from "@/types";
 
 // Pra qual rota mandar o usuário quando ele cai em alguma sem permissão.
@@ -173,6 +174,14 @@ export default function App() {
         element={
           <ProtectedRoute roles={["COORDENADOR", "ADMIN", "APROVADOR", "OPERADOR"]}>
             <MeuPainelCoordenadorPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/vital"
+        element={
+          <ProtectedRoute roles={["ADMIN", "APROVADOR", "OPERADOR"]}>
+            <VitalDashboardPage />
           </ProtectedRoute>
         }
       />

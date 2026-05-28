@@ -855,3 +855,128 @@ export interface LancamentoCreatePayload {
   paciente_iniciais?: string | null;
   observacoes?: string | null;
 }
+
+// =============================================================================
+// MedPag Vital (RuView / Aqara / sensores de presença e sinais vitais)
+// =============================================================================
+
+export type TipoAmbiente =
+  | "SALA_CIRURGICA"
+  | "UTI"
+  | "ENFERMARIA"
+  | "CONSULTORIO"
+  | "PRONTO_SOCORRO"
+  | "RESIDENCIAL"
+  | "OUTRO";
+
+export type TipoSensor =
+  | "RUVIEW_ESP32_S3"
+  | "RUVIEW_ESP32_C6"
+  | "AQARA_FP2"
+  | "AQARA_FP1"
+  | "SIMULADO"
+  | "OUTRO";
+
+export type StatusNo = "ONLINE" | "OFFLINE" | "DEGRADADO" | "NUNCA_VISTO";
+
+export type TipoEvento =
+  | "PRESENCA"
+  | "CONTAGEM_PESSOAS"
+  | "MOVIMENTO"
+  | "BATIMENTO_CARDIACO"
+  | "FREQUENCIA_RESPIRATORIA"
+  | "QUEDA"
+  | "POSE"
+  | "PESSOA_DORMINDO"
+  | "POSSIVEL_DISTRESS"
+  | "SALA_ATIVA"
+  | "ANOMALIA_INATIVIDADE"
+  | "REUNIAO"
+  | "BANHEIRO"
+  | "RISCO_QUEDA"
+  | "SAIDA_CAMA"
+  | "SEM_MOVIMENTO"
+  | "TRANSICAO_MULTI_SALA"
+  | "HEARTBEAT"
+  | "OUTRO";
+
+export interface AmbienteMonitorado {
+  id: string;
+  cliente_id: string;
+  nome: string;
+  tipo: TipoAmbiente;
+  descricao: string | null;
+  referencia_externa: string | null;
+  ativo: boolean;
+  created_at: string;
+}
+
+export interface NoVital {
+  id: string;
+  cliente_id: string;
+  ambiente_id: string | null;
+  node_id: string;
+  tipo: TipoSensor;
+  apelido: string | null;
+  status: StatusNo;
+  privacy_mode: boolean;
+  firmware_version: string | null;
+  last_seen_at: string | null;
+  last_rssi: number | null;
+  ativo: boolean;
+  created_at: string;
+}
+
+export interface NoComApiKey extends NoVital {
+  api_key: string;
+}
+
+export interface EventoVital {
+  id: string;
+  cliente_id: string;
+  ambiente_id: string | null;
+  no_id: string | null;
+  tipo: TipoEvento;
+  valor_num: number | null;
+  valor_texto: string | null;
+  confianca: number | null;
+  observado_em: string;
+  created_at: string;
+}
+
+export interface EventoListResponse {
+  items: EventoVital[];
+  total: number;
+}
+
+export interface VitalStats {
+  cliente_id: string;
+  nos_total: number;
+  nos_online: number;
+  nos_offline: number;
+  ambientes_total: number;
+  eventos_24h: number;
+  quedas_24h: number;
+  distress_24h: number;
+  ultima_atividade: string | null;
+}
+
+export interface AuditoriaVitalResumo {
+  lancamento_id: string;
+  ambiente_id: string | null;
+  ambiente_nome: string | null;
+  inicio: string;
+  fim: string;
+  duracao_minutos: number;
+  total_eventos: number;
+  presenca_detectada: boolean;
+  contagem_pessoas_max: number | null;
+  contagem_pessoas_media: number | null;
+  quedas_detectadas: number;
+  distress_detectado: number;
+  paciente_deitado_pct: number | null;
+  bpm_medio: number | null;
+  rpm_medio: number | null;
+  veredito: "VALIDO" | "AUDITORIA" | "INSUFICIENTE";
+  motivos: string[];
+}
