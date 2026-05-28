@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -102,6 +102,34 @@ class Cliente(Base):
     # decidir se cobra direto ou só inicia trial).
     pagamento_cadastrado: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    # ---------- Configuração operacional (per-tenant) ----------
+    # Dia do mês em que o fechamento de pagamentos ocorre (1-31, ou 0
+    # pra "último dia útil"). Cliente edita pela tela Configurar Operação.
+    dia_fechamento: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=25, server_default="25"
+    )
+    # Fuso IANA (ex: "America/Sao_Paulo"). Default Brasília.
+    fuso_horario: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="America/Sao_Paulo",
+        server_default="America/Sao_Paulo",
+    )
+    # Modalidade preferencial pra novos lançamentos (PIX/TED/CC).
+    # Soft hint — não bloqueia outras escolhas.
+    modalidade_preferida: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="PIX",
+        server_default="PIX",
+    )
+    # Logo do cliente (URL pública). Usado em comprovantes PDF + UI.
+    logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Cor primária pra branding (hex sem #). Default brand-600.
+    cor_primaria: Mapped[str] = mapped_column(
+        String(7), nullable=False, default="#2D5F3F", server_default="#2D5F3F"
     )
 
     ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

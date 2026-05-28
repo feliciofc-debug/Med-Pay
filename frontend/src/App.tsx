@@ -24,6 +24,7 @@ import { AdminEmpresaPagadoraPage } from "@/pages/AdminEmpresaPagadoraPage";
 import { AdminWhatsAppPage } from "@/pages/AdminWhatsAppPage";
 import { AdminPlanosPage } from "@/pages/AdminPlanosPage";
 import { AdminAuditoriaPage } from "@/pages/AdminAuditoriaPage";
+import { ConfigurarOperacaoPage } from "@/pages/ConfigurarOperacaoPage";
 import { SuperAdminPage } from "@/pages/SuperAdminPage";
 import { AnestesistaLancarPage } from "@/pages/AnestesistaLancarPage";
 import { AnestesistaMeusLancamentosPage } from "@/pages/AnestesistaMeusLancamentosPage";
@@ -253,6 +254,14 @@ export default function App() {
         element={
           <AdminRoute>
             <AdminAuditoriaPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/app/admin/operacao"
+        element={
+          <AdminRoute>
+            <ConfigurarOperacaoPage />
           </AdminRoute>
         }
       />
