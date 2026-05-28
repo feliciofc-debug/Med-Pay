@@ -24,7 +24,6 @@ import {
   SignalZero,
   Trash2,
   Wifi,
-  WifiOff,
 } from "lucide-react";
 
 import { api, getErrorMessage } from "@/lib/api";
