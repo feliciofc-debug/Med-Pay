@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Layout } from "@/components/Layout";
 import { LandingPage } from "@/pages/LandingPage";
 import { LoginPage } from "@/pages/LoginPage";
+import { SignupPage } from "@/pages/SignupPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DashboardExecutivoPage } from "@/pages/DashboardExecutivoPage";
 import { ContratosPage } from "@/pages/ContratosPage";
@@ -73,6 +74,7 @@ export default function App() {
       {/* Público */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
       {/* Landing universal de médicos (entrada por CRM) */}
       <Route path="/crm" element={<CrmLandingPage />} />
 
