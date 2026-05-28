@@ -21,10 +21,13 @@ from __future__ import annotations
 import json
 from collections import Counter
 from dataclasses import dataclass
+from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crypto import encrypt, hash_for_lookup, mask_conta, mask_cpf
+from app.models.beneficiario import Beneficiario
 from app.models.lote import Lote, StatusLote
 from app.models.pagamento import ModalidadePagamento, Pagamento, StatusPagamento
 from app.services.importacao import LinhaPlanilha
@@ -190,7 +193,11 @@ def _detectar_duplicatas(resumos: list[ResumoLinha]) -> set[int]:
 # ============================================================
 
 
-def _construir_pagamento(lote: Lote, resumo: ResumoLinha) -> Pagamento:
+def _construir_pagamento(
+    lote: Lote,
+    resumo: ResumoLinha,
+    beneficiario_id: UUID | None = None,
+) -> Pagamento:
     """Cria registro Pagamento com criptografia dos campos sensíveis."""
     cpf_limpo = resumo.cpf_limpo or ""
 
@@ -206,6 +213,7 @@ def _construir_pagamento(lote: Lote, resumo: ResumoLinha) -> Pagamento:
 
     return Pagamento(
         lote_id=lote.id,
+        beneficiario_id=beneficiario_id,
         linha_planilha=resumo.linha.numero_linha,
         cpf_encrypted=cpf_encrypted,
         cpf_hash=cpf_hash,
@@ -228,6 +236,27 @@ def _construir_pagamento(lote: Lote, resumo: ResumoLinha) -> Pagamento:
         ),
         cpf_sugerido=resumo.cpf_sugerido,
     )
+
+
+async def _carregar_beneficiarios_por_cpf(
+    db: AsyncSession, cliente_id: UUID, cpf_hashes: set[str]
+) -> dict[str, UUID]:
+    """Monta dict {cpf_hash: beneficiario_id} pra casar de uma vez.
+
+    Roda 1 query por lote (não N+1). Limita-se a beneficiários ATIVOS
+    do cliente em questão (UniqueConstraint cliente_id+cpf_hash garante
+    no máximo 1 resultado por CPF).
+    """
+    if not cpf_hashes:
+        return {}
+    result = await db.execute(
+        select(Beneficiario.id, Beneficiario.cpf_hash).where(
+            Beneficiario.cliente_id == cliente_id,
+            Beneficiario.ativo.is_(True),
+            Beneficiario.cpf_hash.in_(cpf_hashes),
+        )
+    )
+    return {row.cpf_hash: row.id for row in result.all()}
 
 
 # ============================================================
@@ -281,8 +310,22 @@ async def processar_lote(
                 conta_limpa=r.conta_limpa,
             )
 
-    # 3. Cria Pagamentos
-    pagamentos = [_construir_pagamento(lote, r) for r in resumos]
+    # 3. Casa CPF com Beneficiário cadastrado (preenche beneficiario_id)
+    #    Importante pra modalidade PIX, contratos por médico e relatórios
+    #    que partem de "lista de prestadores".
+    hashes_validos = {
+        hash_for_lookup(r.cpf_limpo) for r in resumos if r.cpf_limpo
+    }
+    mapa_beneficiarios = await _carregar_beneficiarios_por_cpf(
+        db, lote.cliente_id, hashes_validos
+    )
+
+    pagamentos: list[Pagamento] = []
+    for r in resumos:
+        ben_id: UUID | None = None
+        if r.cpf_limpo:
+            ben_id = mapa_beneficiarios.get(hash_for_lookup(r.cpf_limpo))
+        pagamentos.append(_construir_pagamento(lote, r, beneficiario_id=ben_id))
     db.add_all(pagamentos)
 
     # 4. Calcula totais

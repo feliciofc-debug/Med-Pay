@@ -342,7 +342,7 @@ class FichaService:
         nome_xlsx = f"ficha-{ficha.id.hex[:8]}.xlsx"
 
         lote_service = LoteService(self.db)
-        lote, _ = await lote_service.criar_a_partir_de_upload(
+        lote, importacao = await lote_service.criar_a_partir_de_upload(
             conteudo=xlsx_bytes,
             nome_arquivo=nome_xlsx,
             cliente=ficha.cliente,
@@ -364,11 +364,31 @@ class FichaService:
 
         await self.db.flush()
 
+        # Dispara processamento síncrono (cria os Pagamentos).
+        # Sem isso, o lote ficava em RECEBIDO sem pagamento nenhum
+        # e o admin precisava reprocessar manualmente.
+        # Paridade com /api/lotes/upload (que enfileira via Celery ou
+        # roda fallback inline) — aqui vamos sempre inline porque a
+        # ficha tem volume baixo (1-2 páginas, ~30 linhas).
+        from app.services.processamento import processar_lote
+
+        try:
+            await processar_lote(self.db, lote, importacao.linhas)
+            await self.db.flush()
+        except Exception:  # noqa: BLE001
+            # Mantém lote em RECEBIDO pra reprocessar manualmente.
+            log.exception(
+                "ficha.processar_lote_falhou",
+                ficha_id=str(ficha.id),
+                lote_id=str(lote.id),
+            )
+
         log.info(
             "ficha.convertida_em_lote",
             ficha_id=str(ficha.id),
             lote_id=str(lote.id),
             qtd_linhas=len(linhas_validas),
+            lote_status=lote.status.value,
         )
 
         return lote

@@ -6,6 +6,8 @@ import {
   ArrowLeft,
   CheckCircle2,
   Download,
+  Eye,
+  EyeOff,
   FileText,
   Loader2,
   Plus,
@@ -41,6 +43,7 @@ export function FichaDetalhePage() {
   const [linhas, setLinhas] = useState<LinhaExtraida[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showOcrText, setShowOcrText] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(true);
 
   const { data: ficha, isLoading } = useQuery({
     queryKey: ["ficha", id],
@@ -228,6 +231,39 @@ export function FichaDetalhePage() {
           </div>
         </div>
       )}
+
+      {/* Preview do documento original + linhas extraídas lado a lado.
+          Ajuda o revisor a comparar o que o OCR pegou com o documento real. */}
+      <div className="card p-0 overflow-hidden">
+        <header className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileText size={16} className="text-brand-600" />
+            <h3 className="text-sm font-semibold text-slate-900">
+              Documento original
+            </h3>
+            <span className="text-xs text-slate-500">
+              {ficha.mime_type} ·{" "}
+              {(ficha.tamanho_bytes / 1024).toFixed(0)} KB
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowOriginal((s) => !s)}
+            className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1"
+          >
+            {showOriginal ? <EyeOff size={12} /> : <Eye size={12} />}
+            {showOriginal ? "Esconder" : "Mostrar"}
+          </button>
+        </header>
+        {showOriginal && (
+          <div className="bg-slate-100 p-3">
+            <DocumentoPreview
+              url={`${api.defaults.baseURL ?? ""}/api/fichas/${id}/arquivo`}
+              mimeType={ficha.mime_type}
+            />
+          </div>
+        )}
+      </div>
 
       {ficha.metadados && Object.keys(ficha.metadados).length > 0 && (
         <div className="card">
@@ -503,6 +539,61 @@ export function FichaDetalhePage() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Renderiza preview do arquivo original conforme o mime_type.
+ * - imagem: <img> com max-height controlado e zoom no click
+ * - pdf: <iframe> nativo do navegador
+ * - outros: link de download apenas
+ */
+function DocumentoPreview({
+  url,
+  mimeType,
+}: {
+  url: string;
+  mimeType: string;
+}) {
+  const [ampliado, setAmpliado] = useState(false);
+
+  if (mimeType.startsWith("image/")) {
+    return (
+      <div className="flex justify-center">
+        <img
+          src={url}
+          alt="Ficha original"
+          onClick={() => setAmpliado((v) => !v)}
+          className={`cursor-zoom-${ampliado ? "out" : "in"} rounded-md shadow-sm bg-white ${
+            ampliado ? "max-w-full" : "max-h-[500px] object-contain"
+          }`}
+        />
+      </div>
+    );
+  }
+
+  if (mimeType === "application/pdf") {
+    return (
+      <iframe
+        src={url}
+        title="Ficha original"
+        className="w-full h-[600px] rounded-md border border-slate-200 bg-white"
+      />
+    );
+  }
+
+  return (
+    <div className="text-center text-sm text-slate-500 py-6">
+      <p>Preview indisponível pra esse tipo de arquivo ({mimeType}).</p>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-brand-700 hover:underline mt-1 inline-block"
+      >
+        Baixar original →
+      </a>
     </div>
   );
 }

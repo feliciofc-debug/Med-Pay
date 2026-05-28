@@ -25,6 +25,7 @@ import { AdminWhatsAppPage } from "@/pages/AdminWhatsAppPage";
 import { AdminPlanosPage } from "@/pages/AdminPlanosPage";
 import { AdminAuditoriaPage } from "@/pages/AdminAuditoriaPage";
 import { ConfigurarOperacaoPage } from "@/pages/ConfigurarOperacaoPage";
+import { ExtratoConsolidadoPage } from "@/pages/ExtratoConsolidadoPage";
 import { SuperAdminPage } from "@/pages/SuperAdminPage";
 import { AnestesistaLancarPage } from "@/pages/AnestesistaLancarPage";
 import { AnestesistaMeusLancamentosPage } from "@/pages/AnestesistaMeusLancamentosPage";
@@ -148,6 +149,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <FichaDetalhePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/extrato-consolidado"
+        element={
+          <ProtectedRoute roles={["ADMIN", "APROVADOR"]}>
+            <ExtratoConsolidadoPage />
           </ProtectedRoute>
         }
       />

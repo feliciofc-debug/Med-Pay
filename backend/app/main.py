@@ -163,6 +163,7 @@ def create_app() -> FastAPI:
         auth,
         beneficiarios,
         clientes,
+        consolidacao,
         equipes,
         executivo,
         fichas,
@@ -189,6 +190,11 @@ def create_app() -> FastAPI:
     app.include_router(clientes.router, prefix="/api/clientes", tags=["clientes"])
     app.include_router(equipes.router, prefix="/api/equipes", tags=["equipes"])
     app.include_router(fichas.router, prefix="/api/fichas", tags=["fichas"])
+    app.include_router(
+        consolidacao.router,
+        prefix="/api/consolidacao",
+        tags=["consolidacao"],
+    )
     app.include_router(lotes.router, prefix="/api/lotes", tags=["lotes"])
     app.include_router(
         operacao.router, prefix="/api/operacao", tags=["operacao"]

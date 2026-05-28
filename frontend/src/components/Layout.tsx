@@ -15,6 +15,7 @@ import {
   History,
   Home,
   Layers,
+  Layers3,
   type LucideIcon,
   LogOut,
   TrendingUp,
@@ -89,6 +90,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Fichas (OCR)",
     icon: Camera,
     roles: ["ADMIN", "APROVADOR", "OPERADOR", "COORDENADOR"],
+  },
+  {
+    to: "/app/extrato-consolidado",
+    label: "Extrato Consolidado",
+    icon: Layers3,
+    roles: ["ADMIN", "APROVADOR"],
   },
   {
     to: "/app/prestadores",
