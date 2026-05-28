@@ -1039,6 +1039,17 @@ export interface ClienteAssinatura {
 }
 
 // ============================================================
+// Asaas (cobrança recorrente)
+// ============================================================
+
+export interface AsaasStatus {
+  configurado: boolean;
+  base_url: string;
+  billing_type_padrao: "BOLETO" | "CREDIT_CARD" | "PIX" | "UNDEFINED";
+  webhook_token_configurado: boolean;
+}
+
+// ============================================================
 // Super Admin (visão SaaS da MedPag)
 // ============================================================
 

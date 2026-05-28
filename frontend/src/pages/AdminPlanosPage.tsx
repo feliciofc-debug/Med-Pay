@@ -13,18 +13,22 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
+  Ban,
   CheckCircle2,
   Cog,
   CreditCard,
   Layers,
   Package,
+  RefreshCcw,
   Save,
   Sparkles,
+  UserPlus,
   X,
 } from "lucide-react";
 
 import { api, getErrorMessage } from "@/lib/api";
 import type {
+  AsaasStatus,
   ClienteAssinatura,
   FeatureDef,
   Plano,
@@ -71,7 +75,9 @@ export function AdminPlanosPage() {
   const queryClient = useQueryClient();
   const [clienteEditando, setClienteEditando] =
     useState<ClienteListItem | null>(null);
-  const [aba, setAba] = useState<"features" | "plano" | "status">("features");
+  const [aba, setAba] = useState<
+    "features" | "plano" | "status" | "cobranca"
+  >("features");
   const [feedback, setFeedback] = useState<
     { tipo: "sucesso" | "erro"; mensagem: string } | null
   >(null);
@@ -281,7 +287,7 @@ function LinhaCliente({
   onEditar,
 }: {
   cliente: ClienteListItem;
-  onEditar: (aba: "features" | "plano" | "status") => void;
+  onEditar: (aba: "features" | "plano" | "status" | "cobranca") => void;
 }) {
   const { data: assinatura } = useQuery({
     queryKey: ["planos", "cliente", cliente.id],
@@ -350,7 +356,15 @@ function LinhaCliente({
             className="btn-secondary text-xs px-2 py-1"
             title="Mudar status"
           >
-            <CreditCard size={13} /> Status
+            <Sparkles size={13} /> Status
+          </button>
+          <button
+            type="button"
+            onClick={() => onEditar("cobranca")}
+            className="btn-secondary text-xs px-2 py-1"
+            title="Cobrança (Asaas)"
+          >
+            <CreditCard size={13} /> Cobrança
           </button>
         </div>
       </td>
@@ -374,8 +388,8 @@ function ModalEdicaoCliente({
   onError,
 }: {
   cliente: ClienteListItem;
-  aba: "features" | "plano" | "status";
-  setAba: (a: "features" | "plano" | "status") => void;
+  aba: "features" | "plano" | "status" | "cobranca";
+  setAba: (a: "features" | "plano" | "status" | "cobranca") => void;
   catalogo: FeatureDef[];
   catalogoAgrupado: Array<[string, FeatureDef[]]>;
   planos: Plano[];
@@ -432,6 +446,7 @@ function ModalEdicaoCliente({
               ["features", "Features"],
               ["plano", "Trocar Plano"],
               ["status", "Status / Trial"],
+              ["cobranca", "Cobrança"],
             ] as const
           ).map(([k, label]) => (
             <button
@@ -473,8 +488,17 @@ function ModalEdicaoCliente({
               }}
               onError={onError}
             />
-          ) : (
+          ) : aba === "status" ? (
             <AbaStatus
+              assinatura={assinatura}
+              onSuccess={(msg) => {
+                onSuccess(msg);
+                invalidar();
+              }}
+              onError={onError}
+            />
+          ) : (
+            <AbaCobranca
               assinatura={assinatura}
               onSuccess={(msg) => {
                 onSuccess(msg);
@@ -857,6 +881,263 @@ function AbaStatus({
           {atualizar.isPending ? "Salvando..." : "Atualizar status"}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Aba: Cobrança (Asaas)
+// ============================================================
+
+function AbaCobranca({
+  assinatura,
+  onSuccess,
+  onError,
+}: {
+  assinatura: ClienteAssinatura;
+  onSuccess: (msg: string) => void;
+  onError: (msg: string) => void;
+}) {
+  const queryClient = useQueryClient();
+
+  const { data: statusAsaas } = useQuery({
+    queryKey: ["asaas", "status"],
+    queryFn: async () => {
+      const { data } = await api.get<AsaasStatus>("/api/asaas/status");
+      return data;
+    },
+    staleTime: 60_000,
+  });
+
+  // Reusa o cliente completo via /api/planos/clientes/{id} mas os campos
+  // Asaas estão num endpoint enxuto que ainda não criamos — vamos
+  // mostrar com base nos dados já disponíveis no Cliente (que
+  // /api/clientes não devolve) — então buscamos um overview do super-admin
+  // ou criamos um endpoint dedicado. Por ora, derivo do próprio
+  // assinatura.status_assinatura + chamadas explícitas.
+
+  const sincronizarCustomer = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<{
+        cliente_id: string;
+        asaas_customer_id: string;
+      }>(`/api/asaas/clientes/${assinatura.id}/customer`);
+      return data;
+    },
+    onSuccess: (data) => {
+      onSuccess(
+        `Customer Asaas sincronizado: ${data.asaas_customer_id || "(sem id)"}`,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["asaas"] });
+    },
+    onError: (err) => onError(getErrorMessage(err)),
+  });
+
+  const abrirAssinatura = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<{
+        cliente_id: string;
+        asaas_subscription_id: string | null;
+        proximo_vencimento: string | null;
+      }>(`/api/asaas/clientes/${assinatura.id}/subscription`);
+      return data;
+    },
+    onSuccess: (data) => {
+      onSuccess(
+        `Assinatura Asaas criada (${data.asaas_subscription_id ?? "?"}).`,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["asaas"] });
+    },
+    onError: (err) => onError(getErrorMessage(err)),
+  });
+
+  const cancelarAssinatura = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.delete<{ status: string }>(
+        `/api/asaas/clientes/${assinatura.id}/subscription`,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      onSuccess("Assinatura cancelada no Asaas.");
+      void queryClient.invalidateQueries({ queryKey: ["asaas"] });
+    },
+    onError: (err) => onError(getErrorMessage(err)),
+  });
+
+  const naoConfigurado = statusAsaas && !statusAsaas.configurado;
+
+  return (
+    <div className="space-y-5">
+      {/* Status global Asaas */}
+      <div
+        className={`rounded-md border p-3 text-sm flex items-start gap-3 ${
+          naoConfigurado
+            ? "bg-amber-50 border-amber-200 text-amber-900"
+            : "bg-emerald-50 border-emerald-200 text-emerald-900"
+        }`}
+      >
+        {naoConfigurado ? (
+          <AlertCircle size={18} className="shrink-0 mt-0.5" />
+        ) : (
+          <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
+        )}
+        <div className="flex-1">
+          <p className="font-semibold">
+            {naoConfigurado
+              ? "Asaas não configurado"
+              : "Asaas conectado"}
+          </p>
+          <p className="text-xs mt-0.5">
+            {statusAsaas ? (
+              <>
+                {statusAsaas.base_url} · Billing padrão:{" "}
+                <code>{statusAsaas.billing_type_padrao}</code>
+                {!statusAsaas.webhook_token_configurado && (
+                  <span className="block mt-1">
+                    ⚠ Webhook token não setado — webhooks aceitam sem
+                    autenticação.
+                  </span>
+                )}
+              </>
+            ) : (
+              "Verificando status..."
+            )}
+          </p>
+          {naoConfigurado && (
+            <p className="text-xs mt-1.5">
+              Defina <code>ASAAS_API_KEY</code> no .env e reinicie o
+              backend pra ativar cobrança. Sandbox grátis em{" "}
+              <a
+                href="https://sandbox.asaas.com"
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                sandbox.asaas.com
+              </a>
+              .
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Plano do cliente */}
+      <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-sm">
+        <p className="text-xs uppercase tracking-wider text-slate-500 mb-1">
+          Plano vigente
+        </p>
+        <p className="font-semibold text-slate-800">
+          {assinatura.plano?.nome ?? "Sem plano"}
+          {assinatura.plano && (
+            <span className="ml-2 text-sm text-slate-500">
+              ·{" "}
+              {assinatura.plano.preco_mensal_centavos === 0
+                ? "Sob demanda"
+                : new Intl.NumberFormat("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  }).format(
+                    assinatura.plano.preco_mensal_centavos / 100,
+                  ) + "/mês"}
+            </span>
+          )}
+        </p>
+        {assinatura.status_assinatura === "TRIAL" &&
+          assinatura.trial_termina_em && (
+            <p className="text-xs text-blue-700 mt-1">
+              Em trial até{" "}
+              {new Date(assinatura.trial_termina_em).toLocaleDateString(
+                "pt-BR",
+              )}
+            </p>
+          )}
+      </div>
+
+      {/* Ações */}
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => sincronizarCustomer.mutate()}
+          disabled={sincronizarCustomer.isPending || naoConfigurado}
+          className="btn-secondary w-full justify-start"
+        >
+          <UserPlus size={15} className="mr-2" />
+          {sincronizarCustomer.isPending
+            ? "Sincronizando..."
+            : "Sincronizar customer no Asaas"}
+        </button>
+        <p className="text-xs text-slate-500 pl-2">
+          Cria (ou atualiza) o registro do cliente dentro do Asaas. Pré-passo
+          obrigatório antes de abrir a assinatura.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => abrirAssinatura.mutate()}
+          disabled={
+            abrirAssinatura.isPending ||
+            naoConfigurado ||
+            !assinatura.plano ||
+            assinatura.plano.preco_mensal_centavos === 0
+          }
+          className="btn-primary w-full justify-start mt-3"
+        >
+          <CreditCard size={15} className="mr-2" />
+          {abrirAssinatura.isPending
+            ? "Criando..."
+            : "Abrir assinatura recorrente"}
+        </button>
+        <p className="text-xs text-slate-500 pl-2">
+          Cria a subscription mensal no Asaas. Se o cliente está em TRIAL, o
+          primeiro vencimento é a data de fim do trial. Caso contrário, em 7
+          dias.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (!confirm("Cancelar a assinatura no Asaas? Não dá pra desfazer.")) return;
+            cancelarAssinatura.mutate();
+          }}
+          disabled={cancelarAssinatura.isPending || naoConfigurado}
+          className="w-full mt-3 inline-flex items-center justify-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+        >
+          <Ban size={15} />
+          {cancelarAssinatura.isPending
+            ? "Cancelando..."
+            : "Cancelar assinatura"}
+        </button>
+      </div>
+
+      <details className="text-xs text-slate-500 pt-3 border-t border-slate-200">
+        <summary className="cursor-pointer hover:text-slate-700">
+          Como funciona o webhook do Asaas
+        </summary>
+        <div className="mt-2 space-y-1 pl-3">
+          <p>
+            Configure no painel Asaas a URL{" "}
+            <code className="bg-slate-100 px-1 rounded">
+              {window.location.origin.replace("3000", "8000")}/api/asaas/webhook
+            </code>
+          </p>
+          <p>
+            Eventos esperados: PAYMENT_RECEIVED, PAYMENT_OVERDUE,
+            SUBSCRIPTION_DELETED. O webhook atualiza o status
+            (ATIVO/INADIMPLENTE/CANCELADO) sozinho.
+          </p>
+          <p>
+            Defina também <code>ASAAS_WEBHOOK_TOKEN</code> pra validar a
+            origem (header <code>asaas-access-token</code>).
+          </p>
+        </div>
+      </details>
+
+      <p className="text-[11px] text-slate-400 flex items-center gap-1 pt-2">
+        <RefreshCcw size={10} />
+        Job diário converte trial expirado e suspende inadimplentes.
+        Disparar manualmente: <code>POST /api/asaas/job/diario</code>
+      </p>
     </div>
   );
 }

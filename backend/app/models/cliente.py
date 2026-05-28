@@ -84,6 +84,26 @@ class Cliente(Base):
         DateTime(timezone=True), nullable=True, index=True
     )
 
+    # ---------- Asaas (cobrança recorrente) ----------
+    # ID do customer dentro do Asaas. Setado quando o signup cria o
+    # registro de cobrança. Null quando cliente é manual/legado.
+    asaas_customer_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, unique=True, index=True
+    )
+    # ID da assinatura ativa no Asaas (subscription).
+    asaas_subscription_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, unique=True
+    )
+    # Próximo vencimento conhecido (sync com webhooks do Asaas).
+    proximo_vencimento: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    # Se o cliente já cadastrou meio de pagamento no Asaas (pra signup
+    # decidir se cobra direto ou só inicia trial).
+    pagamento_cadastrado: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
     ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

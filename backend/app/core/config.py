@@ -103,6 +103,18 @@ class Settings(BaseSettings):
     VALOR_MIN_CENTAVOS: int = 100  # R$ 1,00
     VALOR_MAX_CENTAVOS: int = 100_000_00  # R$ 100.000,00
 
+    # ===== Asaas (cobrança recorrente das assinaturas MedPag) =====
+    # Crie a chave em https://www.asaas.com (sandbox: sandbox.asaas.com).
+    # Sem ASAAS_API_KEY o serviço fica em "modo desligado" — endpoints
+    # de cobrança retornam 503 ASAAS_INDISPONIVEL e o frontend mostra
+    # banner pedindo configuração.
+    ASAAS_API_KEY: str | None = None
+    ASAAS_BASE_URL: str = "https://sandbox.asaas.com/api/v3"  # prod: https://api.asaas.com/api/v3
+    ASAAS_WEBHOOK_TOKEN: str | None = None  # validado no header asaas-access-token
+    ASAAS_DEFAULT_BILLING_TYPE: Literal["BOLETO", "CREDIT_CARD", "PIX", "UNDEFINED"] = (
+        "UNDEFINED"
+    )
+
     @field_validator("DATABASE_URL")
     @classmethod
     def normalize_database_url(cls, v: str) -> str:
