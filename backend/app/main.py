@@ -158,6 +158,7 @@ def create_app() -> FastAPI:
     from app.api import (
         admin,
         anestesista,
+        auditoria,
         auth,
         beneficiarios,
         clientes,
@@ -167,12 +168,16 @@ def create_app() -> FastAPI:
         lotes,
         pagamentos,
         planos,
+        super_admin,
         vital,
         whatsapp,
     )
 
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+    app.include_router(
+        auditoria.router, prefix="/api/auditoria", tags=["auditoria"]
+    )
     app.include_router(
         anestesista.router, prefix="/api/anestesista", tags=["anestesista"]
     )
@@ -183,6 +188,9 @@ def create_app() -> FastAPI:
     app.include_router(lotes.router, prefix="/api/lotes", tags=["lotes"])
     app.include_router(pagamentos.router, prefix="/api/pagamentos", tags=["pagamentos"])
     app.include_router(planos.router, prefix="/api/planos", tags=["planos"])
+    app.include_router(
+        super_admin.router, prefix="/api/super-admin", tags=["super-admin"]
+    )
     app.include_router(vital.router, prefix="/api/vital", tags=["vital"])
     app.include_router(whatsapp.router, prefix="/api/whatsapp", tags=["whatsapp"])
     # Executivo + Contratos + Painel Coordenador (sem prefixo único —

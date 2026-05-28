@@ -22,6 +22,8 @@ import { AdminDevolucoesPage } from "@/pages/AdminDevolucoesPage";
 import { AdminEmpresaPagadoraPage } from "@/pages/AdminEmpresaPagadoraPage";
 import { AdminWhatsAppPage } from "@/pages/AdminWhatsAppPage";
 import { AdminPlanosPage } from "@/pages/AdminPlanosPage";
+import { AdminAuditoriaPage } from "@/pages/AdminAuditoriaPage";
+import { SuperAdminPage } from "@/pages/SuperAdminPage";
 import { AnestesistaLancarPage } from "@/pages/AnestesistaLancarPage";
 import { AnestesistaMeusLancamentosPage } from "@/pages/AnestesistaMeusLancamentosPage";
 import { CrmLandingPage } from "@/pages/CrmLandingPage";
@@ -233,6 +235,22 @@ export default function App() {
         element={
           <AdminRoute>
             <AdminPlanosPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/app/super-admin"
+        element={
+          <AdminRoute>
+            <SuperAdminPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/app/admin/auditoria"
+        element={
+          <AdminRoute>
+            <AdminAuditoriaPage />
           </AdminRoute>
         }
       />

@@ -1037,3 +1037,74 @@ export interface ClienteAssinatura {
   features_override: Record<string, boolean | number | null>;
   features_efetivas: Record<string, boolean | number | null>;
 }
+
+// ============================================================
+// Super Admin (visão SaaS da MedPag)
+// ============================================================
+
+export interface DistribuicaoPlano {
+  slug: string;
+  nome: string;
+  count: number;
+  mrr_centavos: number;
+}
+
+export interface MetricasSaaS {
+  mrr_centavos: number;
+  arr_centavos: number;
+  arpu_centavos: number;
+  receita_potencial_trial: number;
+  clientes_total: number;
+  clientes_pagantes: number;
+  clientes_trial: number;
+  clientes_suspensos: number;
+  clientes_cancelados: number;
+  novos_30d: number;
+  novos_no_mes: number;
+  cancelados_no_mes: number;
+  trials_vencendo_7d: number;
+  distribuicao_plano: DistribuicaoPlano[];
+}
+
+export type HealthScore = "VERDE" | "AMARELO" | "VERMELHO" | "CINZA";
+
+export interface ClienteOverview {
+  id: string;
+  nome: string;
+  cnpj: string | null;
+  plano_nome: string | null;
+  status_assinatura: StatusAssinatura;
+  trial_termina_em: string | null;
+  mrr_centavos: number;
+  ultimo_login: string | null;
+  lotes_30d: number;
+  health_score: HealthScore;
+  sinais: string[];
+}
+
+// ============================================================
+// Auditoria
+// ============================================================
+
+export interface AuditoriaItem {
+  id: string;
+  user_id: string | null;
+  user_nome: string | null;
+  user_email: string | null;
+  acao: string;
+  entidade_tipo: string | null;
+  entidade_id: string | null;
+  detalhes: Record<string, unknown> | null;
+  hash_relacionado: string | null;
+  ip_address: string | null;
+  mensagem: string | null;
+  created_at: string;
+}
+
+export interface AuditoriaPage {
+  items: AuditoriaItem[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
