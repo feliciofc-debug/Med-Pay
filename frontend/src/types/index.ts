@@ -397,6 +397,16 @@ export interface ContratoConfig {
   meta_mensal_centavos: number;
   vencimento: string; // ISO
   ativo: boolean;
+  modo_cobranca?: ModoCobranca;
+}
+
+export interface ClienteSemContrato {
+  cliente_id: string;
+  nome: string;
+  cnpj: string | null;
+  qtd_lotes_30d: number;
+  valor_processado_30d_centavos: number;
+  ultima_atividade: string | null;
 }
 
 // =============================================================================

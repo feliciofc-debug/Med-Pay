@@ -38,13 +38,14 @@ from app.core.exceptions import (
     ValidacaoError,
 )
 from app.models.cliente import Cliente
-from app.models.contrato_hospital import ContratoHospital
+from app.models.contrato_hospital import ContratoHospital, ModoCobranca
 from app.models.ficha_plantao import FichaPlantao, StatusFicha
 from app.models.lote import Lote, StatusLote
 from app.models.user import User, UserRole
 from app.schemas.executivo import (
     AlertaExecutivo,
     BancoHorasMedico,
+    ClienteSemContratoOut,
     ContratoFinanceiro,
     ContratoOut,
     DashboardExecutivo,
@@ -137,6 +138,7 @@ def _serializar_contrato(c: ContratoHospital) -> ContratoOut:
         vigencia_inicio=c.vigencia_inicio,
         vencimento=c.vigencia_fim,
         ativo=c.ativo,
+        modo_cobranca=c.modo_cobranca.value if c.modo_cobranca else "PERCENTUAL_REPASSE",
         observacoes=c.observacoes,
     )
 
@@ -192,6 +194,7 @@ async def salvar_contrato(
             custo_variavel_pct=payload.custo.custo_variavel_pct,
             meta_mensal_centavos=payload.meta_mensal_centavos,
             vigencia_fim=payload.vencimento,
+            modo_cobranca=ModoCobranca(payload.modo_cobranca),
             observacoes=payload.observacoes,
             ativo=True,
         )
@@ -211,6 +214,7 @@ async def salvar_contrato(
         contrato.custo_variavel_pct = payload.custo.custo_variavel_pct
         contrato.meta_mensal_centavos = payload.meta_mensal_centavos
         contrato.vigencia_fim = payload.vencimento
+        contrato.modo_cobranca = ModoCobranca(payload.modo_cobranca)
         contrato.observacoes = payload.observacoes
 
     await db.flush()
@@ -223,6 +227,76 @@ async def salvar_contrato(
         cliente_id=str(cliente_id),
     )
     return _serializar_contrato(contrato)
+
+
+@router.get(
+    "/contratos/clientes-sem-contrato",
+    response_model=list[ClienteSemContratoOut],
+)
+async def listar_clientes_sem_contrato(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_visao_executiva),
+) -> list[ClienteSemContratoOut]:
+    """Clientes que têm atividade no sistema mas não têm contrato ativo.
+
+    Ajuda o admin a identificar hospitais "esquecidos" — operando sem
+    contrato comercial cadastrado e portanto sem aparecer em receita,
+    margem e renovação no Executivo.
+
+    Inclui também clientes sem atividade alguma (qtd_lotes_30d=0), pra
+    o fluxo "criar contrato pra hospital novo".
+    """
+    inicio_30d = datetime.now(tz=UTC) - timedelta(days=30)
+
+    # Subquery: clientes com contrato ativo
+    contrato_subq = (
+        select(ContratoHospital.cliente_id)
+        .where(ContratoHospital.ativo.is_(True))
+        .subquery()
+    )
+
+    # Clientes ativos sem contrato + agregados de lotes nos últimos 30d
+    lotes_count = func.count(Lote.id).label("lotes_30d")
+    lotes_valor = func.coalesce(func.sum(Lote.valor_total_centavos), 0).label(
+        "valor_30d"
+    )
+    ultima = func.max(Lote.created_at).label("ultima")
+
+    result = await db.execute(
+        select(
+            Cliente.id,
+            Cliente.nome,
+            Cliente.cnpj,
+            lotes_count,
+            lotes_valor,
+            ultima,
+        )
+        .outerjoin(
+            Lote,
+            and_(
+                Lote.cliente_id == Cliente.id,
+                Lote.created_at >= inicio_30d,
+            ),
+        )
+        .where(
+            Cliente.deleted_at.is_(None),
+            Cliente.ativo.is_(True),
+            Cliente.id.not_in(select(contrato_subq.c.cliente_id)),
+        )
+        .group_by(Cliente.id, Cliente.nome, Cliente.cnpj)
+        .order_by(lotes_count.desc(), Cliente.nome)
+    )
+    return [
+        ClienteSemContratoOut(
+            cliente_id=row.id,
+            nome=row.nome,
+            cnpj=row.cnpj,
+            qtd_lotes_30d=int(row.lotes_30d or 0),
+            valor_processado_30d_centavos=int(row.valor_30d or 0),
+            ultima_atividade=row.ultima,
+        )
+        for row in result.all()
+    ]
 
 
 # ============================================================

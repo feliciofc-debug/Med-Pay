@@ -30,6 +30,9 @@ class ConfiguracaoCusto(BaseModel):
     custo_variavel_pct: int = Field(ge=0, le=100, default=0)
 
 
+ModoCobrancaLit = Literal["PERCENTUAL_REPASSE", "MENSALIDADE_SAAS"]
+
+
 class ContratoOut(BaseModel):
     """Shape do contrato exposto pra UI (compatível com `ContratoConfig`)."""
 
@@ -45,6 +48,7 @@ class ContratoOut(BaseModel):
     vigencia_inicio: date
     vencimento: date | None  # alias do vigencia_fim, pra match com mock
     ativo: bool
+    modo_cobranca: ModoCobrancaLit = "PERCENTUAL_REPASSE"
     observacoes: str | None = None
 
 
@@ -55,7 +59,19 @@ class SalvarContratoRequest(BaseModel):
     custo: ConfiguracaoCusto
     meta_mensal_centavos: int = Field(ge=0, default=0)
     vencimento: date | None = None
+    modo_cobranca: ModoCobrancaLit = "PERCENTUAL_REPASSE"
     observacoes: str | None = None
+
+
+class ClienteSemContratoOut(BaseModel):
+    """Cliente sem contrato ativo mas com atividade no sistema."""
+
+    cliente_id: UUID
+    nome: str
+    cnpj: str | None
+    qtd_lotes_30d: int
+    valor_processado_30d_centavos: int
+    ultima_atividade: datetime | None
 
 
 # ============================================================
