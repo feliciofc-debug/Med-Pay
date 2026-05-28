@@ -51,6 +51,9 @@ class CriarUsuarioRequest(BaseModel):
     nome: str = Field(min_length=2, max_length=255)
     role: UserRole
     senha: str = Field(min_length=8, max_length=128)
+    # Multi-tenancy: vincula o user a um cliente especifico.
+    # None = "MedPag interno" (vê todos os tenants).
+    cliente_id: UUID | None = None
 
 
 class AtualizarUsuarioRequest(BaseModel):

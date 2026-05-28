@@ -7,7 +7,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -17,6 +17,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.auditoria import Auditoria
+    from app.models.cliente import Cliente
     from app.models.lote import Lote
 
 
@@ -54,6 +55,18 @@ class User(Base):
     )
     ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    # ---------- Multi-tenancy ----------
+    # cliente_id = null  → "MedPag interno" (admin global, vê tudo)
+    #            = UUID  → user pertence a esse cliente, queries são filtradas
+    # Setado automaticamente no signup self-service (/api/signup).
+    # Users criados por admin MedPag (via /admin) nascem com null.
+    cliente_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("clientes.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -63,6 +76,9 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relacionamentos
+    cliente: Mapped["Cliente | None"] = relationship(
+        "Cliente", foreign_keys=[cliente_id]
+    )
     lotes_enviados: Mapped[list["Lote"]] = relationship(
         "Lote", back_populates="enviado_por", foreign_keys="Lote.enviado_por_id"
     )
@@ -77,6 +93,15 @@ class User(Base):
     def pode_aprovar(self) -> bool:
         """Apenas APROVADOR e ADMIN podem aprovar lotes."""
         return self.role in (UserRole.APROVADOR, UserRole.ADMIN)
+
+    @property
+    def is_medpag_interno(self) -> bool:
+        """User MedPag (sem cliente_id) — vê todos os tenants.
+
+        Usado pelo `get_tenant_filter` pra decidir se aplica filtro
+        por cliente_id nas queries.
+        """
+        return self.cliente_id is None
 
     def __repr__(self) -> str:
         return f"<User id={self.id} email={self.email} role={self.role.value}>"

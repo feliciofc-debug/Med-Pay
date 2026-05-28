@@ -77,8 +77,11 @@ async def listar_beneficiarios(
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_visao_executiva),
+    user: User = Depends(require_visao_executiva),
 ) -> BeneficiarioListResponse:
+    # Multi-tenancy: força filtro do cliente do user
+    if user.cliente_id is not None:
+        cliente_id = user.cliente_id
     service = BeneficiarioService(db)
     return await service.listar(
         cliente_id=cliente_id,
@@ -232,13 +235,20 @@ async def baixar_template_planilha(
 async def detalhar_beneficiario(
     beneficiario_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_visao_executiva),
+    user: User = Depends(require_visao_executiva),
 ) -> BeneficiarioOut:
+    from app.core.deps import verificar_acesso_cliente
+
     service = BeneficiarioService(db)
     try:
         b = await service.buscar(beneficiario_id)
     except BeneficiarioNaoEncontradoError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    verificar_acesso_cliente(
+        user,
+        b.cliente_id,
+        mensagem="Beneficiário pertence a outro cliente.",
+    )
     return BeneficiarioOut.model_validate(b)
 
 

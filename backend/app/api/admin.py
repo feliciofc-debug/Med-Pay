@@ -115,6 +115,7 @@ async def criar_usuario(
         hashed_password=hash_password(payload.senha),
         role=payload.role,
         ativo=True,
+        cliente_id=payload.cliente_id,
     )
     db.add(novo)
     await db.flush()

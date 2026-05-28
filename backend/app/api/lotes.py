@@ -20,7 +20,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.deps import get_current_user, get_db, require_aprovador
+from app.core.deps import (
+    get_current_user,
+    get_db,
+    require_aprovador,
+    require_feature,
+)
 from app.core.exceptions import (
     LoteNaoEncontradoError,
     ValidacaoError,
@@ -167,7 +172,14 @@ async def listar_lotes(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[LoteResumo]:
-    """Lista lotes (dashboard do operador)."""
+    """Lista lotes (dashboard do operador).
+
+    Multi-tenancy: se o user tem `cliente_id`, força o filtro pra
+    esse cliente (ignora o query param `cliente_id` mesmo se vier).
+    MedPag interno (sem cliente_id) pode filtrar livre.
+    """
+    if current_user.cliente_id is not None:
+        cliente_id = current_user.cliente_id
     service = LoteService(db)
     lotes = await service.listar(
         status=status_filtro,
@@ -186,8 +198,15 @@ async def detalhe_lote(
     current_user: User = Depends(get_current_user),
 ) -> LoteDetalhe:
     """Detalhe completo do lote com lista de pagamentos."""
+    from app.core.deps import verificar_acesso_cliente
+
     service = LoteService(db)
     lote = await service.get_com_pagamentos(lote_id)
+    verificar_acesso_cliente(
+        current_user,
+        lote.cliente_id,
+        mensagem="Lote pertence a outro cliente.",
+    )
     return LoteDetalhe.model_validate(lote)
 
 
@@ -237,7 +256,7 @@ async def aprovar_lote(
 # ============================================================
 
 
-@router.get("/{lote_id}/cnab")
+@router.get("/{lote_id}/cnab", dependencies=[Depends(require_feature("pagamento.cnab"))])
 async def download_cnab(
     lote_id: UUID,
     db: AsyncSession = Depends(get_db),

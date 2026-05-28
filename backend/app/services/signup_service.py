@@ -148,6 +148,9 @@ async def signup(
         hashed_password=hash_password(admin_senha),
         role=UserRole.ADMIN,
         ativo=True,
+        # Multi-tenancy: vincula user ao cliente recem criado pra que
+        # queries (lotes, fichas, beneficiarios) sejam filtradas
+        cliente_id=cliente.id,
     )
     db.add(user)
     await db.flush()

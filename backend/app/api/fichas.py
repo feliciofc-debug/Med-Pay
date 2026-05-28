@@ -397,6 +397,10 @@ async def listar_fichas(
     if current_user.role == UserRole.COORDENADOR:
         enviado_por_id = current_user.id
 
+    # Multi-tenancy: user de cliente vê só fichas do próprio cliente
+    if current_user.cliente_id is not None:
+        cliente_id = current_user.cliente_id
+
     service = FichaService(db)
     fichas = await service.listar(
         status=status_filtro,
@@ -414,6 +418,8 @@ async def detalhar_ficha(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> FichaDetalhe:
+    from app.core.deps import verificar_acesso_cliente
+
     service = FichaService(db)
     ficha = await service.get(ficha_id)
     # Coordenador só pode abrir as fichas que ele mesmo enviou.
@@ -422,6 +428,12 @@ async def detalhar_ficha(
         and ficha.enviado_por_id != current_user.id
     ):
         raise PermissaoNegadaError("Esta ficha não pertence a você")
+    # Multi-tenancy: usuário de cliente só vê fichas do próprio cliente
+    verificar_acesso_cliente(
+        current_user,
+        ficha.cliente_id,
+        mensagem="Ficha pertence a outro cliente.",
+    )
     return _ficha_para_detalhe(ficha)
 
 

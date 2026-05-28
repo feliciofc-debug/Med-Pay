@@ -165,11 +165,140 @@ def require_visao_executiva(
     return current_user
 
 
+# ============================================================
+# Multi-tenancy
+# ============================================================
+
+
+def get_tenant_id(
+    current_user: User = Depends(get_current_user),
+) -> UUID | None:
+    """Retorna o `cliente_id` que deve filtrar queries do usuário.
+
+    Convenções:
+        - None  → user é "MedPag interno" (admin/operação do BPO), vê
+                  dados de todos os tenants
+        - UUID  → user pertence a esse cliente, deve ver só os dados dele
+
+    Use em endpoints assim:
+
+        async def listar_lotes(
+            tenant_id: UUID | None = Depends(get_tenant_id),
+            db: AsyncSession = Depends(get_db),
+        ):
+            stmt = select(Lote)
+            stmt = aplicar_filtro_tenant(stmt, Lote, tenant_id)
+            ...
+
+    Quando todos os clientes virarem multi-tenant puro (sem MedPag
+    interno), trocar este `get_tenant_id` por `require_tenant_id`
+    abaixo.
+    """
+    return current_user.cliente_id
+
+
+def require_tenant_id(
+    current_user: User = Depends(get_current_user),
+) -> UUID:
+    """Versão estrita — bloqueia users sem cliente_id (MedPag interno).
+
+    Útil em endpoints que SÓ fazem sentido pra cliente especifico
+    (ex: GET /api/operacao do MEU cliente). Em endpoints "globais"
+    (Super Admin), use `get_tenant_id` (que aceita None).
+    """
+    if current_user.cliente_id is None:
+        raise PermissaoNegadaError(
+            "Este endpoint requer usuário vinculado a um cliente. "
+            "Users MedPag internos devem usar os endpoints administrativos."
+        )
+    return current_user.cliente_id
+
+
+def require_feature(chave: str):  # noqa: ANN201
+    """Factory de dependency que exige feature ativa pro cliente do user.
+
+    Uso típico:
+
+        @router.post(
+            "/lotes/{lote_id}/cnab",
+            dependencies=[Depends(require_feature("pagamento.cnab"))],
+        )
+        async def gerar_cnab(...): ...
+
+    Regras:
+        - User MedPag interno (cliente_id is None): sempre passa
+          (acesso total — útil pra debug/suporte)
+        - User vinculado a cliente: feature precisa estar ativada
+          (no plano OU no `features_override` do cliente)
+
+    Levanta 403 PERMISSAO_NEGADA se a feature está desligada.
+    """
+
+    async def _checar(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> None:
+        if current_user.cliente_id is None:
+            return  # MedPag interno passa direto
+
+        from app.models.cliente import Cliente
+        from app.services.feature_flags import cliente_tem_feature
+
+        result = await db.execute(
+            select(Cliente).where(Cliente.id == current_user.cliente_id)
+        )
+        cliente = result.scalar_one_or_none()
+        if cliente is None:
+            raise PermissaoNegadaError(
+                "Cliente do usuário não encontrado — sessão inválida."
+            )
+        if not cliente_tem_feature(cliente, chave):
+            raise PermissaoNegadaError(
+                f"Funcionalidade '{chave}' não está disponível no seu plano. "
+                "Contate o suporte pra ativar."
+            )
+
+    return _checar
+
+
+def verificar_acesso_cliente(
+    user: User, cliente_id_alvo: UUID, *, mensagem: str | None = None
+) -> None:
+    """Garante que `user` pode acessar dados do cliente `cliente_id_alvo`.
+
+    Regra:
+        - MedPag interno (user.cliente_id is None) → sempre pode
+        - Caso contrário, user.cliente_id deve igualar cliente_id_alvo
+
+    Use em endpoints onde o cliente_id vem do path/query e precisa
+    validar contra o tenant do user:
+
+        @router.get("/{cliente_id}/relatorio")
+        async def relatorio(
+            cliente_id: UUID,
+            user: User = Depends(get_current_user),
+        ):
+            verificar_acesso_cliente(user, cliente_id)
+            ...
+    """
+    if user.cliente_id is None:
+        return  # MedPag interno
+    if user.cliente_id != cliente_id_alvo:
+        raise PermissaoNegadaError(
+            mensagem
+            or "Você não tem acesso a dados de outro cliente.",
+        )
+
+
 __all__ = [
     "get_current_user",
     "get_db",
+    "get_tenant_id",
     "require_admin",
     "require_aprovador",
+    "require_feature",
     "require_pode_subir_ficha",
+    "require_tenant_id",
     "require_visao_executiva",
+    "verificar_acesso_cliente",
 ]

@@ -18,7 +18,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, require_aprovador
+from app.core.deps import get_db, require_aprovador, verificar_acesso_cliente
 from app.models.user import User
 from app.schemas.consolidacao import (
     ClienteComFichasOut,
@@ -44,9 +44,12 @@ router = APIRouter()
 )
 async def listar_clientes(
     db: AsyncSession = Depends(get_db),
-    _u: User = Depends(require_aprovador),
+    user: User = Depends(require_aprovador),
 ) -> list[ClienteComFichasOut]:
     items = await listar_clientes_com_fichas_pendentes(db)
+    # Multi-tenancy: filtra resultado pra mostrar só o próprio cliente
+    if user.cliente_id is not None:
+        items = [t for t in items if t[0] == user.cliente_id]
     return [
         ClienteComFichasOut(
             cliente_id=cid, nome=nome, qtd_fichas_pendentes=qtd
@@ -59,8 +62,9 @@ async def listar_clientes(
 async def listar_competencias(
     cliente_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _u: User = Depends(require_aprovador),
+    user: User = Depends(require_aprovador),
 ) -> list[str]:
+    verificar_acesso_cliente(user, cliente_id)
     return await listar_competencias_disponiveis(db, cliente_id=cliente_id)
 
 
@@ -69,8 +73,9 @@ async def por_hospital_mes(
     cliente_id: UUID,
     competencia: str | None = Query(None, description="MM/YYYY"),
     db: AsyncSession = Depends(get_db),
-    _u: User = Depends(require_aprovador),
+    user: User = Depends(require_aprovador),
 ) -> ExtratoConsolidadoOut:
+    verificar_acesso_cliente(user, cliente_id)
     extrato = await consolidar_por_hospital_mes(
         db, cliente_id=cliente_id, competencia=competencia
     )
@@ -82,8 +87,9 @@ async def por_dia(
     cliente_id: UUID,
     data: datetime = Query(..., description="ISO date (YYYY-MM-DD)"),
     db: AsyncSession = Depends(get_db),
-    _u: User = Depends(require_aprovador),
+    user: User = Depends(require_aprovador),
 ) -> ExtratoConsolidadoOut:
+    verificar_acesso_cliente(user, cliente_id)
     extrato = await consolidar_por_dia(db, cliente_id=cliente_id, data=data)
     return ExtratoConsolidadoOut.model_validate(extrato)
 
@@ -94,8 +100,9 @@ async def por_medico(
     beneficiario_id: UUID | None = None,
     cpf: str | None = None,
     db: AsyncSession = Depends(get_db),
-    _u: User = Depends(require_aprovador),
+    user: User = Depends(require_aprovador),
 ) -> ExtratoConsolidadoOut:
+    verificar_acesso_cliente(user, cliente_id)
     extrato = await consolidar_por_medico(
         db,
         cliente_id=cliente_id,

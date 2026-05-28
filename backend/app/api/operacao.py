@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, require_admin
+from app.core.deps import get_db, require_admin, verificar_acesso_cliente
 from app.core.exceptions import ClienteNaoEncontradoError
 from app.models.cliente import Cliente
 from app.models.user import User
@@ -43,8 +43,9 @@ async def _carregar(db: AsyncSession, cliente_id: UUID) -> Cliente:
 async def obter_config(
     cliente_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
 ) -> ConfigOperacaoOut:
+    verificar_acesso_cliente(admin, cliente_id)
     cliente = await _carregar(db, cliente_id)
     return ConfigOperacaoOut.model_validate(cliente)
 
@@ -54,8 +55,9 @@ async def atualizar_config(
     cliente_id: UUID,
     payload: AtualizarConfigOperacaoRequest,
     db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
 ) -> ConfigOperacaoOut:
+    verificar_acesso_cliente(admin, cliente_id)
     cliente = await _carregar(db, cliente_id)
     if payload.dia_fechamento is not None:
         cliente.dia_fechamento = payload.dia_fechamento
