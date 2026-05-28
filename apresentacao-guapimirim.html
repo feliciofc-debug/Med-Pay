@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedPag — Apresentação Guapimirim</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #1f2412;
+    color: #f5f7ef;
+    overflow: hidden;
+  }
+  .slide {
+    width: 100vw;
+    height: 100vh;
+    display: none;
+    padding: 60px 80px;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    background: linear-gradient(135deg, #1f2412 0%, #353d24 50%, #525f30 100%);
+  }
+  .slide.active { display: flex; }
+
+  /* Logo no canto */
+  .logo {
+    position: absolute;
+    top: 30px;
+    left: 40px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-square {
+    width: 36px;
+    height: 36px;
+    background: #353d24;
+    border: 1px solid rgba(240, 198, 74, 0.4);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f0c64a;
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .logo-text {
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    font-size: 14px;
+    color: #f5f7ef;
+  }
+
+  /* Numeração */
+  .slide-num {
+    position: absolute;
+    bottom: 28px;
+    right: 40px;
+    font-size: 12px;
+    color: rgba(245, 247, 239, 0.4);
+    letter-spacing: 0.1em;
+  }
+
+  /* Navegação */
+  .nav {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    z-index: 100;
+  }
+  .nav button {
+    background: rgba(240, 198, 74, 0.1);
+    color: #f0c64a;
+    border: 1px solid rgba(240, 198, 74, 0.3);
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  .nav button:hover {
+    background: rgba(240, 198, 74, 0.2);
+    border-color: rgba(240, 198, 74, 0.6);
+  }
+  .nav button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* Tipografia */
+  h1 {
+    font-size: 72px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+  h1 .accent {
+    background: linear-gradient(135deg, #f0c64a 0%, #e9b22a 50%, #d29215 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  h2 {
+    font-size: 48px;
+    font-weight: 700;
+    margin-bottom: 32px;
+    color: #f5f7ef;
+    letter-spacing: -0.01em;
+  }
+  h3 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    color: #f0c64a;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  p, li {
+    font-size: 20px;
+    line-height: 1.55;
+    color: rgba(245, 247, 239, 0.85);
+    margin-bottom: 10px;
+  }
+  .subtitle {
+    font-size: 26px;
+    color: rgba(245, 247, 239, 0.7);
+    margin-bottom: 40px;
+    line-height: 1.4;
+  }
+  .eyebrow {
+    display: inline-block;
+    padding: 6px 14px;
+    background: rgba(240, 198, 74, 0.12);
+    border: 1px solid rgba(240, 198, 74, 0.35);
+    border-radius: 999px;
+    color: #f0c64a;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+  .highlight { color: #f0c64a; font-weight: 600; }
+  .success { color: #b6c283; font-weight: 600; }
+  .danger { color: #ff8a80; font-weight: 600; }
+
+  /* Listas */
+  ul { list-style: none; padding-left: 0; }
+  li {
+    padding-left: 28px;
+    position: relative;
+    margin-bottom: 12px;
+  }
+  li::before {
+    content: "▸";
+    position: absolute;
+    left: 0;
+    color: #f0c64a;
+    font-weight: 700;
+  }
+
+  /* Grids */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: start;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  .grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+
+  /* Cards */
+  .card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(240, 198, 74, 0.2);
+    border-radius: 14px;
+    padding: 28px;
+    transition: all 0.2s;
+  }
+  .card:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(240, 198, 74, 0.4);
+  }
+  .card h3 {
+    font-size: 15px;
+    margin-bottom: 10px;
+  }
+  .card p, .card li {
+    font-size: 15px;
+    line-height: 1.5;
+    margin-bottom: 6px;
+  }
+  .card .icon {
+    font-size: 32px;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  /* Stats */
+  .stat {
+    text-align: center;
+    padding: 20px;
+  }
+  .stat-num {
+    font-size: 54px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #f0c64a 0%, #d29215 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+    margin-bottom: 12px;
+  }
+  .stat-label {
+    font-size: 14px;
+    color: rgba(245, 247, 239, 0.7);
+    line-height: 1.4;
+  }
+
+  /* Timeline */
+  .timeline {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    margin-top: 30px;
+  }
+  .timeline-step {
+    flex: 1;
+    text-align: center;
+    padding: 24px 16px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(240, 198, 74, 0.25);
+    border-radius: 14px;
+  }
+  .timeline-step .icon {
+    font-size: 36px;
+    margin-bottom: 12px;
+  }
+  .timeline-step strong {
+    display: block;
+    color: #f0c64a;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .timeline-step p {
+    font-size: 14px;
+    line-height: 1.45;
+    margin: 0;
+  }
+  .timeline-arrow {
+    display: flex;
+    align-items: center;
+    color: #f0c64a;
+    font-size: 24px;
+    opacity: 0.5;
+  }
+
+  /* Comparativo */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 20px;
+  }
+  .compare-col {
+    padding: 28px;
+    border-radius: 14px;
+  }
+  .compare-col.bad {
+    background: rgba(255, 138, 128, 0.05);
+    border: 1px solid rgba(255, 138, 128, 0.2);
+  }
+  .compare-col.good {
+    background: rgba(182, 194, 131, 0.08);
+    border: 1px solid rgba(182, 194, 131, 0.3);
+  }
+  .compare-col h3 { font-size: 16px; margin-bottom: 18px; }
+
+  /* Capa especial */
+  .cover-art {
+    position: absolute;
+    right: 60px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 220px;
+    opacity: 0.08;
+    pointer-events: none;
+  }
+
+  /* Citação */
+  .quote {
+    font-size: 30px;
+    font-style: italic;
+    color: #f5f7ef;
+    line-height: 1.5;
+    border-left: 4px solid #f0c64a;
+    padding-left: 28px;
+    margin: 30px 0;
+  }
+  .quote-author {
+    font-size: 16px;
+    color: rgba(245, 247, 239, 0.6);
+    margin-top: 14px;
+    font-style: normal;
+  }
+
+  /* CTA final */
+  .cta-box {
+    margin-top: 40px;
+    padding: 30px;
+    background: linear-gradient(135deg, rgba(240, 198, 74, 0.15) 0%, rgba(146, 167, 75, 0.1) 100%);
+    border: 1px solid rgba(240, 198, 74, 0.4);
+    border-radius: 16px;
+    text-align: center;
+  }
+  .cta-box .label {
+    color: #f0c64a;
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .cta-box .contact {
+    font-size: 18px;
+    color: #f5f7ef;
+    margin-top: 6px;
+  }
+
+  /* Linha dourada decorativa */
+  .gold-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, #f0c64a 50%, transparent 100%);
+  }
+
+  @media print {
+    .slide { display: flex !important; page-break-after: always; }
+    .nav { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- SLIDE 1 — CAPA -->
+<div class="slide active">
+  <div class="gold-line"></div>
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <div class="cover-art">⚕️</div>
+
+  <span class="eyebrow">Proposta exclusiva — Prefeitura de Guapimirim</span>
+  <h1>A gestão de pagamentos<br><span class="accent">e atendimento médico</span><br>na palma da mão.</h1>
+  <p class="subtitle">
+    Uma única plataforma para pagar os profissionais, cadastrar os pacientes,<br>
+    prevenir fraudes e ter visibilidade total da operação de saúde.
+  </p>
+  <p style="font-size: 15px; color: rgba(245, 247, 239, 0.5); margin-top: 30px;">
+    Apresentação preparada para a Secretaria Municipal de Saúde
+  </p>
+  <div class="slide-num">01 / 18</div>
+</div>
+
+<!-- SLIDE 2 — O CENÁRIO HOJE -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">O cenário</span>
+  <h2>A operação de saúde pública<br>vive no Excel.</h2>
+
+  <div class="grid-2" style="margin-top: 20px;">
+    <div>
+      <h3>As dores reais</h3>
+      <ul>
+        <li><span class="danger">Planilha solta</span> entre coordenador, RH e financeiro</li>
+        <li><span class="danger">Médico questiona</span> valor do mês — sem como provar</li>
+        <li><span class="danger">Procedimento "fantasma"</span> — sem como confirmar que aconteceu</li>
+        <li><span class="danger">Pagamento errado</span> gera retrabalho e desgaste político</li>
+        <li><span class="danger">Cadastro do paciente</span> some entre uma consulta e a próxima</li>
+        <li><span class="danger">Auditoria</span> precisa garimpar papel</li>
+      </ul>
+    </div>
+    <div>
+      <h3>O custo invisível</h3>
+      <ul>
+        <li>Horas de servidor digitando pagamento por pagamento</li>
+        <li>Erros de transferência geram estornos</li>
+        <li>Médicos descontentes saem da rede pública</li>
+        <li>Pacientes precisam refazer cadastro toda vez</li>
+        <li>Sem dados para planejar políticas de saúde</li>
+        <li>Risco jurídico e LGPD em planilha aberta</li>
+      </ul>
+    </div>
+  </div>
+  <div class="slide-num">02 / 18</div>
+</div>
+
+<!-- SLIDE 3 — A SOLUÇÃO EM UMA FRASE -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">A solução</span>
+  <h2 style="font-size: 42px;">Uma plataforma única que conecta<br>os 3 lados da saúde:</h2>
+
+  <div class="grid-3" style="margin-top: 40px;">
+    <div class="card" style="text-align: center;">
+      <div class="icon">👨‍⚕️</div>
+      <h3 style="color: #f0c64a; font-size: 16px;">Médico</h3>
+      <p>Entra com o CRM, lança o procedimento e recebe pelo que executou — com extrato pronto pra Imposto de Renda.</p>
+    </div>
+    <div class="card" style="text-align: center;">
+      <div class="icon">🏥</div>
+      <h3 style="color: #f0c64a; font-size: 16px;">Prefeitura</h3>
+      <p>Vê em tempo real quem fez o quê, aprova fechamentos e envia a variável pronta pra folha do RH.</p>
+    </div>
+    <div class="card" style="text-align: center;">
+      <div class="icon">🧑‍🤝‍🧑</div>
+      <h3 style="color: #f0c64a; font-size: 16px;">Paciente</h3>
+      <p>Confirma o atendimento por QR Code, cadastra-se uma vez e a prefeitura tem o histórico dele pra sempre.</p>
+    </div>
+  </div>
+
+  <div class="quote" style="margin-top: 50px;">
+    A planilha vira plataforma. O caos vira dado. O dado vira gestão.
+  </div>
+
+  <div class="slide-num">03 / 18</div>
+</div>
+
+<!-- SLIDE 4 — COMO FUNCIONA -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Como funciona</span>
+  <h2>Em 4 passos. Sem complicação.</h2>
+
+  <div class="timeline">
+    <div class="timeline-step">
+      <div class="icon">🩺</div>
+      <strong>1. Médico lança</strong>
+      <p>Entra com seu CRM, informa a data e o código do procedimento que executou.</p>
+    </div>
+    <span class="timeline-arrow">→</span>
+    <div class="timeline-step">
+      <div class="icon">📱</div>
+      <strong>2. Paciente confirma</strong>
+      <p>Escaneia um QR Code, tira uma selfie e preenche o cadastro uma única vez.</p>
+    </div>
+    <span class="timeline-arrow">→</span>
+    <div class="timeline-step">
+      <div class="icon">✅</div>
+      <strong>3. Prefeitura aprova</strong>
+      <p>Secretário/coordenador vê o lançamento cruzado com a confirmação e aprova o pagamento.</p>
+    </div>
+    <span class="timeline-arrow">→</span>
+    <div class="timeline-step">
+      <div class="icon">📋</div>
+      <strong>4. RH lança na folha</strong>
+      <p>Plataforma gera o relatório de variável já no formato do sistema de folha da prefeitura.</p>
+    </div>
+  </div>
+
+  <p style="margin-top: 40px; text-align: center; font-size: 18px;">
+    <span class="highlight">Tudo digital. Tudo rastreado. Tudo seguro.</span>
+  </p>
+  <div class="slide-num">04 / 18</div>
+</div>
+
+<!-- SLIDE 5 — MÉDICO -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Funcionalidade 1</span>
+  <h2>O médico, no comando.</h2>
+
+  <div class="grid-2" style="margin-top: 20px;">
+    <div>
+      <h3>O que ele faz</h3>
+      <ul>
+        <li><span class="highlight">Login só com o CRM</span> — sem senha, sem cadastro complicado</li>
+        <li>Lança o procedimento em <span class="highlight">menos de 30 segundos</span>, pelo celular</li>
+        <li>Vê apenas os <span class="highlight">próprios pagamentos</span> — privacidade total</li>
+        <li>Recebe <span class="highlight">aviso por WhatsApp</span> quando o pagamento sai</li>
+        <li>Baixa o <span class="highlight">comprovante mensal em PDF</span> pronto pro contador</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="color: #f0c64a;">A dor que isso resolve</h3>
+      <p style="margin-top: 8px;">
+        Antes: planilha do RH, fofoca sobre quanto cada um ganhou, espera de semanas pra saber o repasse.
+      </p>
+      <p style="margin-top: 14px;">
+        Agora: <span class="success">cada médico tem o próprio painel</span>, com seus números, no ar 24h por dia.
+      </p>
+      <p style="margin-top: 14px;">
+        Resultado: <span class="highlight">médicos engajados, menos desligamentos, mais agilidade na folha.</span>
+      </p>
+    </div>
+  </div>
+  <div class="slide-num">05 / 18</div>
+</div>
+
+<!-- SLIDE 6 — PACIENTE -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Funcionalidade 2 — Exclusivo do setor público</span>
+  <h2>O paciente vira parte<br>da gestão de saúde.</h2>
+
+  <div class="grid-2" style="margin-top: 20px;">
+    <div>
+      <h3>Como funciona</h3>
+      <ul>
+        <li>Médico ou enfermeiro mostra um <span class="highlight">QR Code</span> no atendimento</li>
+        <li>Paciente escaneia com o celular — abre direto, sem app</li>
+        <li>Tira uma <span class="highlight">selfie</span> e preenche dados básicos uma única vez</li>
+        <li>A partir daí, todo retorno é instantâneo — <span class="highlight">não precisa preencher de novo</span></li>
+      </ul>
+
+      <h3 style="margin-top: 28px;">Casos práticos</h3>
+      <ul>
+        <li>Inserção de DIU hoje → manutenção daqui 5 anos: dados lá</li>
+        <li>Vacina aplicada → calendário de reforço automático</li>
+        <li>Consulta pré-natal → histórico até o pós-parto</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="color: #f0c64a;">O ganho pra prefeitura</h3>
+      <p style="margin-top: 10px;">
+        Em pouco tempo, a Secretaria de Saúde tem um <span class="highlight">banco de dados próprio</span> de toda a população atendida — não mais o sistema federal lento.
+      </p>
+      <p style="margin-top: 16px;">
+        Isso permite:
+      </p>
+      <ul style="margin-top: 8px;">
+        <li>Convocação automática pra exames de rotina</li>
+        <li>Campanhas dirigidas por bairro/idade/condição</li>
+        <li>Indicadores reais pra prestar contas ao TCE</li>
+        <li>Continuidade do cuidado mesmo trocando profissional</li>
+      </ul>
+    </div>
+  </div>
+  <div class="slide-num">06 / 18</div>
+</div>
+
+<!-- SLIDE 7 — ANTIFRAUDE -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Funcionalidade 3</span>
+  <h2>Procedimento fantasma:<br><span class="accent">extinto.</span></h2>
+
+  <p style="font-size: 22px; max-width: 800px; margin-bottom: 30px;">
+    A plataforma cruza três informações antes de liberar qualquer pagamento:
+  </p>
+
+  <div class="grid-3" style="margin-top: 10px;">
+    <div class="card" style="text-align: center;">
+      <div class="icon">👨‍⚕️</div>
+      <strong style="color: #f0c64a; font-size: 14px; letter-spacing: 0.08em;">1. O QUE O MÉDICO LANÇOU</strong>
+      <p style="margin-top: 12px;">CRM, data, hora, código do procedimento, valor.</p>
+    </div>
+    <div class="card" style="text-align: center;">
+      <div class="icon">🤳</div>
+      <strong style="color: #f0c64a; font-size: 14px; letter-spacing: 0.08em;">2. O QUE O PACIENTE CONFIRMOU</strong>
+      <p style="margin-top: 12px;">Selfie no atendimento, geolocalização e data/hora do scan do QR.</p>
+    </div>
+    <div class="card" style="text-align: center;">
+      <div class="icon">🏥</div>
+      <strong style="color: #f0c64a; font-size: 14px; letter-spacing: 0.08em;">3. O QUE A PREFEITURA ESPERA</strong>
+      <p style="margin-top: 12px;">Tabela de procedimentos válidos, duração esperada, conformidade clínica.</p>
+    </div>
+  </div>
+
+  <p style="margin-top: 40px; font-size: 20px; max-width: 900px;">
+    <span class="success">Quando os 3 batem</span>, o pagamento é liberado automaticamente.<br>
+    <span class="danger">Quando algo não bate</span>, o sistema bloqueia e marca pra auditoria.
+  </p>
+  <div class="slide-num">07 / 18</div>
+</div>
+
+<!-- SLIDE 8 — VARIÁVEL NA FOLHA DA PREFEITURA -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Funcionalidade 4</span>
+  <h2>A variável vai direto<br>pra folha da prefeitura.</h2>
+
+  <p style="font-size: 19px; max-width: 900px; margin-bottom: 28px;">
+    Os profissionais são <span class="highlight">concursados</span> e recebem salário fixo pelo RH municipal.
+    A MedPag cuida apenas da <span class="highlight">parte variável</span> — os procedimentos executados — e entrega tudo pronto pro setor de pessoal lançar.
+  </p>
+
+  <div class="grid-2" style="margin-top: 10px;">
+    <div>
+      <h3>O fluxo de fechamento</h3>
+      <ul>
+        <li>Médicos lançam os procedimentos do mês</li>
+        <li>Pacientes confirmam os atendimentos via QR</li>
+        <li>Plataforma <span class="highlight">cruza, valida e bloqueia</span> o que não bate</li>
+        <li>Secretário aprova o fechamento mensal</li>
+        <li>Sistema gera o <span class="highlight">relatório de variável por servidor</span>, pronto pro RH</li>
+      </ul>
+
+      <h3 style="margin-top: 26px;">O que o RH recebe</h3>
+      <ul>
+        <li>Matrícula do servidor + valor da variável</li>
+        <li>Detalhamento de procedimentos (auditoria)</li>
+        <li>Memória de cálculo por código</li>
+        <li>Formato XLSX/CSV pronto pra importar</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="color: #f0c64a;">Aprovação em duas etapas</h3>
+      <p>O sistema <span class="highlight">nunca lança sozinho</span>. Antes de fechar o mês, exige:</p>
+      <ul style="margin-top: 12px;">
+        <li>Confirmação do total da variável</li>
+        <li>Confirmação da quantidade de profissionais</li>
+        <li>Assinatura digital do secretário de saúde</li>
+      </ul>
+      <p style="margin-top: 16px;">
+        Em caso de inconsistência — procedimento sem confirmação do paciente, valor fora do padrão, médico fora de escala — o sistema <span class="highlight">bloqueia, sinaliza e oferece correção</span>.
+      </p>
+    </div>
+  </div>
+  <div class="slide-num">08 / 18</div>
+</div>
+
+<!-- SLIDE 9 — INTEGRAÇÃO COM O RH -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Integração</span>
+  <h2>Conversamos com<br>qualquer sistema de RH.</h2>
+
+  <p style="font-size: 19px; max-width: 900px; margin-bottom: 30px;">
+    A MedPag se adapta ao sistema de folha que a prefeitura <span class="highlight">já usa</span> —
+    sem trocar nada, sem licitação adicional.
+  </p>
+
+  <div class="grid-3" style="margin-top: 10px;">
+    <div class="card">
+      <div class="icon">📊</div>
+      <strong style="color: #f0c64a; font-size: 13px; letter-spacing: 0.1em;">MODO 1 — RELATÓRIO</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px; margin-top: 10px;">O mais simples</h3>
+      <p style="margin-top: 10px;">RH baixa um <span class="highlight">XLSX/CSV mensal</span> e importa no sistema de folha. Funciona com qualquer sistema do mercado.</p>
+    </div>
+    <div class="card">
+      <div class="icon">🔌</div>
+      <strong style="color: #f0c64a; font-size: 13px; letter-spacing: 0.1em;">MODO 2 — INTEGRAÇÃO</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px; margin-top: 10px;">API direta</h3>
+      <p style="margin-top: 10px;">Sistemas modernos (Betha, IPM, Fiorilli, ADP, Senior) recebem os dados <span class="highlight">automaticamente via API</span>, sem ninguém digitar.</p>
+    </div>
+    <div class="card">
+      <div class="icon">🗂</div>
+      <strong style="color: #f0c64a; font-size: 13px; letter-spacing: 0.1em;">MODO 3 — eSOCIAL</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px; margin-top: 10px;">Para eventos S-1200</h3>
+      <p style="margin-top: 10px;">Plataforma também exporta <span class="highlight">no formato eSocial</span> quando o evento precisar ser informado à Receita.</p>
+    </div>
+  </div>
+
+  <p style="margin-top: 40px; text-align: center; font-size: 18px;">
+    <span class="success">Migração zero.</span> Mantemos o que já funciona, só automatizamos o que dá trabalho.
+  </p>
+  <div class="slide-num">09 / 18</div>
+</div>
+
+<!-- SLIDE 9 — DASHBOARD GESTÃO -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Funcionalidade 5</span>
+  <h2>Gestão em tempo real<br>na palma da mão.</h2>
+
+  <div class="grid-4" style="margin-top: 30px;">
+    <div class="stat card">
+      <div class="stat-num">R$ X</div>
+      <div class="stat-label">Total previsto<br>de pagamentos do mês</div>
+    </div>
+    <div class="stat card">
+      <div class="stat-num">XX</div>
+      <div class="stat-label">Procedimentos<br>lançados hoje</div>
+    </div>
+    <div class="stat card">
+      <div class="stat-num">XX</div>
+      <div class="stat-label">Pacientes únicos<br>atendidos no mês</div>
+    </div>
+    <div class="stat card">
+      <div class="stat-num">98%</div>
+      <div class="stat-label">Conformidade<br>(passou no antifraude)</div>
+    </div>
+  </div>
+
+  <p style="margin-top: 50px; font-size: 19px; max-width: 900px;">
+    O dashboard do secretário mostra <span class="highlight">tudo o que está acontecendo</span> agora:
+    quantos médicos estão ativos, quais procedimentos foram lançados hoje, quanto está previsto pagar,
+    quantos pacientes foram atendidos por bairro e por especialidade.
+  </p>
+  <p style="margin-top: 16px; font-size: 18px;">
+    Pronto pra <span class="highlight">prestar contas no TCE-RJ, na Câmara Municipal</span> ou pra imprensa em segundos.
+  </p>
+  <div class="slide-num">10 / 18</div>
+</div>
+
+<!-- SLIDE 10 — COMUNICAÇÃO + COMPROVANTE -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Funcionalidade 6</span>
+  <h2>WhatsApp, e-mail e comprovante PDF.</h2>
+
+  <div class="grid-2" style="margin-top: 20px;">
+    <div>
+      <h3>📲 Notificações automáticas</h3>
+      <ul>
+        <li>Médico recebe WhatsApp quando pagamento sai</li>
+        <li>Paciente recebe WhatsApp com data do próximo retorno</li>
+        <li>Secretário recebe alerta de inconsistência em tempo real</li>
+        <li>Auditoria interna recebe relatório mensal por e-mail</li>
+      </ul>
+
+      <h3 style="margin-top: 28px;">📄 Comprovante mensal</h3>
+      <p>Todo médico baixa um PDF mensal com:</p>
+      <ul style="margin-top: 8px;">
+        <li>Cada procedimento executado</li>
+        <li>Data, valor e identificação do paciente</li>
+        <li>Total bruto e líquido do mês</li>
+        <li>Pronto pra <span class="highlight">Carnê-Leão</span> e declaração de IR</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="color: #f0c64a;">Por que isso importa</h3>
+      <p>
+        O médico autônomo precisa declarar imposto todo mês. Hoje ele garimpa essas informações em planilhas, recibos avulsos ou solicita ao RH.
+      </p>
+      <p style="margin-top: 16px;">
+        Com a MedPag, o comprovante é <span class="success">gerado e enviado automaticamente</span> — atendendo às exigências da Receita Federal.
+      </p>
+      <p style="margin-top: 16px;">
+        <span class="highlight">Resultado:</span> menos burocracia, menos reclamação no RH, mais médicos satisfeitos.
+      </p>
+    </div>
+  </div>
+  <div class="slide-num">11 / 18</div>
+</div>
+
+<!-- SLIDE 11 — SEGURANÇA E LGPD -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Funcionalidade 7</span>
+  <h2>Segurança e LGPD<br>como padrão.</h2>
+
+  <div class="grid-3" style="margin-top: 20px;">
+    <div class="card">
+      <div class="icon">🔒</div>
+      <h3 style="color: #f0c64a;">Criptografia ponta a ponta</h3>
+      <p>CPF, dados bancários e informações do paciente <span class="highlight">criptografados no banco de dados</span>. Mesmo um vazamento técnico não expõe dados pessoais.</p>
+    </div>
+    <div class="card">
+      <div class="icon">🪪</div>
+      <h3 style="color: #f0c64a;">Auditoria imutável</h3>
+      <p>Cada lançamento, edição e aprovação é <span class="highlight">registrado com assinatura digital</span>, IP e horário. Nada some, nada é alterado sem rastro.</p>
+    </div>
+    <div class="card">
+      <div class="icon">⚖️</div>
+      <h3 style="color: #f0c64a;">LGPD by design</h3>
+      <p>Plataforma desenhada desde o início para atender a Lei Geral de Proteção de Dados — direito de portabilidade, exclusão e relatório de impacto.</p>
+    </div>
+  </div>
+
+  <p style="margin-top: 40px; font-size: 18px; max-width: 900px;">
+    Atende às exigências do <span class="highlight">TCE-RJ, do CFM e do Ministério da Saúde</span>.
+    Dados ficam armazenados no Brasil, em servidores certificados, com backup automático.
+  </p>
+  <div class="slide-num">12 / 18</div>
+</div>
+
+<!-- SLIDE 13 — MEDPAG VITAL (TECNOLOGIA) -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Diferencial exclusivo — em desenvolvimento</span>
+  <h2>MedPag Sentinela:<br>antifraude por <span class="accent">física.</span></h2>
+
+  <p style="font-size: 19px; max-width: 950px; margin-bottom: 28px;">
+    Pequenos sensores instalados nas salas detectam <span class="highlight">presença, movimento, batimento cardíaco e respiração</span>
+    do paciente — <strong>sem câmera, sem usar wearable, sem invadir privacidade</strong>.
+    O sistema confirma que o procedimento <span class="highlight">realmente aconteceu</span>, com a duração e
+    a equipe certas.
+  </p>
+
+  <div class="grid-3" style="margin-top: 10px;">
+    <div class="card">
+      <div class="icon">📡</div>
+      <strong style="color: #f0c64a; font-size: 13px; letter-spacing: 0.1em;">TECNOLOGIA</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px; margin-top: 10px;">WiFi sensing + IA</h3>
+      <p style="margin-top: 10px;">Chip do tamanho de uma caixa de fósforo lê os reflexos do sinal WiFi e identifica corpos humanos com <span class="highlight">precisão de 100%</span> no benchmark do modelo.</p>
+    </div>
+    <div class="card">
+      <div class="icon">🛏️</div>
+      <strong style="color: #f0c64a; font-size: 13px; letter-spacing: 0.1em;">O QUE DETECTA</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px; margin-top: 10px;">Presença, vitais, quedas</h3>
+      <p style="margin-top: 10px;">Quantas pessoas na sala, paciente deitado/em pé, batimento, respiração, queda em enfermaria — em <span class="highlight">tempo real</span>.</p>
+    </div>
+    <div class="card">
+      <div class="icon">🛡️</div>
+      <strong style="color: #f0c64a; font-size: 13px; letter-spacing: 0.1em;">PRIVACIDADE</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px; margin-top: 10px;">LGPD by design</h3>
+      <p style="margin-top: 10px;">Modo privacidade: o sensor só publica <span class="highlight">eventos semânticos</span> ("alguém caiu") — dados biométricos brutos <strong>nunca saem do dispositivo</strong>.</p>
+    </div>
+  </div>
+
+  <p style="margin-top: 38px; text-align: center; font-size: 19px;">
+    Antes confiávamos em assinatura.<br>
+    Agora confiamos em <span class="accent" style="font-weight: 700;">física</span>.
+  </p>
+  <div class="slide-num">13 / 18</div>
+</div>
+
+<!-- SLIDE 14 — SENTINELA NÃO PROTEGE SÓ PAGAMENTO -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">O alcance do Sentinela</span>
+  <h2>Não é só antifraude.<br>É a <span class="accent">caixa-preta</span> da saúde pública.</h2>
+
+  <p style="font-size: 19px; max-width: 950px; margin-bottom: 28px;">
+    O sensor de presença e sinais vitais não vê só pagamento — vê <span class="highlight">tudo que acontece em volta do paciente</span>.
+    Por isso ele protege quem cuida, quem é cuidado e a própria instituição.
+  </p>
+
+  <div class="grid-3" style="margin-top: 10px;">
+    <div class="card">
+      <div class="icon">🛡️</div>
+      <strong style="color: #f0c64a; font-size: 13px; letter-spacing: 0.1em;">PACIENTE</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px; margin-top: 10px;">Segurança real</h3>
+      <ul style="margin-top: 10px; padding-left: 18px;">
+        <li><strong>Queda detectada</strong> em 2 segundos</li>
+        <li>Saída de cama sem ajuda → alerta</li>
+        <li>Padrão respiratório anormal → equipe avisada antes do alarme padrão</li>
+        <li>Idoso parado tempo demais (anomalia) → checagem</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="icon">👩‍⚕️</div>
+      <strong style="color: #f0c64a; font-size: 13px; letter-spacing: 0.1em;">PROFISSIONAL</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px; margin-top: 10px;">Testemunha que não dorme</h3>
+      <ul style="margin-top: 10px; padding-left: 18px;">
+        <li>Médica acusada injustamente → dado defende</li>
+        <li>Botão de pânico passivo (sensor já detecta agressão)</li>
+        <li>Plantonista no leito → presença comprovada</li>
+        <li>Equipe completa em cirurgia → registrado</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="icon">⚖️</div>
+      <strong style="color: #f0c64a; font-size: 13px; letter-spacing: 0.1em;">INSTITUIÇÃO</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px; margin-top: 10px;">Defesa técnica</h3>
+      <ul style="margin-top: 10px; padding-left: 18px;">
+        <li>Processo de família → prova de cuidado</li>
+        <li>Auditoria do TCE → relatório pronto</li>
+        <li>Acreditação ONA → indicadores automatizados</li>
+        <li>Acompanhamento de qualidade do atendimento</li>
+      </ul>
+    </div>
+  </div>
+
+  <p style="margin-top: 38px; text-align: center; font-size: 18px;">
+    A saúde pública precisa de uma <span class="highlight">testemunha que não pisca, não dorme, não tem opinião</span>.
+    O Sentinela é isso.
+  </p>
+  <div class="slide-num">14 / 18</div>
+</div>
+
+<!-- SLIDE 15 — ROADMAP POR ONDAS -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Roadmap de implementação</span>
+  <h2>Entrega em <span class="accent">3 ondas.</span><br>Cada uma com valor visível.</h2>
+
+  <p style="font-size: 19px; max-width: 950px; margin-bottom: 32px;">
+    A Prefeitura não compra promessa — compra <span class="highlight">entrega medível mês a mês</span>.
+    Cada onda começa antes da anterior terminar.
+  </p>
+
+  <div class="grid-3" style="margin-top: 10px;">
+    <div class="card" style="border-color: rgba(182, 194, 131, 0.5);">
+      <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px;">
+        <span style="font-size: 36px; font-weight: 800; color: #b6c283;">1</span>
+        <strong style="color: #b6c283; font-size: 12px; letter-spacing: 0.15em;">ONDA 1 — 0-3 MESES</strong>
+      </div>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px;">Núcleo operacional</h3>
+      <ul style="margin-top: 12px; padding-left: 18px;">
+        <li>Lançamento por médico (CRM)</li>
+        <li>Confirmação do paciente (QR)</li>
+        <li>Variável pronta pra folha do RH</li>
+        <li>Dashboard de gestão</li>
+        <li>WhatsApp + comprovantes</li>
+      </ul>
+      <p style="margin-top: 12px; font-size: 13px; color: rgba(245, 247, 239, 0.6); font-style: italic;">
+        Resultado: pagamento automatizado já no 1º mês.
+      </p>
+    </div>
+    <div class="card" style="border-color: rgba(240, 198, 74, 0.5);">
+      <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px;">
+        <span style="font-size: 36px; font-weight: 800; color: #f0c64a;">2</span>
+        <strong style="color: #f0c64a; font-size: 12px; letter-spacing: 0.15em;">ONDA 2 — 3-6 MESES</strong>
+      </div>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px;">Antifraude completo</h3>
+      <ul style="margin-top: 12px; padding-left: 18px;">
+        <li>Selfie + biometria do paciente</li>
+        <li>Cruzamento de evidências</li>
+        <li>Auditoria automática 1-clique</li>
+        <li>Veredito sugerido por IA</li>
+        <li>Bloqueio preventivo de fraude</li>
+      </ul>
+      <p style="margin-top: 12px; font-size: 13px; color: rgba(245, 247, 239, 0.6); font-style: italic;">
+        Resultado: 95% das fraudes barradas antes de pagar.
+      </p>
+    </div>
+    <div class="card" style="border-color: rgba(255, 138, 128, 0.5);">
+      <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px;">
+        <span style="font-size: 36px; font-weight: 800; color: #ff8a80;">3</span>
+        <strong style="color: #ff8a80; font-size: 12px; letter-spacing: 0.15em;">ONDA 3 — 6-12 MESES</strong>
+      </div>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px;">MedPag Sentinela nas salas</h3>
+      <ul style="margin-top: 12px; padding-left: 18px;">
+        <li>Sensores instalados (piloto)</li>
+        <li>Confirmação por <strong>física</strong></li>
+        <li>Sinais vitais sem wearable</li>
+        <li>Queda em enfermaria detectada</li>
+        <li>UTI monitorada sem câmera</li>
+      </ul>
+      <p style="margin-top: 12px; font-size: 13px; color: rgba(245, 247, 239, 0.6); font-style: italic;">
+        Resultado: Guapimirim pioneira nacional.
+      </p>
+    </div>
+  </div>
+
+  <p style="margin-top: 38px; text-align: center; font-size: 17px;">
+    <span class="highlight">Você não compra um software.</span> Compra um caminho de modernização — com cada degrau entregue por contrato.
+  </p>
+  <div class="slide-num">15 / 18</div>
+</div>
+
+<!-- SLIDE 15 — COMPARATIVO -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Comparativo</span>
+  <h2>Antes e depois<br>da MedPag.</h2>
+
+  <div class="compare">
+    <div class="compare-col bad">
+      <h3 style="color: #ff8a80;">❌ HOJE (planilha + manual)</h3>
+      <ul>
+        <li>Planilha que todos veem</li>
+        <li>Pagamento errado todo mês</li>
+        <li>Paciente preenche papel toda visita</li>
+        <li>Não tem como provar que o procedimento aconteceu</li>
+        <li>Auditoria leva semanas</li>
+        <li>Médico bravo, paciente perdido</li>
+        <li>Dados em planilha Excel</li>
+        <li>Risco de multa LGPD</li>
+        <li>Sem comprovante automático</li>
+        <li>RH gasta dias por mês com folha</li>
+      </ul>
+    </div>
+    <div class="compare-col good">
+      <h3 style="color: #b6c283;">✅ COM A MEDPAG</h3>
+      <ul>
+        <li>Cada médico vê só o seu</li>
+        <li>Validação automática antes de pagar</li>
+        <li>Paciente preenche uma vez na vida</li>
+        <li>Selfie + presença confirmam atendimento</li>
+        <li>Auditoria com 1 clique</li>
+        <li>Médico no controle, paciente cadastrado</li>
+        <li>Dados criptografados e seguros</li>
+        <li>LGPD cumprida desde a primeira tela</li>
+        <li>PDF mensal automático pro IR</li>
+        <li>RH foca em gestão, não digitação</li>
+      </ul>
+    </div>
+  </div>
+  <div class="slide-num">16 / 18</div>
+</div>
+
+<!-- SLIDE 13 — PROPOSTA PILOTO -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Proposta para Guapimirim</span>
+  <h2>Vamos começar com<br>um piloto?</h2>
+
+  <div class="grid-3" style="margin-top: 30px;">
+    <div class="card">
+      <strong style="color: #f0c64a; letter-spacing: 0.1em; font-size: 12px;">FASE 1 — 30 DIAS</strong>
+      <h3 style="margin-top: 12px; color: #f5f7ef; text-transform: none; font-size: 18px;">Implantação</h3>
+      <ul style="margin-top: 14px;">
+        <li>Cadastro dos médicos da rede</li>
+        <li>Configuração da tabela de procedimentos</li>
+        <li>Treinamento da equipe da Secretaria</li>
+        <li>QR codes prontos nas UBSs</li>
+      </ul>
+    </div>
+    <div class="card">
+      <strong style="color: #f0c64a; letter-spacing: 0.1em; font-size: 12px;">FASE 2 — 60 DIAS</strong>
+      <h3 style="margin-top: 12px; color: #f5f7ef; text-transform: none; font-size: 18px;">Operação assistida</h3>
+      <ul style="margin-top: 14px;">
+        <li>Médicos começam a lançar pela plataforma</li>
+        <li>Pacientes começam a se cadastrar</li>
+        <li>Primeiros fechamentos com nossa supervisão</li>
+        <li>Ajustes finos da operação</li>
+      </ul>
+    </div>
+    <div class="card">
+      <strong style="color: #f0c64a; letter-spacing: 0.1em; font-size: 12px;">FASE 3 — A PARTIR DE 90 DIAS</strong>
+      <h3 style="margin-top: 12px; color: #f5f7ef; text-transform: none; font-size: 18px;">Operação plena</h3>
+      <ul style="margin-top: 14px;">
+        <li>Prefeitura opera sozinha</li>
+        <li>Suporte contínuo da MedPag</li>
+        <li>Relatórios mensais pro TCE</li>
+        <li>Expansão para outras secretarias</li>
+      </ul>
+    </div>
+  </div>
+
+  <p style="margin-top: 40px; text-align: center; font-size: 19px;">
+    <span class="highlight">Sem investimento inicial em hardware.</span> Tudo na nuvem, acessível pelo navegador.<br>
+    Funciona em qualquer celular, tablet ou computador.
+  </p>
+  <div class="slide-num">17 / 18</div>
+</div>
+
+<!-- SLIDE 14 — CONTATO -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <div class="cover-art">🤝</div>
+
+  <span class="eyebrow">Próximos passos</span>
+  <h2>Vamos transformar a saúde<br>de Guapimirim.</h2>
+
+  <p class="subtitle" style="margin-top: 20px;">
+    Estamos prontos para uma reunião técnica com a Secretaria e demonstração<br>
+    ao vivo da plataforma em qualquer data que for melhor pra prefeitura.
+  </p>
+
+  <div class="cta-box" style="max-width: 700px;">
+    <div class="label">CONTATO DIRETO</div>
+    <div style="font-size: 22px; font-weight: 600; color: #f5f7ef;">Felício</div>
+    <div class="contact">📱 (preencher seu WhatsApp)</div>
+    <div class="contact">✉️ contato@medpag.com.br</div>
+    <div class="contact" style="margin-top: 14px;">
+      🌐 <a href="https://med-pay-91t6.vercel.app" style="color: #f0c64a;">med-pay-91t6.vercel.app</a>
+    </div>
+  </div>
+
+  <p style="margin-top: 40px; font-size: 14px; color: rgba(245, 247, 239, 0.5); text-align: center;">
+    MedPag · Plataforma de pagamentos e gestão para a saúde brasileira<br>
+    Solução para redes pública e privada
+  </p>
+  <div class="slide-num">18 / 18</div>
+</div>
+
+<!-- Navegação -->
+<div class="nav">
+  <button id="prevBtn" onclick="prev()">← Anterior</button>
+  <button id="nextBtn" onclick="next()">Próximo →</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let current = 0;
+
+  function show(idx) {
+    slides.forEach((s, i) => s.classList.toggle('active', i === idx));
+    document.getElementById('prevBtn').disabled = idx === 0;
+    document.getElementById('nextBtn').disabled = idx === slides.length - 1;
+  }
+  function next() { if (current < slides.length - 1) { current++; show(current); } }
+  function prev() { if (current > 0) { current--; show(current); } }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ') next();
+    if (e.key === 'ArrowLeft') prev();
+  });
+
+  show(0);
+</script>
+
+</body>
+</html>

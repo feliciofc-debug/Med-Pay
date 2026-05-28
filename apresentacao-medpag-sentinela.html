@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedPag Sentinela — A caixa-preta da saúde pública</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #1f2412;
+    color: #f5f7ef;
+    overflow: hidden;
+  }
+  .slide {
+    width: 100vw;
+    height: 100vh;
+    display: none;
+    padding: 60px 80px;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    background: linear-gradient(135deg, #1f2412 0%, #353d24 50%, #525f30 100%);
+  }
+  .slide.active { display: flex; }
+  .logo {
+    position: absolute;
+    top: 30px;
+    left: 40px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-square {
+    width: 36px;
+    height: 36px;
+    background: #353d24;
+    border: 1px solid rgba(240, 198, 74, 0.4);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f0c64a;
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .logo-text {
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    font-size: 14px;
+    color: #f5f7ef;
+  }
+  .slide-num {
+    position: absolute;
+    bottom: 28px;
+    right: 40px;
+    font-size: 12px;
+    color: rgba(245, 247, 239, 0.4);
+    letter-spacing: 0.1em;
+  }
+  .nav {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    z-index: 100;
+  }
+  .nav button {
+    background: rgba(240, 198, 74, 0.1);
+    color: #f0c64a;
+    border: 1px solid rgba(240, 198, 74, 0.3);
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  .nav button:hover {
+    background: rgba(240, 198, 74, 0.2);
+    border-color: rgba(240, 198, 74, 0.6);
+  }
+  .nav button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  h1 {
+    font-size: 76px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+  h1 .accent {
+    background: linear-gradient(135deg, #f0c64a 0%, #e9b22a 50%, #d29215 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  h2 {
+    font-size: 48px;
+    font-weight: 700;
+    margin-bottom: 32px;
+    color: #f5f7ef;
+    letter-spacing: -0.01em;
+  }
+  h3 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    color: #f0c64a;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  p, li {
+    font-size: 20px;
+    line-height: 1.55;
+    color: rgba(245, 247, 239, 0.85);
+    margin-bottom: 10px;
+  }
+  .subtitle {
+    font-size: 26px;
+    color: rgba(245, 247, 239, 0.7);
+    margin-bottom: 40px;
+    line-height: 1.4;
+  }
+  .eyebrow {
+    display: inline-block;
+    padding: 6px 14px;
+    background: rgba(240, 198, 74, 0.12);
+    border: 1px solid rgba(240, 198, 74, 0.35);
+    border-radius: 999px;
+    color: #f0c64a;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+  .highlight { color: #f0c64a; font-weight: 600; }
+  .success { color: #b6c283; font-weight: 600; }
+  .danger { color: #ff8a80; font-weight: 600; }
+  .accent {
+    background: linear-gradient(135deg, #f0c64a 0%, #d29215 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 700;
+  }
+
+  ul { list-style: none; padding-left: 0; }
+  li {
+    padding-left: 28px;
+    position: relative;
+    margin-bottom: 12px;
+  }
+  li::before {
+    content: "▸";
+    position: absolute;
+    left: 0;
+    color: #f0c64a;
+    font-weight: 700;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: start;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  .grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+
+  .card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(240, 198, 74, 0.2);
+    border-radius: 14px;
+    padding: 28px;
+    transition: all 0.2s;
+  }
+  .card:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(240, 198, 74, 0.4);
+  }
+  .card h3 { font-size: 15px; margin-bottom: 10px; }
+  .card p, .card li {
+    font-size: 15px;
+    line-height: 1.5;
+    margin-bottom: 6px;
+  }
+  .card li { padding-left: 22px; margin-bottom: 8px; }
+  .card .icon {
+    font-size: 32px;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  .stat-num {
+    font-size: 64px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #f0c64a 0%, #d29215 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+    margin-bottom: 12px;
+  }
+
+  .quote {
+    font-size: 26px;
+    font-style: italic;
+    color: #f5f7ef;
+    line-height: 1.5;
+    border-left: 4px solid #f0c64a;
+    padding: 12px 0 12px 28px;
+    margin: 30px 0;
+  }
+  .quote-author {
+    font-size: 16px;
+    color: rgba(245, 247, 239, 0.6);
+    margin-top: 14px;
+    font-style: normal;
+  }
+
+  .cta-box {
+    margin-top: 30px;
+    padding: 30px;
+    background: linear-gradient(135deg, rgba(240, 198, 74, 0.15) 0%, rgba(146, 167, 75, 0.1) 100%);
+    border: 1px solid rgba(240, 198, 74, 0.4);
+    border-radius: 16px;
+    text-align: center;
+  }
+  .cta-box .label {
+    color: #f0c64a;
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .cta-box .contact {
+    font-size: 18px;
+    color: #f5f7ef;
+    margin-top: 6px;
+  }
+
+  .cover-art {
+    position: absolute;
+    right: 60px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 240px;
+    opacity: 0.08;
+    pointer-events: none;
+  }
+
+  .table-compare {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    font-size: 16px;
+  }
+  .table-compare th,
+  .table-compare td {
+    text-align: left;
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(240, 198, 74, 0.15);
+  }
+  .table-compare th {
+    color: #f0c64a;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 12px;
+    background: rgba(240, 198, 74, 0.06);
+  }
+  .table-compare td:first-child { font-weight: 600; color: #f5f7ef; }
+
+  @media print {
+    .slide { display: flex !important; page-break-after: always; }
+    .nav { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- SLIDE 1 — CAPA -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Tecnologia exclusiva no Brasil</span>
+  <h1>MedPag<br><span class="accent">Sentinela</span></h1>
+  <p class="subtitle">
+    A primeira "caixa-preta" hospitalar do Brasil.<br>
+    Detecta presença, vitais e quedas — <strong>sem câmera</strong>, <strong>sem wearable</strong>, <strong>sem invadir privacidade</strong>.
+  </p>
+  <p style="font-size: 16px; color: rgba(245, 247, 239, 0.5); margin-top: 40px;">
+    Proteção do paciente · Defesa do profissional · Escudo jurídico da instituição
+  </p>
+  <div class="cover-art">🛡️</div>
+  <div class="slide-num">01 / 09</div>
+</div>
+
+<!-- SLIDE 2 — O PROBLEMA -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">O problema invisível</span>
+  <h2>Dentro do quarto do hospital,<br>a verdade fica trancada.</h2>
+
+  <div class="grid-3" style="margin-top: 10px;">
+    <div class="card">
+      <div class="icon">⚖️</div>
+      <strong style="color: #ff8a80; font-size: 13px; letter-spacing: 0.1em;">CASO 1</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 16px; margin-top: 8px;">Agressão em leito</h3>
+      <p style="margin-top: 10px;">Médica denuncia ter sido agredida por paciente influente em quarto fechado. <strong>Sem testemunha, sem câmera, sem prova.</strong> Processo arrasta há anos.</p>
+    </div>
+    <div class="card">
+      <div class="icon">👴</div>
+      <strong style="color: #ff8a80; font-size: 13px; letter-spacing: 0.1em;">CASO 2</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 16px; margin-top: 8px;">Maus-tratos em asilo</h3>
+      <p style="margin-top: 10px;">1 em cada 6 idosos sofre algum tipo de abuso. <strong>A esmagadora maioria nunca é denunciada</strong> — porque não há como provar.</p>
+    </div>
+    <div class="card">
+      <div class="icon">💉</div>
+      <strong style="color: #ff8a80; font-size: 13px; letter-spacing: 0.1em;">CASO 3</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 16px; margin-top: 8px;">"Anjos da morte"</h3>
+      <p style="margin-top: 10px;">Enfermeiros que mataram dezenas de pacientes terminais ao longo de anos. <strong>Só são descobertos quando alguém pede autópsia por desconfiança.</strong></p>
+    </div>
+  </div>
+
+  <p style="margin-top: 32px; text-align: center; font-size: 18px;">
+    O denominador comum: <span class="danger">nenhuma prova técnica do que aconteceu no leito</span>.
+  </p>
+  <div class="slide-num">02 / 09</div>
+</div>
+
+<!-- SLIDE 3 — A SOLUÇÃO -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">A solução</span>
+  <h2>Uma testemunha<br>que <span class="accent">não pisca, não dorme, não tem opinião.</span></h2>
+
+  <p style="font-size: 21px; max-width: 900px; line-height: 1.55;">
+    O <span class="highlight">MedPag Sentinela</span> instala um pequeno sensor (do tamanho de uma caixa de fósforo) em cada ambiente crítico do hospital.
+    Ele lê os <span class="highlight">reflexos do sinal de WiFi e ondas milimétricas</span> e identifica em tempo real:
+  </p>
+
+  <div class="grid-4" style="margin-top: 32px;">
+    <div class="card" style="text-align: center;">
+      <div class="icon">👥</div>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 14px;">Quantas pessoas estão na sala</h3>
+    </div>
+    <div class="card" style="text-align: center;">
+      <div class="icon">🛏️</div>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 14px;">Postura (em pé / sentado / deitado)</h3>
+    </div>
+    <div class="card" style="text-align: center;">
+      <div class="icon">💗</div>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 14px;">Batimento cardíaco e respiração</h3>
+    </div>
+    <div class="card" style="text-align: center;">
+      <div class="icon">⚠️</div>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 14px;">Quedas e movimentos bruscos</h3>
+    </div>
+  </div>
+
+  <p style="margin-top: 36px; text-align: center; font-size: 18px;">
+    Tudo <span class="highlight">sem câmera</span>, <span class="highlight">sem cabo no paciente</span>, <span class="highlight">sem aplicativo</span>.<br>
+    O sensor vê <strong>movimento</strong>, não vê <strong>imagem</strong>.
+  </p>
+  <div class="slide-num">03 / 09</div>
+</div>
+
+<!-- SLIDE 4 — COMO FUNCIONA -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Como funciona</span>
+  <h2>WiFi sensing + IA<br>em hardware de baixo custo.</h2>
+
+  <div class="grid-2" style="margin-top: 20px;">
+    <div>
+      <h3>O princípio físico</h3>
+      <p style="font-size: 18px; margin-top: 12px;">
+        Quando alguém se mexe num ambiente, o corpo humano <span class="highlight">altera o sinal de WiFi de forma única</span>
+        (água absorve e desvia ondas eletromagnéticas).
+      </p>
+      <p style="font-size: 18px; margin-top: 12px;">
+        Um modelo de IA pequeno e treinado (<span class="highlight">apenas 8 KB</span>, roda em microcontrolador) lê essas distorções
+        e infere o que está acontecendo na sala.
+      </p>
+      <p style="font-size: 18px; margin-top: 12px;">
+        É a mesma física de um <strong>radar de aeroporto</strong> — mas em escala doméstica, usando o WiFi que já está lá.
+      </p>
+    </div>
+    <div class="card">
+      <h3 style="color: #f0c64a;">Pipeline de processamento</h3>
+      <ul style="margin-top: 14px;">
+        <li><strong>Hardware:</strong> chip ESP32 (~R$ 80) instalado no teto</li>
+        <li><strong>Captura:</strong> 20 leituras por segundo do canal WiFi</li>
+        <li><strong>IA local:</strong> modelo treinado roda no próprio chip</li>
+        <li><strong>Servidor:</strong> recebe só eventos semânticos via API</li>
+        <li><strong>MedPag:</strong> integra com prontuário, gera alertas e relatórios</li>
+      </ul>
+      <p style="margin-top: 14px; font-size: 14px; color: rgba(245, 247, 239, 0.6); font-style: italic;">
+        Hardware comodity. Inteligência proprietária.
+      </p>
+    </div>
+  </div>
+  <div class="slide-num">04 / 09</div>
+</div>
+
+<!-- SLIDE 5 — TRÊS PILARES DE VALOR -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">O alcance do Sentinela</span>
+  <h2>Três pilares.<br>Três grupos protegidos.</h2>
+
+  <div class="grid-3" style="margin-top: 20px;">
+    <div class="card">
+      <div class="icon">🛡️</div>
+      <strong style="color: #f0c64a; font-size: 12px; letter-spacing: 0.15em;">PILAR 1</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px; margin-top: 8px;">Paciente protegido</h3>
+      <ul style="margin-top: 12px;">
+        <li>Queda em 2 segundos</li>
+        <li>Saída de cama com risco</li>
+        <li>Parada respiratória antes do alarme</li>
+        <li>Distress fisiológico</li>
+        <li>Idoso parado tempo demais</li>
+        <li>Tentativa de suicídio em psiquiatria</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="icon">👩‍⚕️</div>
+      <strong style="color: #f0c64a; font-size: 12px; letter-spacing: 0.15em;">PILAR 2</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px; margin-top: 8px;">Profissional defendido</h3>
+      <ul style="margin-top: 12px;">
+        <li>Acusação falsa de assédio</li>
+        <li>Negligência alegada</li>
+        <li>Botão de pânico <strong>passivo</strong></li>
+        <li>Presença em plantão comprovada</li>
+        <li>Cumprimento de protocolo registrado</li>
+        <li>Equipe completa em cirurgia</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="icon">⚖️</div>
+      <strong style="color: #f0c64a; font-size: 12px; letter-spacing: 0.15em;">PILAR 3</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 17px; margin-top: 8px;">Instituição blindada</h3>
+      <ul style="margin-top: 12px;">
+        <li>Processo de família: prova técnica</li>
+        <li>Auditoria do TCE: dado pronto</li>
+        <li>Acreditação ONA/JCI</li>
+        <li>Antifraude de procedimento</li>
+        <li>Indicadores automáticos de qualidade</li>
+        <li>Defesa em CPI / Ministério Público</li>
+      </ul>
+    </div>
+  </div>
+  <div class="slide-num">05 / 09</div>
+</div>
+
+<!-- SLIDE 6 — PRIVACIDADE -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Privacidade by design</span>
+  <h2>A primeira solução de saúde<br><span class="accent">LGPD-compliant por física.</span></h2>
+
+  <div class="grid-2" style="margin-top: 20px;">
+    <div>
+      <p style="font-size: 19px; line-height: 1.6;">
+        Câmera viu o que aconteceu? <span class="danger">Vazou.</span><br>
+        Wearable do paciente? <span class="danger">Vazou.</span><br>
+        Servidor com dados biométricos? <span class="danger">Vazou.</span>
+      </p>
+      <p style="font-size: 19px; line-height: 1.6; margin-top: 20px;">
+        O <span class="highlight">Sentinela</span> resolve isso por desenho.
+        No <span class="highlight">modo privacidade</span>, o sensor:
+      </p>
+      <ul style="margin-top: 16px;">
+        <li>Processa o sinal <strong>no próprio chip</strong></li>
+        <li>Publica só <span class="highlight">eventos semânticos</span> ("alguém caiu", "sala vazia")</li>
+        <li>Dados brutos de batimento e respiração <strong>nunca saem do dispositivo</strong></li>
+        <li>Imagem, áudio ou identidade pessoal: <strong>nunca existem</strong></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="color: #f0c64a;">O que sobe pra rede</h3>
+      <table style="width: 100%; margin-top: 14px; font-size: 14px;">
+        <tr style="border-bottom: 1px solid rgba(240, 198, 74, 0.15);">
+          <td style="padding: 8px 0;">Imagem do paciente</td>
+          <td style="text-align: right;"><span class="danger">❌ nunca</span></td>
+        </tr>
+        <tr style="border-bottom: 1px solid rgba(240, 198, 74, 0.15);">
+          <td style="padding: 8px 0;">Áudio do quarto</td>
+          <td style="text-align: right;"><span class="danger">❌ nunca</span></td>
+        </tr>
+        <tr style="border-bottom: 1px solid rgba(240, 198, 74, 0.15);">
+          <td style="padding: 8px 0;">Identificação biométrica</td>
+          <td style="text-align: right;"><span class="danger">❌ nunca</span></td>
+        </tr>
+        <tr style="border-bottom: 1px solid rgba(240, 198, 74, 0.15);">
+          <td style="padding: 8px 0;">Batimento bruto (privacy mode)</td>
+          <td style="text-align: right;"><span class="danger">❌ bloqueado</span></td>
+        </tr>
+        <tr style="border-bottom: 1px solid rgba(240, 198, 74, 0.15);">
+          <td style="padding: 8px 0;">Evento "queda detectada"</td>
+          <td style="text-align: right;"><span class="success">✓ sim</span></td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0;">Contagem de pessoas</td>
+          <td style="text-align: right;"><span class="success">✓ sim</span></td>
+        </tr>
+      </table>
+      <p style="margin-top: 14px; font-size: 13px; font-style: italic; color: rgba(245, 247, 239, 0.6);">
+        O sensor <strong>nunca</strong> sabe quem é quem. Só sabe que <strong>algo aconteceu</strong>.
+      </p>
+    </div>
+  </div>
+  <div class="slide-num">06 / 09</div>
+</div>
+
+<!-- SLIDE 7 — MERCADO E REGULAÇÃO -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Mercado e regulação</span>
+  <h2>Hoje é diferencial.<br><span class="accent">Amanhã será exigência.</span></h2>
+
+  <p style="font-size: 19px; max-width: 950px;">
+    Todo padrão de segurança nasce opcional e termina obrigatório.
+    O Sentinela está exatamente nesse ponto inicial.
+  </p>
+
+  <table class="table-compare" style="margin-top: 24px;">
+    <thead>
+      <tr>
+        <th>Setor</th>
+        <th>Começou como</th>
+        <th>Hoje é</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Caixa-preta em avião</td>
+        <td>Opcional (1958)</td>
+        <td><span class="success">Universal e obrigatório</span></td>
+      </tr>
+      <tr>
+        <td>ABS em carro</td>
+        <td>Luxo (anos 80)</td>
+        <td><span class="success">Lei obriga em todos</span></td>
+      </tr>
+      <tr>
+        <td>Câmera corporal em policial</td>
+        <td>Piloto (2014)</td>
+        <td><span class="success">Obrigatório em vários estados</span></td>
+      </tr>
+      <tr>
+        <td>Câmera em viatura</td>
+        <td>Opcional</td>
+        <td><span class="success">Exigida em licitação</span></td>
+      </tr>
+      <tr style="background: rgba(240, 198, 74, 0.08);">
+        <td><strong>Sensor de presença em hospital</strong></td>
+        <td><strong>Hoje (2026)</strong></td>
+        <td><span class="highlight">??? (você decide)</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p style="margin-top: 30px; text-align: center; font-size: 18px;">
+    Quem chega <span class="highlight">primeiro</span> no mercado define o padrão.<br>
+    Quem chega depois <span class="highlight">paga mais</span> pra se adequar.
+  </p>
+  <div class="slide-num">07 / 09</div>
+</div>
+
+<!-- SLIDE 8 — PACOTES E IMPLEMENTAÇÃO -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Implementação</span>
+  <h2>Comece com 1 leito.<br>Escale pra todo o hospital.</h2>
+
+  <p style="font-size: 19px; max-width: 950px; margin-bottom: 28px;">
+    Não exige obra, não exige troca de sistemas. O sensor é <strong>plug-and-play</strong>: liga numa tomada,
+    conecta no WiFi e em <span class="highlight">15 minutos</span> está enviando eventos pro painel.
+  </p>
+
+  <div class="grid-3" style="margin-top: 10px;">
+    <div class="card">
+      <strong style="color: #b6c283; font-size: 12px; letter-spacing: 0.15em;">PILOTO</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 18px; margin-top: 8px;">1 unidade — 30 dias</h3>
+      <ul style="margin-top: 14px;">
+        <li>1 sensor instalado</li>
+        <li>1 ambiente monitorado</li>
+        <li>Painel completo</li>
+        <li>Treinamento da equipe</li>
+        <li>Relatório de 30 dias</li>
+      </ul>
+      <p style="margin-top: 14px; font-size: 13px; font-style: italic; color: rgba(245, 247, 239, 0.6);">
+        Valida a tecnologia no seu hospital antes de escalar.
+      </p>
+    </div>
+    <div class="card" style="border-color: rgba(240, 198, 74, 0.5);">
+      <strong style="color: #f0c64a; font-size: 12px; letter-spacing: 0.15em;">SETOR</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 18px; margin-top: 8px;">5-20 sensores</h3>
+      <ul style="margin-top: 14px;">
+        <li>UTI ou enfermaria completa</li>
+        <li>Alertas em tempo real (WhatsApp)</li>
+        <li>Integração com prontuário</li>
+        <li>Relatório mensal de qualidade</li>
+        <li>SLA de 4h pra reposição</li>
+      </ul>
+      <p style="margin-top: 14px; font-size: 13px; font-style: italic; color: rgba(245, 247, 239, 0.6);">
+        Resultado financeiro em 60 dias.
+      </p>
+    </div>
+    <div class="card" style="border-color: rgba(255, 138, 128, 0.5);">
+      <strong style="color: #ff8a80; font-size: 12px; letter-spacing: 0.15em;">HOSPITAL</strong>
+      <h3 style="color: #f5f7ef; text-transform: none; font-size: 18px; margin-top: 8px;">100+ sensores</h3>
+      <ul style="margin-top: 14px;">
+        <li>Cobertura institucional</li>
+        <li>Integração com folha e RH</li>
+        <li>API pra processos jurídicos</li>
+        <li>Painel executivo</li>
+        <li>Dashboard pro TCE/CGU</li>
+      </ul>
+      <p style="margin-top: 14px; font-size: 13px; font-style: italic; color: rgba(245, 247, 239, 0.6);">
+        Reposicionamento estratégico da instituição.
+      </p>
+    </div>
+  </div>
+  <div class="slide-num">08 / 09</div>
+</div>
+
+<!-- SLIDE 9 — CTA -->
+<div class="slide">
+  <div class="logo">
+    <div class="logo-square">M</div>
+    <div class="logo-text">MEDPAG</div>
+  </div>
+  <span class="eyebrow">Próximos passos</span>
+  <h2>A saúde precisa de uma<br>testemunha que <span class="accent">não dorme.</span></h2>
+
+  <div class="quote" style="margin-top: 20px;">
+    "A diferença entre uma instituição que reage à crise e uma que a previne
+    é exatamente o que ela <strong>consegue medir</strong>.<br>
+    O Sentinela mede o que ninguém mediu até hoje."
+    <div class="quote-author">— equipe MedPag</div>
+  </div>
+
+  <div class="cta-box">
+    <div class="label">Vamos conversar</div>
+    <h3 style="color: #f5f7ef; text-transform: none; font-size: 22px; margin: 10px 0;">
+      Agende uma demonstração de 30 minutos
+    </h3>
+    <p style="font-size: 17px; color: rgba(245, 247, 239, 0.8); margin: 12px 0;">
+      Mostramos o sistema rodando ao vivo na nossa estrutura de testes — com sensores reais detectando presença,
+      vitais e quedas <strong>em tempo real</strong>.
+    </p>
+    <div class="contact" style="margin-top: 18px;">
+      📧 felicio@medpag.com.br · 📱 (21) 99999-9999<br>
+      🏢 ATOM BRASIL DIGITAL LTDA · CNPJ 22.003.550/0001-05
+    </div>
+  </div>
+  <div class="slide-num">09 / 09</div>
+</div>
+
+<!-- Navegação -->
+<div class="nav">
+  <button id="prevBtn" onclick="prev()">← Anterior</button>
+  <button id="nextBtn" onclick="next()">Próximo →</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let current = 0;
+  function show(idx) {
+    slides.forEach((s, i) => s.classList.toggle('active', i === idx));
+    document.getElementById('prevBtn').disabled = idx === 0;
+    document.getElementById('nextBtn').disabled = idx === slides.length - 1;
+  }
+  function next() { if (current < slides.length - 1) { current++; show(current); } }
+  function prev() { if (current > 0) { current--; show(current); } }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ') next();
+    if (e.key === 'ArrowLeft') prev();
+  });
+  show(0);
+</script>
+
+</body>
+</html>
