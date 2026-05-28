@@ -21,6 +21,7 @@ import { AdminRelatorioErrosPage } from "@/pages/AdminRelatorioErrosPage";
 import { AdminDevolucoesPage } from "@/pages/AdminDevolucoesPage";
 import { AdminEmpresaPagadoraPage } from "@/pages/AdminEmpresaPagadoraPage";
 import { AdminWhatsAppPage } from "@/pages/AdminWhatsAppPage";
+import { AdminPlanosPage } from "@/pages/AdminPlanosPage";
 import { AnestesistaLancarPage } from "@/pages/AnestesistaLancarPage";
 import { AnestesistaMeusLancamentosPage } from "@/pages/AnestesistaMeusLancamentosPage";
 import { CrmLandingPage } from "@/pages/CrmLandingPage";
@@ -224,6 +225,14 @@ export default function App() {
         element={
           <AdminRoute>
             <AdminWhatsAppPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/app/admin/planos"
+        element={
+          <AdminRoute>
+            <AdminPlanosPage />
           </AdminRoute>
         }
       />

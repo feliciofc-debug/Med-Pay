@@ -980,3 +980,60 @@ export interface AuditoriaVitalResumo {
   veredito: "VALIDO" | "AUDITORIA" | "INSUFICIENTE";
   motivos: string[];
 }
+
+// ============================================================
+// Planos + Features (SaaS foundation)
+// ============================================================
+
+export type StatusAssinatura =
+  | "TRIAL"
+  | "ATIVO"
+  | "INADIMPLENTE"
+  | "SUSPENSO"
+  | "CANCELADO";
+
+export type CategoriaFeature =
+  | "Modalidades de Pagamento"
+  | "Módulos"
+  | "Limites de Uso";
+
+export interface FeatureDef {
+  chave: string;
+  nome: string;
+  descricao: string;
+  categoria: CategoriaFeature;
+  tipo: "bool" | "int";
+  default: boolean | number | null;
+}
+
+export interface Plano {
+  id: string;
+  slug: string;
+  nome: string;
+  descricao: string | null;
+  preco_mensal_centavos: number;
+  trial_dias: number;
+  features: Record<string, boolean | number | null>;
+  publico: boolean;
+  ordem: number;
+  ativo: boolean;
+}
+
+export interface PlanoResumo {
+  id: string;
+  slug: string;
+  nome: string;
+  preco_mensal_centavos: number;
+  trial_dias: number;
+}
+
+export interface ClienteAssinatura {
+  id: string;
+  nome: string;
+  cnpj: string | null;
+  status_assinatura: StatusAssinatura;
+  trial_termina_em: string | null;
+  plano: PlanoResumo | null;
+  features_override: Record<string, boolean | number | null>;
+  features_efetivas: Record<string, boolean | number | null>;
+}

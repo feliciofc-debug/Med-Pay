@@ -168,6 +168,21 @@ class EmpresaConfigNaoEncontradaError(MedPagException):
 
 
 # ============================================================
+# Exceções de Planos + Clientes
+# ============================================================
+
+
+class ClienteNaoEncontradoError(MedPagException):
+    code = "CLIENTE_NAO_ENCONTRADO"
+    status_code = 404
+
+
+class PlanoNaoEncontradoError(MedPagException):
+    code = "PLANO_NAO_ENCONTRADO"
+    status_code = 404
+
+
+# ============================================================
 # Exceções de Validação genéricas
 # ============================================================
 
@@ -178,6 +193,7 @@ class ValidacaoError(MedPagException):
 
 
 __all__ = [
+    "ClienteNaoEncontradoError",
     "CredenciaisInvalidasError",
     "EmpresaConfigNaoEncontradaError",
     "LoteFormatoNaoReconhecidoError",
@@ -187,6 +203,7 @@ __all__ = [
     "LoteVazioError",
     "MedPagException",
     "PagamentoNaoEditavelError",
+    "PlanoNaoEncontradoError",
     "PagamentoNaoEncontradoError",
     "PermissaoNegadaError",
     "TokenExpiradoError",

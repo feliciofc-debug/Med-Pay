@@ -6,12 +6,14 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.models.plano import Plano, StatusAssinatura
 
 if TYPE_CHECKING:
     from app.models.lote import Lote
@@ -44,6 +46,44 @@ class Cliente(Base):
     # Ex: {"cpf": "Documento", "nome": "Beneficiário", "valor": "Valor Bruto", ...}
     mapeamento_colunas: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
+    # ---------- Plano + Assinatura ----------
+    # Cada cliente assina um plano que define features padrão e limites.
+    # Nullable porque clientes legados nascem sem plano e migram depois.
+    plano_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("planos.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # Overrides pontuais do plano (ex: cliente Profissional com Sentinela
+    # liberado por cortesia). Dict no mesmo formato do Plano.features.
+    # Vazio = usa tudo do plano. Resolver checa override antes do plano.
+    features_override: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+        server_default="{}",
+        comment="Overrides do cliente sobre o plano. Vazio = usa só o plano.",
+    )
+
+    status_assinatura: Mapped[StatusAssinatura] = mapped_column(
+        SAEnum(
+            StatusAssinatura,
+            name="status_assinatura",
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=False,
+        default=StatusAssinatura.ATIVO,
+        server_default=StatusAssinatura.ATIVO.value,
+        index=True,
+    )
+
+    # Setado quando cliente nasce em TRIAL. Null fora desse estado.
+    trial_termina_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+
     ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -55,6 +95,7 @@ class Cliente(Base):
 
     # Relacionamentos
     lotes: Mapped[list["Lote"]] = relationship("Lote", back_populates="cliente")
+    plano: Mapped["Plano | None"] = relationship("Plano", lazy="joined")
 
     def __repr__(self) -> str:
         return f"<Cliente id={self.id} nome={self.nome}>"

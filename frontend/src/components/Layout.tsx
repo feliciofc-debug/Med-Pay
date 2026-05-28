@@ -12,6 +12,7 @@ import {
   FileSpreadsheet,
   HeartPulse,
   Home,
+  Layers,
   type LucideIcon,
   LogOut,
   TrendingUp,
@@ -115,6 +116,7 @@ const NAV_ITEMS: NavItem[] = [
 
 const ADMIN_ITEMS = [
   { to: "/app/admin/empresa-pagadora", label: "Empresa Pagadora", icon: Building2 },
+  { to: "/app/admin/planos", label: "Planos & Features", icon: Layers },
   { to: "/app/admin/usuarios", label: "Equipe", icon: UserCog },
   { to: "/app/admin/whatsapp", label: "Jarvis (WhatsApp)", icon: Bot },
   { to: "/app/admin/relatorio-erros", label: "Erros", icon: TrendingUp },

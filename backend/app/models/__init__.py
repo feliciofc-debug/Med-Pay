@@ -18,6 +18,7 @@ from app.models.ficha_plantao import FichaPlantao, StatusFicha
 from app.models.lancamento_servico import LancamentoServico, StatusLancamento
 from app.models.lote import Lote, StatusLote
 from app.models.pagamento import Pagamento, StatusPagamento
+from app.models.plano import Plano, StatusAssinatura
 from app.models.user import User, UserRole
 from app.models.vital import (
     AmbienteMonitorado,
@@ -57,6 +58,8 @@ __all__ = [
     "NoVital",
     "OrigemCadastroBeneficiario",
     "Pagamento",
+    "Plano",
+    "StatusAssinatura",
     "StatusBeneficiario",
     "StatusFicha",
     "StatusInstancia",
