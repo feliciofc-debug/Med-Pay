@@ -133,16 +133,73 @@ class WuzapiClient:
     # Operações administrativas (precisam admin token)
     # ============================================================
 
+    async def listar_instancias(self) -> list[dict[str, Any]]:
+        """Lista as instâncias (sessões) cadastradas no Wuzapi."""
+        data = await self._request(
+            "GET", "/admin/users", token=self.admin_token
+        )
+        if isinstance(data, dict):
+            users = data.get("data") or data.get("users") or data.get("Users") or []
+        else:
+            users = data
+        return [u for u in users if isinstance(u, dict)]
+
     async def criar_instancia(self, nome: str) -> WuzapiInstance:
         """Cria uma instância (sessão WhatsApp) no Wuzapi.
 
-        O Wuzapi devolve `id` e `token`. Guardamos os dois em
-        `WhatsAppInstancia` pra usar nas operações da sessão.
+        Se já existir um user com o mesmo nome, REUSA — não cria duplicado.
+        Útil quando o Med-Pay reinicia e a instância da VPS persiste.
+
+        Forks do Wuzapi (ex: AMZ Ofertas) podem retornar HTTP 409
+        "user with this token already exists" quando duas chamadas batem
+        no mesmo nome. Aqui interceptamos esse caso e fazemos lookup.
         """
+        # Primeiro tenta achar uma instância existente com esse nome
+        try:
+            existentes = await self.listar_instancias()
+            for u in existentes:
+                if (u.get("name") or u.get("Name") or "") == nome:
+                    instance_id = str(u.get("id") or u.get("Id") or nome)
+                    token = str(u.get("token") or u.get("Token") or "")
+                    if token:
+                        log.info(
+                            "wuzapi.instancia_reusada", nome=nome, id=instance_id
+                        )
+                        return WuzapiInstance(
+                            instance_id=instance_id, token=token
+                        )
+        except (WuzapiIndisponivelError, WuzapiFalhouError):
+            # Se o listar falhou, segue tentando criar (pode dar 409)
+            pass
+
         payload = {"name": nome}
-        data = await self._request(
-            "POST", "/admin/users", token=self.admin_token, json=payload
-        )
+        try:
+            data = await self._request(
+                "POST", "/admin/users", token=self.admin_token, json=payload
+            )
+        except WuzapiFalhouError as exc:
+            # 409 conflict → tenta carregar de novo, agora exigindo achar
+            if "409" in str(exc) or "already exists" in str(exc).lower():
+                existentes = await self.listar_instancias()
+                for u in existentes:
+                    if (u.get("name") or u.get("Name") or "") == nome:
+                        instance_id = str(u.get("id") or u.get("Id") or nome)
+                        token = str(u.get("token") or u.get("Token") or "")
+                        if token:
+                            log.info(
+                                "wuzapi.instancia_recuperada_apos_409",
+                                nome=nome,
+                                id=instance_id,
+                            )
+                            return WuzapiInstance(
+                                instance_id=instance_id, token=token
+                            )
+                raise WuzapiFalhouError(
+                    f"Wuzapi disse que '{nome}' já existe mas não conseguimos "
+                    "encontrar o registro. Verifique manualmente no servidor."
+                ) from exc
+            raise
+
         instance_id = str(data.get("id") or data.get("Id") or nome)
         token = str(data.get("token") or data.get("Token") or "")
         if not token:
