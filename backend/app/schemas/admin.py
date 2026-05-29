@@ -39,6 +39,8 @@ class UserAdminOut(BaseModel):
     nome: str
     role: UserRole
     ativo: bool
+    cliente_id: UUID | None = None
+    beneficiario_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
     last_login_at: datetime | None = None
@@ -54,6 +56,9 @@ class CriarUsuarioRequest(BaseModel):
     # Multi-tenancy: vincula o user a um cliente especifico.
     # None = "MedPag interno" (vê todos os tenants).
     cliente_id: UUID | None = None
+    # Para role=MEDICO: vincula ao Beneficiario (cadastro de prestador
+    # naquele hospital). Permite ao app do medico ver SEUS plantoes/extrato.
+    beneficiario_id: UUID | None = None
 
 
 class AtualizarUsuarioRequest(BaseModel):
@@ -62,6 +67,7 @@ class AtualizarUsuarioRequest(BaseModel):
     nome: str | None = Field(default=None, min_length=2, max_length=255)
     role: UserRole | None = None
     ativo: bool | None = None
+    beneficiario_id: UUID | None = None
 
 
 class ResetSenhaRequest(BaseModel):

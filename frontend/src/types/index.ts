@@ -436,6 +436,8 @@ export interface UserAdmin {
   nome: string;
   role: UserRole;
   ativo: boolean;
+  cliente_id?: string | null;
+  beneficiario_id?: string | null;
   created_at: string;
   updated_at: string;
   last_login_at: string | null;
@@ -446,12 +448,15 @@ export interface CriarUsuarioPayload {
   nome: string;
   role: UserRole;
   senha: string;
+  cliente_id?: string | null;
+  beneficiario_id?: string | null;
 }
 
 export interface AtualizarUsuarioPayload {
   nome?: string;
   role?: UserRole;
   ativo?: boolean;
+  beneficiario_id?: string | null;
 }
 
 export interface ErrosPorOperador {

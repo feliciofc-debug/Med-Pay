@@ -170,6 +170,7 @@ def create_app() -> FastAPI:
         fechamentos,
         fichas,
         lotes,
+        medico,
         operacao,
         pagamentos,
         planos,
@@ -204,6 +205,7 @@ def create_app() -> FastAPI:
         tags=["consolidacao"],
     )
     app.include_router(lotes.router, prefix="/api/lotes", tags=["lotes"])
+    app.include_router(medico.router, prefix="/api/medico", tags=["medico"])
     app.include_router(
         operacao.router, prefix="/api/operacao", tags=["operacao"]
     )

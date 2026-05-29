@@ -116,6 +116,7 @@ async def criar_usuario(
         role=payload.role,
         ativo=True,
         cliente_id=payload.cliente_id,
+        beneficiario_id=payload.beneficiario_id,
     )
     db.add(novo)
     await db.flush()
@@ -160,6 +161,10 @@ async def atualizar_usuario(
         user.role = payload.role
     if payload.ativo is not None:
         user.ativo = payload.ativo
+    if payload.beneficiario_id is not None:
+        # Aceita string vazia (UUID nulo nao chega aqui) — pra desvincular
+        # usa um endpoint dedicado se necessario.
+        user.beneficiario_id = payload.beneficiario_id
 
     await db.flush()
     # Refresh garante que `updated_at` (com onupdate=func.now()) seja

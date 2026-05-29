@@ -79,6 +79,18 @@ class User(Base):
         index=True,
     )
 
+    # ---------- Vinculo com Beneficiario (so para role MEDICO) ----------
+    # Quando role == MEDICO, este id aponta pro cadastro de prestador
+    # (Beneficiario) deste medico no hospital. Permite ao app do medico
+    # filtrar plantoes/extrato pelo seu proprio CPF sem expor o numero.
+    # Pode ser null se o medico ainda nao foi vinculado (UI mostra aviso).
+    beneficiario_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("beneficiarios.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -90,6 +102,9 @@ class User(Base):
     # Relacionamentos
     cliente: Mapped["Cliente | None"] = relationship(
         "Cliente", foreign_keys=[cliente_id]
+    )
+    beneficiario: Mapped["Beneficiario | None"] = relationship(  # noqa: F821
+        "Beneficiario", foreign_keys=[beneficiario_id]
     )
     lotes_enviados: Mapped[list["Lote"]] = relationship(
         "Lote", back_populates="enviado_por", foreign_keys="Lote.enviado_por_id"

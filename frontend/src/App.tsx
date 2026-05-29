@@ -8,6 +8,7 @@ import { SignupPage } from "@/pages/SignupPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DashboardExecutivoPage } from "@/pages/DashboardExecutivoPage";
 import { MedicoHomePage } from "@/pages/MedicoHomePage";
+import { MedicoExtratoPage } from "@/pages/MedicoExtratoPage";
 import { FechamentoPeriodoPage } from "@/pages/FechamentoPeriodoPage";
 import { ContratosPage } from "@/pages/ContratosPage";
 import { UploadPage } from "@/pages/UploadPage";
@@ -124,7 +125,7 @@ export default function App() {
         path="/app/medico/extrato"
         element={
           <ProtectedRoute roles={["MEDICO", "ADMIN"]}>
-            <MedicoHomePage />
+            <MedicoExtratoPage />
           </ProtectedRoute>
         }
       />
