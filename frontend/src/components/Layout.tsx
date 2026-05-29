@@ -18,10 +18,12 @@ import {
   Layers3,
   type LucideIcon,
   LogOut,
+  Stethoscope,
   TrendingUp,
   Upload,
   UserCog,
   Users,
+  Wallet,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
@@ -36,93 +38,161 @@ interface NavItem {
   roles: UserRole[];
 }
 
-// Visibilidade do menu por role.
+interface NavSection {
+  id: string;
+  label: string;          // visivel acima do grupo
+  items: NavItem[];
+  // Esconde a secao inteira se o usuario nao tiver acesso a nenhum item
+}
+
+// ============================================================
+// Navegação organizada por SEÇÕES e por PAPEL.
+// ============================================================
 //
-// COORDENADOR (funcionário interno que sobe fichas dos hospitais):
-// vê APENAS o painel próprio (fichas que ele subiu + banco de horas)
-// e a tela de subir nova ficha. Nada de operacional, financeiro ou
-// admin — isolamento por desenho.
+// Cada usuário vê apenas as seções e itens compatíveis com seu papel.
+// Seções vazias somem automaticamente.
 //
-// OPERADOR (Maria sobe planilha, corrige, NÃO aprova nem vê dados
-// financeiros do BPO): Novo Lote + Lotes + Fichas.
+// Papeis e o que cada um enxerga (alto nível):
 //
-// APROVADOR (Thiago e irmão diretores: aprovam, geram CNAB, inserem
-// token na Unicred): dashboards operacionais + Novo Lote + Lotes.
-// NÃO veem Contratos comerciais nem área Admin.
-//
-// ADMIN (você, Felício, dono do BPO): tudo, incluindo configuração
-// comercial, equipe, empresa pagadora e relatórios estratégicos.
-const NAV_ITEMS: NavItem[] = [
+// MEDICO (prestador)        -> só "Meu app" (plantões/extrato dele)
+// COORDENADOR (hospital)    -> só "Operação" (subir fichas)
+// FINANCEIRO (hospital)     -> "Financeiro" (CNAB / folha / extrato)
+// GESTOR (hospital)         -> "Operação" + "Financeiro" + "Hospital"
+// OPERADOR (MedPag)         -> "Operação"
+// APROVADOR (MedPag)        -> "Operação" + "Financeiro" + "Dashboards"
+// ADMIN (MedPag, Felício)   -> TUDO (todos os menus + "Administração")
+// ============================================================
+
+const SECOES: NavSection[] = [
+  // ---------- Meu app (médico) ----------
   {
-    to: "/app/coordenador",
-    label: "Meu Painel",
-    icon: ClipboardList,
-    exact: true,
-    roles: ["COORDENADOR"],
+    id: "meu_app",
+    label: "Meu app",
+    items: [
+      {
+        to: "/app/medico",
+        label: "Meus plantões",
+        icon: Stethoscope,
+        exact: true,
+        roles: ["MEDICO"],
+      },
+      {
+        to: "/app/medico/extrato",
+        label: "Meu extrato",
+        icon: Wallet,
+        roles: ["MEDICO"],
+      },
+    ],
   },
+
+  // ---------- Dashboards / visão geral ----------
   {
-    to: "/app",
-    label: "Dashboard",
-    icon: Home,
-    exact: true,
-    roles: ["ADMIN", "APROVADOR"],
+    id: "geral",
+    label: "Visão geral",
+    items: [
+      {
+        to: "/app/coordenador",
+        label: "Meu Painel",
+        icon: ClipboardList,
+        exact: true,
+        roles: ["COORDENADOR"],
+      },
+      {
+        to: "/app",
+        label: "Dashboard",
+        icon: Home,
+        exact: true,
+        roles: ["ADMIN", "APROVADOR", "GESTOR"],
+      },
+      {
+        to: "/app/executivo",
+        label: "Executivo",
+        icon: BarChart3,
+        roles: ["ADMIN", "GESTOR"],
+      },
+    ],
   },
+
+  // ---------- Operação ----------
   {
-    to: "/app/executivo",
-    label: "Executivo",
-    icon: BarChart3,
-    roles: ["ADMIN"],
+    id: "operacao",
+    label: "Operação",
+    items: [
+      {
+        to: "/app/fichas",
+        label: "Fichas (OCR)",
+        icon: Camera,
+        roles: ["ADMIN", "APROVADOR", "OPERADOR", "COORDENADOR", "GESTOR"],
+      },
+      {
+        to: "/app/upload",
+        label: "Novo Lote",
+        icon: Upload,
+        roles: ["ADMIN", "APROVADOR", "OPERADOR"],
+      },
+      {
+        to: "/app/extrato-consolidado",
+        label: "Extrato Consolidado",
+        icon: Layers3,
+        roles: ["ADMIN", "APROVADOR", "GESTOR"],
+      },
+      {
+        to: "/app/prestadores",
+        label: "Prestadores",
+        icon: Users,
+        roles: ["ADMIN", "APROVADOR", "OPERADOR", "GESTOR"],
+      },
+      {
+        to: "/app/equipes",
+        label: "Equipes",
+        icon: HeartPulse,
+        roles: ["ADMIN", "APROVADOR", "OPERADOR", "GESTOR"],
+      },
+    ],
   },
+
+  // ---------- Financeiro ----------
   {
-    to: "/app/contratos",
-    label: "Contratos",
-    icon: Briefcase,
-    roles: ["ADMIN"],
+    id: "financeiro",
+    label: "Financeiro",
+    items: [
+      {
+        to: "/app/lotes",
+        label: "Lotes",
+        icon: FileSpreadsheet,
+        roles: [
+          "ADMIN",
+          "APROVADOR",
+          "OPERADOR",
+          "GESTOR",
+          "FINANCEIRO",
+        ],
+      },
+      {
+        to: "/app/contratos",
+        label: "Contratos",
+        icon: Briefcase,
+        roles: ["ADMIN", "GESTOR"],
+      },
+    ],
   },
+
+  // ---------- Compliance ----------
   {
-    to: "/app/upload",
-    label: "Novo Lote",
-    icon: Upload,
-    roles: ["ADMIN", "APROVADOR", "OPERADOR"],
-  },
-  {
-    to: "/app/fichas",
-    label: "Fichas (OCR)",
-    icon: Camera,
-    roles: ["ADMIN", "APROVADOR", "OPERADOR", "COORDENADOR"],
-  },
-  {
-    to: "/app/extrato-consolidado",
-    label: "Extrato Consolidado",
-    icon: Layers3,
-    roles: ["ADMIN", "APROVADOR"],
-  },
-  {
-    to: "/app/prestadores",
-    label: "Prestadores",
-    icon: Users,
-    roles: ["ADMIN", "APROVADOR", "OPERADOR"],
-  },
-  {
-    to: "/app/equipes",
-    label: "Equipes",
-    icon: HeartPulse,
-    roles: ["ADMIN", "APROVADOR", "OPERADOR"],
-  },
-  {
-    to: "/app/lotes",
-    label: "Lotes",
-    icon: FileSpreadsheet,
-    roles: ["ADMIN", "APROVADOR", "OPERADOR"],
-  },
-  {
-    to: "/app/vital",
-    label: "MedPag Vital",
-    icon: Activity,
-    roles: ["ADMIN", "APROVADOR", "OPERADOR"],
+    id: "compliance",
+    label: "Compliance",
+    items: [
+      {
+        to: "/app/vital",
+        label: "MedPag Vital",
+        icon: Activity,
+        roles: ["ADMIN", "APROVADOR", "OPERADOR", "GESTOR"],
+      },
+    ],
   },
 ];
 
+// Itens "Administração" — só ADMIN MedPag vê.
 const ADMIN_ITEMS = [
   { to: "/app/super-admin", label: "Super Admin", icon: TrendingUp },
   { to: "/app/admin/empresa-pagadora", label: "Empresa Pagadora", icon: Building2 },
@@ -135,13 +205,30 @@ const ADMIN_ITEMS = [
   { to: "/app/admin/devolucoes", label: "Devoluções", icon: ArrowLeftRight },
 ];
 
+// Labels amigáveis pros papéis (mostrados no rodapé do menu).
+const ROLE_LABEL: Record<UserRole, string> = {
+  ADMIN: "MedPag · Admin",
+  APROVADOR: "MedPag · Aprovador",
+  OPERADOR: "MedPag · Operador",
+  COORDENADOR: "Hospital · Coordenador",
+  GESTOR: "Hospital · Gestor",
+  FINANCEIRO: "Hospital · Financeiro",
+  MEDICO: "Prestador (Médico)",
+};
+
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const isAdmin = user?.role === "ADMIN";
   const role = user?.role;
-  const navVisible = role
-    ? NAV_ITEMS.filter((item) => item.roles.includes(role))
+  const nomeHospital = user?.cliente?.nome ?? null;
+
+  // Filtra seções/itens visíveis para o papel atual.
+  const secoesVisiveis = role
+    ? SECOES.map((s) => ({
+        ...s,
+        items: s.items.filter((i) => i.roles.includes(role)),
+      })).filter((s) => s.items.length > 0)
     : [];
 
   return (
@@ -166,32 +253,42 @@ export function Layout({ children }: { children: ReactNode }) {
           </p>
         </Link>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {navVisible.map((item) => {
-            const Icon = item.icon;
-            const active = item.exact
-              ? location.pathname === item.to
-              : location.pathname.startsWith(item.to);
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors relative",
-                  active
-                    ? "bg-brand-800 text-white border-l-2 border-accent-400"
-                    : "text-brand-100/70 hover:bg-brand-900 hover:text-white",
-                )}
-              >
-                <Icon size={18} className={active ? "text-accent-300" : ""} />
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+          {secoesVisiveis.map((secao) => (
+            <div key={secao.id} className="space-y-1">
+              <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-accent-400/70">
+                {secao.label}
+              </p>
+              {secao.items.map((item) => {
+                const Icon = item.icon;
+                const active = item.exact
+                  ? location.pathname === item.to
+                  : location.pathname.startsWith(item.to);
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative",
+                      active
+                        ? "bg-brand-800 text-white border-l-2 border-accent-400"
+                        : "text-brand-100/70 hover:bg-brand-900 hover:text-white",
+                    )}
+                  >
+                    <Icon
+                      size={18}
+                      className={active ? "text-accent-300" : ""}
+                    />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
 
           {isAdmin && (
-            <div className="pt-4 mt-4 border-t border-brand-900/60">
-              <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-accent-400/70">
+            <div className="pt-3 mt-2 border-t border-brand-900/60 space-y-1">
+              <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-accent-400/70">
                 Administração
               </p>
               {ADMIN_ITEMS.map((item) => {
@@ -202,7 +299,7 @@ export function Layout({ children }: { children: ReactNode }) {
                     key={item.to}
                     to={item.to}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors relative",
+                      "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative",
                       active
                         ? "bg-brand-800 text-white border-l-2 border-accent-400"
                         : "text-brand-100/70 hover:bg-brand-900 hover:text-white",
@@ -221,12 +318,28 @@ export function Layout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="p-4 border-t border-brand-900">
-          <div className="text-xs text-brand-100/70 mb-1 truncate">
+          <div className="text-xs text-brand-100/80 mb-0.5 truncate font-medium">
+            {user?.nome ?? user?.email}
+          </div>
+          <div className="text-[11px] text-brand-100/60 mb-1 truncate">
             {user?.email}
           </div>
-          <div className="text-[10px] text-accent-300 uppercase tracking-wider mb-3 font-semibold">
-            {user?.role}
+          <div className="text-[10px] text-accent-300 uppercase tracking-wider mb-1 font-semibold">
+            {role ? ROLE_LABEL[role] : ""}
           </div>
+          {nomeHospital && (
+            <div
+              className="text-[10px] text-brand-100/60 mb-3 truncate"
+              title={nomeHospital}
+            >
+              📍 {nomeHospital}
+            </div>
+          )}
+          {!nomeHospital && role && (
+            <div className="text-[10px] text-brand-100/40 mb-3 italic">
+              {role === "MEDICO" ? "Prestador" : "Acesso global"}
+            </div>
+          )}
           <button
             type="button"
             onClick={() => void logout()}

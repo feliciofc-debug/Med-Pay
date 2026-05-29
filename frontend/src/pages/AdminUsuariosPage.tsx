@@ -30,6 +30,9 @@ const ROLE_LABEL: Record<UserRole, string> = {
   APROVADOR: "Aprovador",
   OPERADOR: "Operador",
   COORDENADOR: "Coordenador",
+  GESTOR: "Gestor (hospital)",
+  FINANCEIRO: "Financeiro (hospital)",
+  MEDICO: "Médico (prestador)",
 };
 
 const ROLE_COLOR: Record<UserRole, string> = {
@@ -37,6 +40,9 @@ const ROLE_COLOR: Record<UserRole, string> = {
   APROVADOR: "bg-brand-100 text-brand-800 border-brand-300",
   OPERADOR: "bg-slate-100 text-slate-700 border-slate-300",
   COORDENADOR: "bg-amber-100 text-amber-800 border-amber-300",
+  GESTOR: "bg-indigo-100 text-indigo-800 border-indigo-300",
+  FINANCEIRO: "bg-emerald-100 text-emerald-800 border-emerald-300",
+  MEDICO: "bg-rose-100 text-rose-800 border-rose-300",
 };
 
 export function AdminUsuariosPage() {
@@ -189,6 +195,10 @@ export function AdminUsuariosPage() {
             <option value="ADMIN">Administrador</option>
             <option value="APROVADOR">Aprovador</option>
             <option value="OPERADOR">Operador</option>
+            <option value="COORDENADOR">Coordenador</option>
+            <option value="GESTOR">Gestor</option>
+            <option value="FINANCEIRO">Financeiro</option>
+            <option value="MEDICO">Médico</option>
           </select>
         </div>
         <div>
@@ -452,15 +462,33 @@ function NovoUsuarioModal({ onClose }: { onClose: () => void }) {
             onChange={(e) => setRole(e.target.value as UserRole)}
             className="input"
           >
-            <option value="OPERADOR">
-              Operador — sobe planilha, revisa, corrige
-            </option>
-            <option value="APROVADOR">
-              Aprovador — aprova lotes, gera CNAB, insere token
-            </option>
-            <option value="ADMIN">
-              Administrador — gerencia usuários e vê relatórios
-            </option>
+            <optgroup label="MedPag (interno)">
+              <option value="OPERADOR">
+                Operador — sobe planilha, revisa, corrige
+              </option>
+              <option value="APROVADOR">
+                Aprovador — aprova lotes, gera CNAB
+              </option>
+              <option value="ADMIN">
+                Administrador — vê tudo, gerencia tudo
+              </option>
+            </optgroup>
+            <optgroup label="Hospital (cliente)">
+              <option value="COORDENADOR">
+                Coordenador — sobe fichas dos plantões
+              </option>
+              <option value="GESTOR">
+                Gestor — aprova fechamento de período
+              </option>
+              <option value="FINANCEIRO">
+                Financeiro — baixa CNAB e folha
+              </option>
+            </optgroup>
+            <optgroup label="Prestador">
+              <option value="MEDICO">
+                Médico — vê só os próprios plantões
+              </option>
+            </optgroup>
           </select>
         </div>
 
@@ -579,9 +607,19 @@ function EditarUsuarioModal({
             onChange={(e) => setRole(e.target.value as UserRole)}
             className="input"
           >
-            <option value="OPERADOR">Operador</option>
-            <option value="APROVADOR">Aprovador</option>
-            <option value="ADMIN">Administrador</option>
+            <optgroup label="MedPag (interno)">
+              <option value="OPERADOR">Operador</option>
+              <option value="APROVADOR">Aprovador</option>
+              <option value="ADMIN">Administrador</option>
+            </optgroup>
+            <optgroup label="Hospital (cliente)">
+              <option value="COORDENADOR">Coordenador</option>
+              <option value="GESTOR">Gestor</option>
+              <option value="FINANCEIRO">Financeiro</option>
+            </optgroup>
+            <optgroup label="Prestador">
+              <option value="MEDICO">Médico</option>
+            </optgroup>
           </select>
         </div>
 

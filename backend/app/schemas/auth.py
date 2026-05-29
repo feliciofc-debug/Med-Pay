@@ -32,6 +32,15 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class ClienteMini(BaseModel):
+    """Cliente mínimo embarcado no UserOut para contexto multi-tenant."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    nome: str
+
+
 class UserOut(BaseModel):
     """Usuário (representação pública, sem senha)."""
 
@@ -42,5 +51,7 @@ class UserOut(BaseModel):
     nome: str
     role: UserRole
     ativo: bool
+    cliente_id: UUID | None = None
+    cliente: ClienteMini | None = None
     created_at: datetime
     last_login_at: datetime | None = None

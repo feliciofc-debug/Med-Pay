@@ -24,19 +24,31 @@ if TYPE_CHECKING:
 class UserRole(str, Enum):
     """Papéis disponíveis no sistema.
 
-    - ADMIN: gerencia usuários, clientes, configurações, vê o Executivo
-    - APROVADOR: pode aprovar lotes e gerar CNAB (Thiago, dono)
-    - OPERADOR: pode revisar lotes (4 olhos antes da aprovação)
-    - COORDENADOR: funcionário interno que SOBE fichas/planilhas dos
-      hospitais. Tem visão restrita: só vê o que ele mesmo subiu, um
-      "extrato" do banco de horas pra evitar duplicatas, e não aprova
-      nada. É o ponto de entrada da operação.
+    Visão MedPag (cliente_id=NULL):
+    - ADMIN: Felício e equipe interna MedPag. Gerencia tudo: usuários,
+      clientes, planos, vê o Super Admin / Executivo.
+    - APROVADOR: pode aprovar lotes e gerar CNAB no MedPag central.
+    - OPERADOR: pode revisar lotes (4 olhos antes da aprovação).
+
+    Visão Hospital (cliente_id=UUID):
+    - COORDENADOR: funcionário do hospital que SOBE fichas/planilhas
+      dos plantões. Vê só o que ele mesmo subiu. Ponto de entrada da
+      operação. Não aprova.
+    - GESTOR: gestor do hospital — vê tudo do hospital, aprova
+      fechamento de período. NÃO mexe em CNAB (delega ao Financeiro).
+    - FINANCEIRO: financeiro do hospital — baixa extrato, gera CNAB
+      ou folha de pagamento. Não decide quem é pago, só executa.
+    - MEDICO: prestador (médico/enfermeiro) — vê só os PRÓPRIOS
+      plantões, extrato e pagamentos. Não vê dados de outros.
     """
 
     ADMIN = "ADMIN"
     APROVADOR = "APROVADOR"
     OPERADOR = "OPERADOR"
     COORDENADOR = "COORDENADOR"
+    GESTOR = "GESTOR"
+    FINANCEIRO = "FINANCEIRO"
+    MEDICO = "MEDICO"
 
 
 class User(Base):

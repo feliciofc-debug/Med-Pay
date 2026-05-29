@@ -7,6 +7,7 @@ import { LoginPage } from "@/pages/LoginPage";
 import { SignupPage } from "@/pages/SignupPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DashboardExecutivoPage } from "@/pages/DashboardExecutivoPage";
+import { MedicoHomePage } from "@/pages/MedicoHomePage";
 import { ContratosPage } from "@/pages/ContratosPage";
 import { UploadPage } from "@/pages/UploadPage";
 import { LoteDetalhePage } from "@/pages/LoteDetalhePage";
@@ -34,11 +35,13 @@ import { VitalDashboardPage } from "@/pages/VitalDashboardPage";
 import type { UserRole } from "@/types";
 
 // Pra qual rota mandar o usuário quando ele cai em alguma sem permissão.
-// Operador não tem Dashboard → vai direto pra tela de upload.
-// Coordenador tem painel próprio → /app/coordenador.
+// Cada papel tem uma "casa" — o lugar onde ele opera no dia-a-dia.
 function rotaInicial(role: UserRole | undefined): string {
+  if (role === "MEDICO") return "/app/medico";
   if (role === "COORDENADOR") return "/app/coordenador";
+  if (role === "FINANCEIRO") return "/app/lotes";
   if (role === "OPERADOR") return "/app/upload";
+  // ADMIN, APROVADOR, GESTOR → dashboard executivo
   return "/app";
 }
 
@@ -91,8 +94,25 @@ export default function App() {
       <Route
         path="/app"
         element={
-          <ProtectedRoute roles={["ADMIN", "APROVADOR"]}>
+          <ProtectedRoute roles={["ADMIN", "APROVADOR", "GESTOR"]}>
             <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      {/* App do médico — placeholder pra Leva 3.1 */}
+      <Route
+        path="/app/medico"
+        element={
+          <ProtectedRoute roles={["MEDICO", "ADMIN"]}>
+            <MedicoHomePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/medico/extrato"
+        element={
+          <ProtectedRoute roles={["MEDICO", "ADMIN"]}>
+            <MedicoHomePage />
           </ProtectedRoute>
         }
       />

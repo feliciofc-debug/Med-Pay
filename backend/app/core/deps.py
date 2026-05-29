@@ -93,7 +93,15 @@ async def get_current_user(
     except ValueError as exc:
         raise TokenInvalidoError("Token com identificador malformado") from exc
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    # Carrega cliente junto (eager) — usado pelo frontend pra mostrar
+    # nome do hospital no menu e pelos guards de tenant.
+    from sqlalchemy.orm import selectinload
+
+    result = await db.execute(
+        select(User)
+        .where(User.id == user_id)
+        .options(selectinload(User.cliente))
+    )
     user = result.scalar_one_or_none()
 
     if user is None:
@@ -155,12 +163,64 @@ def require_visao_executiva(
 ) -> User:
     """Visão executiva (Executivo, Equipe, Erros, Devoluções, Empresa).
 
-    COORDENADOR é EXCLUÍDO de propósito — ele só vê o painel dele com
-    as fichas que ele subiu. Operador/Aprovador/Admin têm visão geral.
+    COORDENADOR e MEDICO são EXCLUÍDOS de propósito — eles só veem
+    o painel próprio. Operador/Aprovador/Admin/Gestor/Financeiro
+    têm visão geral conforme o papel.
     """
-    if current_user.role == UserRole.COORDENADOR:
+    if current_user.role in (UserRole.COORDENADOR, UserRole.MEDICO):
         raise PermissaoNegadaError(
-            "Coordenador não tem acesso à visão executiva. Use seu painel próprio."
+            f"{current_user.role.value} não tem acesso à visão executiva."
+        )
+    return current_user
+
+
+def require_medico(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Médico (prestador) — usado em endpoints do app do médico.
+
+    Aceita também ADMIN para suporte/diagnóstico (entrar como o
+    médico em caso de problema). Recusa outros papéis pra não
+    misturar contextos.
+    """
+    if current_user.role not in (UserRole.MEDICO, UserRole.ADMIN):
+        raise PermissaoNegadaError(
+            "Esta área é exclusiva do médico (prestador)."
+        )
+    return current_user
+
+
+def require_gestor_hospital(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Gestor do hospital — aprova fechamento de período, ve relatório
+    consolidado. Aceita também ADMIN (MedPag interno) e APROVADOR.
+    """
+    permitidos = {UserRole.GESTOR, UserRole.ADMIN, UserRole.APROVADOR}
+    if current_user.role not in permitidos:
+        raise PermissaoNegadaError(
+            "Apenas gestores do hospital podem aprovar fechamento."
+        )
+    return current_user
+
+
+def require_financeiro(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Financeiro do hospital — baixa CNAB e folha de pagamento.
+
+    Aceita ADMIN, APROVADOR e GESTOR também (são quem aprovam, mas
+    podem precisar baixar o arquivo em emergências).
+    """
+    permitidos = {
+        UserRole.FINANCEIRO,
+        UserRole.GESTOR,
+        UserRole.APROVADOR,
+        UserRole.ADMIN,
+    }
+    if current_user.role not in permitidos:
+        raise PermissaoNegadaError(
+            "Apenas o financeiro do hospital pode baixar CNAB/folha."
         )
     return current_user
 

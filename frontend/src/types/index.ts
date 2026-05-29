@@ -1,6 +1,13 @@
 // Tipos compartilhados — espelham os schemas Pydantic do backend.
 
-export type UserRole = "ADMIN" | "APROVADOR" | "OPERADOR" | "COORDENADOR";
+export type UserRole =
+  | "ADMIN"
+  | "APROVADOR"
+  | "OPERADOR"
+  | "COORDENADOR"
+  | "GESTOR"
+  | "FINANCEIRO"
+  | "MEDICO";
 
 // ============================================================
 // Beneficiário (cadastro mestre de prestadores)
@@ -215,12 +222,19 @@ export interface FechamentoEquipe {
   created_at: string | null;
 }
 
+export interface ClienteMini {
+  id: string;
+  nome: string;
+}
+
 export interface User {
   id: string;
   email: string;
   nome: string;
   role: UserRole;
   ativo: boolean;
+  cliente_id?: string | null;
+  cliente?: ClienteMini | null;
   created_at: string;
   last_login_at: string | null;
 }
