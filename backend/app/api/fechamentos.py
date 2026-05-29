@@ -350,6 +350,114 @@ def _gerar_xlsx_extrato(
     return buf.read()
 
 
+@router.get("/{fechamento_id}/folha.xlsx")
+async def baixar_folha_xlsx(
+    fechamento_id: UUID,
+    aplicar_irrf: bool = Query(
+        default=False,
+        description="Se True, calcula IRRF retido na fonte (Tabela RFB 2026)",
+    ),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_visao_executiva),
+    tenant_id: UUID | None = Depends(get_tenant_id),
+) -> Response:
+    """Baixa folha de pagamento em XLSX (formato formal pro contador/RH)."""
+    from datetime import datetime
+
+    from app.services import consolidacao_service, folha_pagamento
+
+    fechamento = await fechamento_service.obter_fechamento(
+        db, fechamento_id, cliente_id=tenant_id
+    )
+    cliente_nome = fechamento.cliente.nome if fechamento.cliente else "Hospital"
+    competencia = f"{fechamento.mes:02d}/{fechamento.ano}"
+
+    extrato = await consolidacao_service.consolidar_por_hospital_mes(
+        db, cliente_id=fechamento.cliente_id, competencia=competencia
+    )
+
+    linhas = folha_pagamento.montar_linhas_folha(
+        extrato.medicos, aplicar_irrf=aplicar_irrf
+    )
+    linhas = await folha_pagamento.enriquecer_com_dados_bancarios(
+        db, linhas, extrato.medicos
+    )
+
+    xlsx = folha_pagamento.gerar_folha_xlsx(
+        cliente_nome=cliente_nome,
+        competencia=competencia,
+        fechamento_id=str(fechamento.id),
+        linhas=linhas,
+        aplicar_irrf=aplicar_irrf,
+        gerado_em=datetime.utcnow(),
+    )
+
+    filename = (
+        f"folha-{cliente_nome.replace(' ', '_').lower()}-"
+        f"{fechamento.ano}-{fechamento.mes:02d}.xlsx"
+    )
+    return Response(
+        content=xlsx,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{fechamento_id}/folha.pdf")
+async def baixar_folha_pdf(
+    fechamento_id: UUID,
+    aplicar_irrf: bool = Query(
+        default=False,
+        description="Se True, calcula IRRF retido na fonte (Tabela RFB 2026)",
+    ),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_visao_executiva),
+    tenant_id: UUID | None = Depends(get_tenant_id),
+) -> Response:
+    """Baixa folha de pagamento em PDF (documento assinavel pro hospital/contador)."""
+    from datetime import datetime
+
+    from app.services import consolidacao_service, folha_pagamento
+
+    fechamento = await fechamento_service.obter_fechamento(
+        db, fechamento_id, cliente_id=tenant_id
+    )
+    cliente_nome = fechamento.cliente.nome if fechamento.cliente else "Hospital"
+    competencia = f"{fechamento.mes:02d}/{fechamento.ano}"
+
+    extrato = await consolidacao_service.consolidar_por_hospital_mes(
+        db, cliente_id=fechamento.cliente_id, competencia=competencia
+    )
+
+    linhas = folha_pagamento.montar_linhas_folha(
+        extrato.medicos, aplicar_irrf=aplicar_irrf
+    )
+    linhas = await folha_pagamento.enriquecer_com_dados_bancarios(
+        db, linhas, extrato.medicos
+    )
+
+    pdf = folha_pagamento.gerar_folha_pdf(
+        cliente_nome=cliente_nome,
+        competencia=competencia,
+        fechamento_id=str(fechamento.id),
+        linhas=linhas,
+        aplicar_irrf=aplicar_irrf,
+        gerado_em=datetime.utcnow(),
+    )
+
+    filename = (
+        f"folha-{cliente_nome.replace(' ', '_').lower()}-"
+        f"{fechamento.ano}-{fechamento.mes:02d}.pdf"
+    )
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/{fechamento_id}/extrato.xlsx")
 async def baixar_extrato_xlsx(
     fechamento_id: UUID,

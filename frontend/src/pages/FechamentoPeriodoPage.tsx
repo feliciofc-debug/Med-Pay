@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Download,
   FileSpreadsheet,
+  FileText,
   Lock,
   Unlock,
   Users,
@@ -190,20 +191,31 @@ export function FechamentoPeriodoPage() {
     },
   });
 
-  async function baixarExtrato(id: string, comp: string) {
+  async function baixarArquivo(
+    id: string,
+    comp: string,
+    tipo: "extrato.xlsx" | "folha.xlsx" | "folha.pdf",
+    aplicarIrrf = false,
+  ) {
     try {
-      const res = await api.get(`/api/fechamentos/${id}/extrato.xlsx`, {
-        responseType: "blob",
-      });
-      const blob = new Blob([res.data], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = URL.createObjectURL(blob);
+      const url =
+        tipo === "extrato.xlsx"
+          ? `/api/fechamentos/${id}/${tipo}`
+          : `/api/fechamentos/${id}/${tipo}?aplicar_irrf=${aplicarIrrf}`;
+      const res = await api.get(url, { responseType: "blob" });
+      const mime =
+        tipo === "folha.pdf"
+          ? "application/pdf"
+          : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      const blob = new Blob([res.data], { type: mime });
+      const objUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = `extrato-${comp.replace("/", "-")}.xlsx`;
+      a.href = objUrl;
+      const prefixo = tipo.startsWith("folha") ? "folha" : "extrato";
+      const ext = tipo.endsWith("pdf") ? "pdf" : "xlsx";
+      a.download = `${prefixo}-${comp.replace("/", "-")}.${ext}`;
       a.click();
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(objUrl);
     } catch (e) {
       setErro(getErrorMessage(e));
     }
@@ -447,49 +459,73 @@ export function FechamentoPeriodoPage() {
                       )}
                     </td>
                     <td className="px-2 py-2 text-right whitespace-nowrap">
-                      <button
-                        type="button"
-                        className="text-xs text-brand-700 hover:text-brand-900 inline-flex items-center gap-1 mr-2"
-                        onClick={() => void baixarExtrato(f.id, f.competencia)}
-                        title="Baixar extrato consolidado em XLSX"
-                      >
-                        <Download size={12} />
-                        XLSX
-                      </button>
-                      {f.status === "TRANCADO" && (
-                        <>
-                          <button
-                            type="button"
-                            className="text-xs text-emerald-700 hover:text-emerald-900 inline-flex items-center gap-1 mr-2"
-                            onClick={() =>
-                              gerarLoteMutation.mutate(f.id)
-                            }
-                            disabled={gerarLoteMutation.isPending}
-                            title="Gerar lote de pagamento a partir deste fechamento"
-                          >
-                            <FileSpreadsheet size={12} />
-                            Gerar lote
-                          </button>
-                          <button
-                            type="button"
-                            className="text-xs text-amber-700 hover:text-amber-900 inline-flex items-center gap-1"
-                            onClick={() => reabrirMutation.mutate(f.id)}
-                            disabled={reabrirMutation.isPending}
-                            title="Reabrir o período pra ajustes"
-                          >
-                            <Unlock size={12} />
-                            Reabrir
-                          </button>
-                        </>
-                      )}
-                      {f.status === "GERADO_LOTE" && f.lote_id && (
-                        <a
-                          href={`/app/lotes/${f.lote_id}`}
-                          className="text-xs text-brand-700 hover:text-brand-900 underline"
+                      <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 justify-end">
+                        <button
+                          type="button"
+                          className="text-xs text-slate-700 hover:text-slate-900 inline-flex items-center gap-1"
+                          onClick={() =>
+                            void baixarArquivo(f.id, f.competencia, "extrato.xlsx")
+                          }
+                          title="Extrato operacional consolidado (fichas + medicos)"
                         >
-                          ver lote
-                        </a>
-                      )}
+                          <Download size={12} />
+                          Extrato
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-brand-700 hover:text-brand-900 inline-flex items-center gap-1"
+                          onClick={() =>
+                            void baixarArquivo(f.id, f.competencia, "folha.xlsx", false)
+                          }
+                          title="Folha de pagamento formal (XLSX) — pro RH/contador"
+                        >
+                          <FileSpreadsheet size={12} />
+                          Folha XLSX
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-rose-700 hover:text-rose-900 inline-flex items-center gap-1"
+                          onClick={() =>
+                            void baixarArquivo(f.id, f.competencia, "folha.pdf", false)
+                          }
+                          title="Folha de pagamento formal (PDF) — pra assinatura"
+                        >
+                          <FileText size={12} />
+                          Folha PDF
+                        </button>
+                        {f.status === "TRANCADO" && (
+                          <>
+                            <button
+                              type="button"
+                              className="text-xs text-emerald-700 hover:text-emerald-900 inline-flex items-center gap-1"
+                              onClick={() => gerarLoteMutation.mutate(f.id)}
+                              disabled={gerarLoteMutation.isPending}
+                              title="Gerar lote de pagamento a partir deste fechamento"
+                            >
+                              <FileSpreadsheet size={12} />
+                              Gerar lote
+                            </button>
+                            <button
+                              type="button"
+                              className="text-xs text-amber-700 hover:text-amber-900 inline-flex items-center gap-1"
+                              onClick={() => reabrirMutation.mutate(f.id)}
+                              disabled={reabrirMutation.isPending}
+                              title="Reabrir o período pra ajustes"
+                            >
+                              <Unlock size={12} />
+                              Reabrir
+                            </button>
+                          </>
+                        )}
+                        {f.status === "GERADO_LOTE" && f.lote_id && (
+                          <a
+                            href={`/app/lotes/${f.lote_id}`}
+                            className="text-xs text-brand-700 hover:text-brand-900 underline"
+                          >
+                            ver lote
+                          </a>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

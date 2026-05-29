@@ -44,6 +44,10 @@ groq==0.13.0
 pypdfium2==4.30.0
 Pillow==10.4.0
 
+# Geração de PDF (folha de pagamento + relatórios formais).
+# reportlab é pure-Python, sem dependência de Cairo/WeasyPrint.
+reportlab==4.2.5
+
 # Dev / Testes
 pytest==8.3.3
 pytest-asyncio==0.24.0
