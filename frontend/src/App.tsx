@@ -10,6 +10,7 @@ import { DashboardExecutivoPage } from "@/pages/DashboardExecutivoPage";
 import { MedicoHomePage } from "@/pages/MedicoHomePage";
 import { MedicoExtratoPage } from "@/pages/MedicoExtratoPage";
 import { FechamentoPeriodoPage } from "@/pages/FechamentoPeriodoPage";
+import { FluxoOperacaoPage } from "@/pages/FluxoOperacaoPage";
 import { ContratosPage } from "@/pages/ContratosPage";
 import { UploadPage } from "@/pages/UploadPage";
 import { LoteDetalhePage } from "@/pages/LoteDetalhePage";
@@ -98,6 +99,15 @@ export default function App() {
         element={
           <ProtectedRoute roles={["ADMIN", "APROVADOR", "GESTOR"]}>
             <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      {/* Mapa visual do fluxo da operação — acessível a TODOS os papéis logados */}
+      <Route
+        path="/app/fluxo"
+        element={
+          <ProtectedRoute>
+            <FluxoOperacaoPage />
           </ProtectedRoute>
         }
       />
