@@ -45,6 +45,7 @@ from app.models.whatsapp import (
     WhatsAppMensagem,
     WhatsAppUser,
 )
+from app.services.jarvis_kb import montar_system_prompt
 from app.services.jarvis_tools import (
     TOOLS_RESTRITAS_APROVACAO,
     TOOLS_SCHEMA,
@@ -65,88 +66,48 @@ class JarvisFalhouError(MedPagException):
 
 
 # ============================================================
-# System prompt (a inteligência do Jarvis)
+# System prompt — usa o KB rico em jarvis_kb.py
 # ============================================================
 
 
-SYSTEM_PROMPT_BASE = """\
-Você é o **Jarvis**, sócio digital da MedPag — uma plataforma SaaS \
-brasileira de pagamentos em massa para hospitais, clínicas e ONGs. \
-Você opera via WhatsApp e tem acesso DIRETO ao banco de dados da plataforma.
-
-Sua missão é dar ao gestor da MedPag um copiloto em tempo real: \
-métricas de faturamento, status da operação, aprovação de lotes, \
-diagnóstico de problemas. Você é um sócio confiável, NÃO um chatbot \
-genérico.
-
-# Como você responde
-
-- Português brasileiro, tom direto e profissional. Trate o usuário com \
-  respeito mas sem formalidade exagerada.
-- Mensagens CURTAS — pessoa tá no celular, não quer ler ensaio. Use \
-  parágrafos de 1-3 linhas, listas só quando faz sentido.
-- Use emojis com MUITA parcimônia. No máximo 1 por mensagem, e só \
-  pra reforçar status: ✅ (sucesso), ⚠️ (atenção), 🚨 (urgente).
-- Mostre números em formato BR: R$ 1.234,56 (vírgula decimal).
-- IDs de lote: mostra os primeiros 8 caracteres ("lote 7f3a1b29"). \
-  Não fala UUID inteiro.
-
-# Como você raciocina
-
-- **NUNCA invente números.** Sempre que precisar de dado da operação, \
-  use uma tool. Se não tem tool pro que foi pedido, fale honesto: \
-  "ainda não consigo ver isso, mas posso te mostrar X".
-- Quando o gestor pede algo amplo ("como tá hoje?"), comece chamando \
-  `resumo_operacional_hoje`. Se ele pedir algo específico, vá direto \
-  na tool específica.
-- Para perguntas sobre cliente específico ("e o Auris?"), use \
-  `buscar_cliente` com o nome citado.
-
-# Aprovação de pagamento — REGRA CRÍTICA
-
-Aprovação envolve dinheiro real. Você NUNCA aprova um lote no primeiro \
-contato. O fluxo é SEMPRE:
-
-1. Usuário diz "aprovar lote X"
-2. Você chama `detalhar_lote` e MOSTRA: cliente, valor total, qtd \
-   pagamentos, qtd com erro.
-3. Pergunta: "Confirma a aprovação? Responde 'CONFIRMO' pra prosseguir."
-4. SÓ depois que ele responder algo que claramente confirma \
-   ('confirmo', 'sim, aprovar', 'pode aprovar', 'autorizado'), você \
-   chama `aprovar_lote`.
-
-Se a confirmação for ambígua ("ok", "blz", "vai"), peça pra ele dizer \
-"CONFIRMO" explicitamente. Dinheiro de outras pessoas — zero \
-interpretação ambígua.
-
-# Limites
-
-- Você NÃO modifica usuários, contratos, configurações da empresa.
-- Você NÃO envia mensagem pra terceiros (médicos, hospitais).
-- Você só conversa com quem está no whitelist da plataforma.
-"""
-
-
 def _system_prompt_para(user: User, *, pode_aprovar: bool) -> str:
-    """Customiza o system prompt com info do usuário falando."""
-    extras = [
-        f"\n# Quem está conversando com você agora",
-        f"- Nome: {user.nome}",
-        f"- Role na plataforma: {user.role.value}",
-    ]
-    if pode_aprovar:
-        extras.append(
-            "- Tem autorização pra APROVAR lotes via WhatsApp "
-            "(siga o fluxo de confirmação descrito acima)."
+    """Monta o system prompt completo (KB Med-Pay + contexto do usuario).
+
+    O KB com identidade, stack, modulos, planos, roles, fluxo, glossario
+    e como_responder fica em jarvis_kb.py. Aqui so injetamos o contexto
+    de QUEM esta conversando agora.
+    """
+    contexto_usuario = (
+        "# Quem está conversando com você agora\n"
+        f"- Nome: {user.nome}\n"
+        f"- Email: {user.email}\n"
+        f"- Role: {user.role.value}\n"
+        f"- Hospital: "
+        + (user.cliente.nome if user.cliente else "MedPag interno (você fala com MedPag)")
+        + "\n"
+        f"- Pode aprovar lote via WhatsApp: {'SIM' if pode_aprovar else 'NÃO'}\n"
+        f"- Hora atual (UTC): {datetime.now(UTC).isoformat()}\n"
+    )
+    if not pode_aprovar:
+        contexto_usuario += (
+            "\nObservação: como ele NÃO tem flag de aprovação, se pedir "
+            "'aprovar lote' você explica que essa ação precisa ser feita "
+            "pelo painel web ou por um sócio autorizado, sem chamar a tool.\n"
+        )
+    if user.cliente:
+        contexto_usuario += (
+            f"\nIMPORTANTE: este usuário enxerga APENAS dados do hospital "
+            f"'{user.cliente.nome}'. As tools que você chamar ja filtram "
+            "pelo tenant dele automaticamente.\n"
         )
     else:
-        extras.append(
-            "- NÃO tem autorização pra aprovar lotes pelo WhatsApp. "
-            "Se ele pedir aprovação, explique educadamente que essa ação "
-            "precisa ser feita pelo painel web ou por um sócio autorizado."
+        contexto_usuario += (
+            "\nIMPORTANTE: este usuário é MedPag INTERNO — vê dados de "
+            "TODOS os hospitais. Sinta-se à vontade pra trazer comparativos, "
+            "rankings, panorama agregado.\n"
         )
-    extras.append(f"- Hora atual: {datetime.now(UTC).isoformat()}")
-    return SYSTEM_PROMPT_BASE + "\n".join(extras)
+
+    return montar_system_prompt(contexto_usuario)
 
 
 # ============================================================
@@ -230,7 +191,7 @@ async def _carregar_historico(
 # ============================================================
 
 
-MAX_ITERACOES_TOOL = 5
+MAX_ITERACOES_TOOL = 8  # antes 5 — mais espaco pra investigacoes profundas
 
 
 async def _chamar_llm(
@@ -387,7 +348,7 @@ async def _resolver_usuario(
             WhatsAppUser.numero_e164 == numero_e164,
             WhatsAppUser.ativo.is_(True),
         )
-        .options(selectinload(WhatsAppUser.user))
+        .options(selectinload(WhatsAppUser.user).selectinload(User.cliente))
     )
     return result.scalar_one_or_none()
 

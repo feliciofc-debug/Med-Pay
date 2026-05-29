@@ -28,6 +28,7 @@ from app.models.cliente import Cliente
 from app.models.ficha_plantao import FichaPlantao, StatusFicha
 from app.models.lote import Lote, StatusLote
 from app.models.pagamento import Pagamento, StatusPagamento
+from app.models.plano import Plano, StatusAssinatura
 from app.models.user import User, UserRole
 
 log = structlog.get_logger()
@@ -202,6 +203,114 @@ TOOLS_SCHEMA: list[dict[str, Any]] = [
                     }
                 },
                 "required": ["nome_parcial"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "diagnostico_plataforma",
+            "description": (
+                "Diagnóstico GERAL da saúde da plataforma agora: "
+                "erros 24h, lotes travados, fichas em ERRO, taxa de "
+                "devolução, clientes inativos (>15d sem lote), clientes "
+                "em trial vencendo. Use quando o gestor perguntar "
+                "'tudo bem?', 'algum problema?', 'algo travado?', "
+                "'me dá um diagnóstico', 'tá tudo rodando?'."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "identificar_problemas",
+            "description": (
+                "Análise PROATIVA: lista problemas que merecem atenção "
+                "agora mesmo (lotes parados >48h, fichas em ERRO há mais "
+                "de 24h, beneficiários com conta inválida, alta taxa "
+                "de devolução por cliente). Cada item vem com severidade "
+                "(critico/alerta/info) e ação sugerida. Use quando o "
+                "gestor pedir 'me mostra o que tá ruim', 'o que precisa "
+                "atenção', 'problemas', 'gargalos'."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analise_cliente_360",
+            "description": (
+                "Visão 360° de UM cliente específico: plano, status de "
+                "assinatura, trial, MRR, total processado no mês, lotes "
+                "no mês, qtd de beneficiários ativos, taxa de erro do "
+                "cliente, última atividade, saúde geral. Use quando o "
+                "usuário pedir 'me fala tudo do hospital X', 'panorama "
+                "do cliente Y', 'análise do Auris'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "nome_parcial": {
+                        "type": "string",
+                        "description": (
+                            "Trecho do nome do cliente (basta primeira palavra)"
+                        ),
+                    }
+                },
+                "required": ["nome_parcial"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "tendencias_3_meses",
+            "description": (
+                "Compara mês atual com 2 meses anteriores: volume "
+                "processado, qtd de lotes, taxa de erro, taxa de "
+                "devolução. Mostra delta % e tendência (subindo, caindo, "
+                "estável). Use quando o gestor perguntar 'como tamo "
+                "comparado ao mês passado?', 'tendência', 'evolução', "
+                "'comparativo'."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "pipeline_comercial",
+            "description": (
+                "Pipeline e métricas SaaS: total de clientes por status "
+                "(TRIAL, ATIVO, INADIMPLENTE, SUSPENSO, CANCELADO), "
+                "distribuição por plano, MRR atual estimado, trials "
+                "vencendo em 7 dias. Use quando o gestor perguntar "
+                "'MRR', 'faturamento SaaS', 'quantos clientes', "
+                "'pipeline', 'trials vencendo', 'como tá a base'."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ranking_hospitais",
+            "description": (
+                "Ranking dos hospitais por volume processado no mês: "
+                "top N pelo valor pago, com taxa de erro e qtd de lotes. "
+                "Use pra 'qual cliente fatura mais', 'top hospitais', "
+                "'ranking de clientes'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limite": {
+                        "type": "integer",
+                        "description": "Top N (default 10, máx 20)",
+                    }
+                },
             },
         },
     },
@@ -681,6 +790,534 @@ async def buscar_cliente(
 
 
 # ============================================================
+# Tools estratégicas (diagnóstico, 360, tendência, comercial)
+# ============================================================
+
+
+async def diagnostico_plataforma(
+    db: AsyncSession, _user: User
+) -> dict[str, Any]:
+    """Visão GERAL da saúde da plataforma — pra Jarvis avisar problemas."""
+    agora = datetime.now(UTC)
+    ha_24h = agora - timedelta(hours=24)
+    ha_48h = agora - timedelta(hours=48)
+    ha_15d = agora - timedelta(days=15)
+    em_7d = agora + timedelta(days=7)
+
+    # Lotes em AGUARDANDO_REVISAO ha mais de 48h (travados)
+    lotes_travados_q = await db.execute(
+        select(func.count(Lote.id)).where(
+            Lote.status == StatusLote.AGUARDANDO_REVISAO,
+            Lote.created_at <= ha_48h,
+        )
+    )
+    lotes_travados = int(lotes_travados_q.scalar_one())
+
+    # Fichas em ERRO nas ultimas 24h
+    fichas_erro_q = await db.execute(
+        select(func.count(FichaPlantao.id)).where(
+            FichaPlantao.status == StatusFicha.ERRO,
+            FichaPlantao.created_at >= ha_24h,
+        )
+    )
+    fichas_erro_24h = int(fichas_erro_q.scalar_one())
+
+    # Total fichas processadas 24h -> taxa de sucesso OCR
+    fichas_total_q = await db.execute(
+        select(func.count(FichaPlantao.id)).where(
+            FichaPlantao.created_at >= ha_24h
+        )
+    )
+    fichas_total_24h = int(fichas_total_q.scalar_one())
+    taxa_sucesso_ocr_pct = (
+        ((fichas_total_24h - fichas_erro_24h) / fichas_total_24h * 100)
+        if fichas_total_24h > 0
+        else 100.0
+    )
+
+    # Devolucoes 24h
+    devo_q = await db.execute(
+        select(func.count(Pagamento.id)).where(
+            Pagamento.status == StatusPagamento.NAO_PAGO,
+            Pagamento.updated_at >= ha_24h,
+        )
+    )
+    devo_24h = int(devo_q.scalar_one())
+
+    # Clientes ATIVOS sem lote ha mais de 15 dias
+    clientes_inativos_q = await db.execute(
+        select(func.count(Cliente.id))
+        .outerjoin(
+            Lote,
+            (Lote.cliente_id == Cliente.id) & (Lote.created_at >= ha_15d),
+        )
+        .where(
+            Cliente.ativo.is_(True),
+            Cliente.status_assinatura == StatusAssinatura.ATIVO,
+        )
+        .group_by(Cliente.id)
+        .having(func.count(Lote.id) == 0)
+    )
+    clientes_inativos = len(list(clientes_inativos_q.all()))
+
+    # Trials vencendo nos proximos 7 dias
+    trials_q = await db.execute(
+        select(func.count(Cliente.id)).where(
+            Cliente.status_assinatura == StatusAssinatura.TRIAL,
+            Cliente.trial_termina_em.isnot(None),
+            Cliente.trial_termina_em <= em_7d,
+            Cliente.trial_termina_em >= agora,
+        )
+    )
+    trials_vencendo = int(trials_q.scalar_one())
+
+    # Saude geral — heuristica simples
+    flags = []
+    if lotes_travados > 0:
+        flags.append(f"{lotes_travados} lote(s) parado(s) há +48h")
+    if taxa_sucesso_ocr_pct < 80 and fichas_total_24h > 5:
+        flags.append(f"OCR caiu pra {taxa_sucesso_ocr_pct:.0f}% nas últimas 24h")
+    if devo_24h > 10:
+        flags.append(f"{devo_24h} devoluções nas últimas 24h (acima do baseline)")
+    if clientes_inativos > 0:
+        flags.append(f"{clientes_inativos} cliente(s) ativo(s) sem lote há +15d")
+    if trials_vencendo > 0:
+        flags.append(f"{trials_vencendo} trial(is) vencendo nos próximos 7d")
+
+    saude = "ok" if not flags else ("alerta" if len(flags) <= 2 else "critico")
+
+    return {
+        "saude_geral": saude,
+        "alertas": flags,
+        "lotes_travados_48h": lotes_travados,
+        "fichas_erro_24h": fichas_erro_24h,
+        "fichas_total_24h": fichas_total_24h,
+        "taxa_sucesso_ocr_24h_pct": round(taxa_sucesso_ocr_pct, 1),
+        "devolucoes_24h": devo_24h,
+        "clientes_ativos_inativos_15d": clientes_inativos,
+        "trials_vencendo_7d": trials_vencendo,
+    }
+
+
+async def identificar_problemas(
+    db: AsyncSession, _user: User
+) -> dict[str, Any]:
+    """Lista PROBLEMAS especificos com severidade e acao sugerida.
+
+    Mais granular que diagnostico — entrega itens acionaveis.
+    """
+    agora = datetime.now(UTC)
+    ha_48h = agora - timedelta(hours=48)
+    ha_24h = agora - timedelta(hours=24)
+    problemas: list[dict[str, Any]] = []
+
+    # Lotes parados > 48h
+    lotes_parados_q = await db.execute(
+        select(Lote)
+        .where(
+            Lote.status == StatusLote.AGUARDANDO_REVISAO,
+            Lote.created_at <= ha_48h,
+        )
+        .options(selectinload(Lote.cliente))
+        .order_by(Lote.created_at.asc())
+        .limit(5)
+    )
+    for lote in lotes_parados_q.scalars().all():
+        horas = int((agora - lote.created_at).total_seconds() / 3600)
+        problemas.append(
+            {
+                "severidade": "critico" if horas > 96 else "alerta",
+                "tipo": "lote_parado",
+                "descricao": (
+                    f"Lote {str(lote.id)[:8]} de {lote.cliente.nome if lote.cliente else '?'} "
+                    f"aguardando revisão há {horas}h"
+                ),
+                "valor_reais": lote.valor_total_centavos / 100,
+                "acao_sugerida": "revisar e aprovar (ou cancelar) pelo painel",
+            }
+        )
+
+    # Fichas em ERRO 24h
+    fichas_erro_q = await db.execute(
+        select(FichaPlantao)
+        .where(
+            FichaPlantao.status == StatusFicha.ERRO,
+            FichaPlantao.created_at >= ha_24h,
+        )
+        .options(selectinload(FichaPlantao.cliente))
+        .order_by(FichaPlantao.created_at.desc())
+        .limit(5)
+    )
+    for ficha in fichas_erro_q.scalars().all():
+        problemas.append(
+            {
+                "severidade": "alerta",
+                "tipo": "ficha_erro",
+                "descricao": (
+                    f"Ficha {str(ficha.id)[:8]} de "
+                    f"{ficha.cliente.nome if ficha.cliente else '?'} "
+                    f"em ERRO ({ficha.mensagem_erro or 'sem msg'})"
+                ),
+                "acao_sugerida": "reprocessar OCR ou subir foto melhor",
+            }
+        )
+
+    # Clientes com taxa de erro alta no mes
+    inicio_mes = _ini_mes()
+    erro_alto_q = await db.execute(
+        select(
+            Cliente.id,
+            Cliente.nome,
+            func.coalesce(func.sum(Lote.total_pagamentos), 0).label("total"),
+            func.coalesce(func.sum(Lote.total_bloqueados), 0).label("bloq"),
+        )
+        .join(Lote, Lote.cliente_id == Cliente.id)
+        .where(Lote.created_at >= inicio_mes)
+        .group_by(Cliente.id, Cliente.nome)
+        .having(func.coalesce(func.sum(Lote.total_pagamentos), 0) >= 20)
+        .order_by(desc("bloq"))
+        .limit(5)
+    )
+    for row in erro_alto_q.all():
+        total = int(row.total)
+        bloq = int(row.bloq)
+        taxa = (bloq / total * 100) if total else 0
+        if taxa >= 10:
+            problemas.append(
+                {
+                    "severidade": "critico" if taxa >= 25 else "alerta",
+                    "tipo": "taxa_erro_cliente",
+                    "descricao": (
+                        f"{row.nome} com taxa de erro {taxa:.0f}% no mês "
+                        f"({bloq} bloqueados em {total} pagamentos)"
+                    ),
+                    "acao_sugerida": (
+                        "revisar cadastro de beneficiários do cliente; "
+                        "muito provavelmente CPF/conta desatualizados"
+                    ),
+                }
+            )
+
+    if not problemas:
+        problemas.append(
+            {
+                "severidade": "info",
+                "tipo": "tudo_ok",
+                "descricao": "Nenhum problema crítico identificado agora.",
+                "acao_sugerida": "",
+            }
+        )
+
+    return {
+        "total": len(problemas),
+        "criticos": sum(1 for p in problemas if p["severidade"] == "critico"),
+        "alertas": sum(1 for p in problemas if p["severidade"] == "alerta"),
+        "problemas": problemas,
+    }
+
+
+async def analise_cliente_360(
+    db: AsyncSession, _user: User, *, nome_parcial: str
+) -> dict[str, Any]:
+    """View 360 graus de um cliente — plano, MRR, operacao, saude."""
+    from app.models.beneficiario import Beneficiario, StatusBeneficiario
+
+    s = (nome_parcial or "").strip()
+    if not s or len(s) < 2:
+        return {"erro": "consulta_curta", "mensagem": "Nome muito curto"}
+
+    cliente_q = await db.execute(
+        select(Cliente)
+        .where(Cliente.nome.ilike(f"%{s}%"))
+        .options(selectinload(Cliente.plano))
+        .limit(1)
+    )
+    cliente = cliente_q.scalar_one_or_none()
+    if not cliente:
+        return {
+            "erro": "nao_encontrado",
+            "mensagem": f"Nenhum cliente com '{s}' no nome.",
+        }
+
+    inicio_mes = _ini_mes()
+
+    # Stats do mes
+    stats_q = await db.execute(
+        select(
+            func.count(Lote.id).label("lotes"),
+            func.coalesce(func.sum(Lote.valor_total_centavos), 0).label("valor"),
+            func.coalesce(func.sum(Lote.total_pagamentos), 0).label("pgs"),
+            func.coalesce(func.sum(Lote.total_bloqueados), 0).label("bloq"),
+            func.max(Lote.created_at).label("ultima"),
+        ).where(
+            Lote.cliente_id == cliente.id,
+            Lote.created_at >= inicio_mes,
+        )
+    )
+    stats = stats_q.one()
+    pgs = int(stats.pgs)
+    bloq = int(stats.bloq)
+    taxa_erro = (bloq / pgs * 100) if pgs else 0
+
+    # Beneficiarios ativos
+    benef_q = await db.execute(
+        select(
+            func.count(Beneficiario.id).filter(
+                Beneficiario.status == StatusBeneficiario.ATIVO
+            ),
+            func.count(Beneficiario.id).filter(
+                Beneficiario.status == StatusBeneficiario.PENDENTE
+            ),
+            func.count(Beneficiario.id).filter(
+                Beneficiario.conta_verificada.is_(False)
+                & Beneficiario.conta_invalida_motivo.isnot(None)
+            ),
+        ).where(Beneficiario.cliente_id == cliente.id)
+    )
+    benef_ativos, benef_pendentes, benef_conta_ruim = benef_q.one()
+
+    # Heuristica de saude
+    flags = []
+    if stats.ultima and (datetime.now(UTC) - stats.ultima).days > 15:
+        flags.append(f"sem lote há {(datetime.now(UTC) - stats.ultima).days}d")
+    if taxa_erro >= 10:
+        flags.append(f"taxa de erro alta ({taxa_erro:.0f}%)")
+    if benef_conta_ruim and benef_conta_ruim > 5:
+        flags.append(f"{benef_conta_ruim} beneficiários com conta inválida")
+    if cliente.status_assinatura == StatusAssinatura.INADIMPLENTE:
+        flags.append("assinatura INADIMPLENTE")
+    if cliente.status_assinatura == StatusAssinatura.TRIAL:
+        if cliente.trial_termina_em:
+            dias = (cliente.trial_termina_em - datetime.now(UTC)).days
+            if dias <= 7:
+                flags.append(f"trial vence em {dias}d")
+
+    saude = "ok" if not flags else ("alerta" if len(flags) <= 1 else "critico")
+
+    return {
+        "id": str(cliente.id),
+        "nome": cliente.nome,
+        "cnpj": cliente.cnpj,
+        "plano": cliente.plano.nome if cliente.plano else "—",
+        "plano_slug": cliente.plano.slug if cliente.plano else "—",
+        "mensalidade_reais": (
+            cliente.plano.preco_mensal_centavos / 100 if cliente.plano else 0
+        ),
+        "status_assinatura": cliente.status_assinatura.value,
+        "trial_termina_em": (
+            cliente.trial_termina_em.isoformat()
+            if cliente.trial_termina_em
+            else None
+        ),
+        "lotes_mes": int(stats.lotes),
+        "valor_processado_mes_reais": float(stats.valor) / 100,
+        "pagamentos_mes": pgs,
+        "taxa_erro_pct": round(taxa_erro, 1),
+        "ultima_atividade": (
+            stats.ultima.isoformat() if stats.ultima else None
+        ),
+        "beneficiarios_ativos": int(benef_ativos),
+        "beneficiarios_pendentes": int(benef_pendentes),
+        "beneficiarios_conta_invalida": int(benef_conta_ruim or 0),
+        "saude": saude,
+        "flags": flags,
+    }
+
+
+async def tendencias_3_meses(
+    db: AsyncSession, _user: User
+) -> dict[str, Any]:
+    """Compara mes atual com 2 meses anteriores."""
+    agora = datetime.now(UTC)
+
+    def _intervalo_mes(offset: int) -> tuple[datetime, datetime, str]:
+        """offset 0 = mes atual; 1 = mes passado; 2 = retrasado."""
+        ano = agora.year
+        mes = agora.month - offset
+        while mes <= 0:
+            mes += 12
+            ano -= 1
+        inicio = datetime(ano, mes, 1, tzinfo=UTC)
+        if mes == 12:
+            fim = datetime(ano + 1, 1, 1, tzinfo=UTC)
+        else:
+            fim = datetime(ano, mes + 1, 1, tzinfo=UTC)
+        return inicio, fim, f"{mes:02d}/{ano}"
+
+    async def _stats(inicio: datetime, fim: datetime) -> dict[str, Any]:
+        q = await db.execute(
+            select(
+                func.count(Lote.id),
+                func.coalesce(func.sum(Lote.valor_total_centavos), 0),
+                func.coalesce(func.sum(Lote.total_pagamentos), 0),
+                func.coalesce(func.sum(Lote.total_bloqueados), 0),
+            ).where(
+                Lote.created_at >= inicio,
+                Lote.created_at < fim,
+            )
+        )
+        lotes, valor, pgs, bloq = q.one()
+        pgs_i = int(pgs)
+        return {
+            "lotes": int(lotes),
+            "valor_reais": float(valor) / 100,
+            "pagamentos": pgs_i,
+            "taxa_erro_pct": (int(bloq) / pgs_i * 100) if pgs_i else 0,
+        }
+
+    meses = []
+    for offset in (2, 1, 0):  # cronologico
+        inicio, fim, label = _intervalo_mes(offset)
+        s = await _stats(inicio, fim)
+        s["mes"] = label
+        meses.append(s)
+
+    # Calcula tendencia (mes atual vs anterior)
+    if meses[2]["valor_reais"] and meses[1]["valor_reais"]:
+        delta_pct = (
+            (meses[2]["valor_reais"] - meses[1]["valor_reais"])
+            / meses[1]["valor_reais"]
+            * 100
+        )
+        if delta_pct > 5:
+            tendencia = "subindo"
+        elif delta_pct < -5:
+            tendencia = "caindo"
+        else:
+            tendencia = "estavel"
+    else:
+        delta_pct = 0
+        tendencia = "indefinida"
+
+    return {
+        "meses": meses,
+        "delta_valor_pct": round(delta_pct, 1),
+        "tendencia": tendencia,
+    }
+
+
+async def pipeline_comercial(
+    db: AsyncSession, _user: User
+) -> dict[str, Any]:
+    """Pipeline SaaS: clientes por status, plano, MRR, trials vencendo."""
+    agora = datetime.now(UTC)
+    em_7d = agora + timedelta(days=7)
+
+    # Clientes por status
+    status_q = await db.execute(
+        select(Cliente.status_assinatura, func.count(Cliente.id))
+        .where(Cliente.ativo.is_(True))
+        .group_by(Cliente.status_assinatura)
+    )
+    por_status = {s.value: int(n) for s, n in status_q.all()}
+
+    # Clientes por plano + MRR estimado (so clientes ATIVO)
+    plano_q = await db.execute(
+        select(
+            Plano.slug,
+            Plano.nome,
+            Plano.preco_mensal_centavos,
+            func.count(Cliente.id).label("qtd"),
+        )
+        .join(Cliente, Cliente.plano_id == Plano.id)
+        .where(
+            Cliente.ativo.is_(True),
+            Cliente.status_assinatura == StatusAssinatura.ATIVO,
+        )
+        .group_by(Plano.slug, Plano.nome, Plano.preco_mensal_centavos)
+        .order_by(desc("qtd"))
+    )
+    por_plano = []
+    mrr_centavos = 0
+    for row in plano_q.all():
+        qtd = int(row.qtd)
+        mrr_centavos += qtd * int(row.preco_mensal_centavos)
+        por_plano.append(
+            {
+                "slug": row.slug,
+                "nome": row.nome,
+                "qtd": qtd,
+                "preco_unit_reais": int(row.preco_mensal_centavos) / 100,
+                "mrr_plano_reais": qtd * int(row.preco_mensal_centavos) / 100,
+            }
+        )
+
+    # Trials vencendo em 7d
+    trials_q = await db.execute(
+        select(Cliente.id, Cliente.nome, Cliente.trial_termina_em)
+        .where(
+            Cliente.status_assinatura == StatusAssinatura.TRIAL,
+            Cliente.trial_termina_em.isnot(None),
+            Cliente.trial_termina_em <= em_7d,
+            Cliente.trial_termina_em >= agora,
+        )
+        .order_by(Cliente.trial_termina_em.asc())
+    )
+    trials_vencendo = []
+    for row in trials_q.all():
+        dias = (row.trial_termina_em - agora).days
+        trials_vencendo.append(
+            {
+                "id": str(row.id),
+                "nome": row.nome,
+                "vence_em_dias": dias,
+            }
+        )
+
+    return {
+        "total_clientes_ativos": sum(por_status.values()),
+        "por_status": por_status,
+        "por_plano": por_plano,
+        "mrr_estimado_reais": mrr_centavos / 100,
+        "arr_estimado_reais": mrr_centavos * 12 / 100,
+        "trials_vencendo_7d": trials_vencendo,
+    }
+
+
+async def ranking_hospitais(
+    db: AsyncSession, _user: User, *, limite: int = 10
+) -> dict[str, Any]:
+    """Top N hospitais por volume processado no mes."""
+    limite = max(1, min(int(limite or 10), 20))
+    inicio = _ini_mes()
+    result = await db.execute(
+        select(
+            Cliente.id,
+            Cliente.nome,
+            func.count(Lote.id).label("lotes"),
+            func.coalesce(func.sum(Lote.total_pagamentos), 0).label("pgs"),
+            func.coalesce(func.sum(Lote.total_bloqueados), 0).label("bloq"),
+            func.coalesce(func.sum(Lote.valor_total_centavos), 0).label("valor"),
+        )
+        .join(Lote, Lote.cliente_id == Cliente.id)
+        .where(Lote.created_at >= inicio)
+        .group_by(Cliente.id, Cliente.nome)
+        .order_by(desc("valor"))
+        .limit(limite)
+    )
+    hospitais = []
+    for row in result.all():
+        pgs = int(row.pgs)
+        bloq = int(row.bloq)
+        hospitais.append(
+            {
+                "id": str(row.id),
+                "nome": row.nome,
+                "lotes": int(row.lotes),
+                "pagamentos": pgs,
+                "bloqueados": bloq,
+                "taxa_erro_pct": round((bloq / pgs * 100) if pgs else 0, 1),
+                "valor_total_reais": float(row.valor) / 100,
+            }
+        )
+    return {
+        "mes": inicio.strftime("%m/%Y"),
+        "total": len(hospitais),
+        "hospitais": hospitais,
+    }
+
+
+# ============================================================
 # Dispatcher
 # ============================================================
 
@@ -695,6 +1332,12 @@ _DISPATCH: dict[str, Any] = {
     "devolucoes_recentes": devolucoes_recentes,
     "fichas_pendentes": fichas_pendentes,
     "buscar_cliente": buscar_cliente,
+    "diagnostico_plataforma": diagnostico_plataforma,
+    "identificar_problemas": identificar_problemas,
+    "analise_cliente_360": analise_cliente_360,
+    "tendencias_3_meses": tendencias_3_meses,
+    "pipeline_comercial": pipeline_comercial,
+    "ranking_hospitais": ranking_hospitais,
 }
 
 
