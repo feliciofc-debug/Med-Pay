@@ -4,6 +4,7 @@ import {
   Activity,
   Bot,
   CheckCircle2,
+  Link2,
   Loader2,
   MessageSquare,
   Phone,
@@ -58,6 +59,7 @@ export function AdminWhatsAppPage() {
 function SessionCard() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [showAdotar, setShowAdotar] = useState(false);
 
   const { data: instancia, isLoading } = useQuery({
     queryKey: ["whatsapp", "instancia"],
@@ -110,7 +112,7 @@ function SessionCard() {
             Pareie um celular para o Jarvis começar a responder.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           {instancia?.status === "CONECTADA" && (
             <button
               type="button"
@@ -122,6 +124,15 @@ function SessionCard() {
               Desconectar
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setShowAdotar(true)}
+            className="btn-ghost"
+            title="Use uma sessao Wuzapi ja existente na VPS"
+          >
+            <Link2 size={14} />
+            Adotar instância existente
+          </button>
           <button
             type="button"
             onClick={() => conectar.mutate()}
@@ -142,6 +153,19 @@ function SessionCard() {
           </button>
         </div>
       </div>
+
+      {showAdotar && (
+        <AdotarInstanciaModal
+          onClose={() => setShowAdotar(false)}
+          onAdopted={() => {
+            setShowAdotar(false);
+            setError(null);
+            void queryClient.invalidateQueries({
+              queryKey: ["whatsapp", "instancia"],
+            });
+          }}
+        />
+      )}
 
       {isLoading ? (
         <div className="text-sm text-slate-500">Carregando...</div>
@@ -201,6 +225,159 @@ function SessionCard() {
           {error}
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// Modal: Adotar instancia existente
+// ============================================================
+
+interface AdotarInstanciaModalProps {
+  onClose: () => void;
+  onAdopted: () => void;
+}
+
+function AdotarInstanciaModal({
+  onClose,
+  onAdopted,
+}: AdotarInstanciaModalProps) {
+  const [instanceId, setInstanceId] = useState("");
+  const [token, setToken] = useState("");
+  const [numero, setNumero] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const adotar = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<InstanciaWpp>(
+        "/api/whatsapp/instancia/adotar",
+        {
+          wuzapi_instance_id: instanceId.trim(),
+          wuzapi_token: token.trim(),
+          numero_bot: numero.trim() || null,
+        },
+      );
+      return data;
+    },
+    onSuccess: onAdopted,
+    onError: (err) => setError(getErrorMessage(err)),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200">
+          <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+            <Link2 size={16} className="text-brand-700" />
+            Adotar instância existente
+          </h3>
+          <p className="text-xs text-slate-500 mt-1">
+            Se você já criou e pareou um user no Wuzapi da VPS, cole os dados
+            aqui que o Med-Pay passa a usar essa sessão.
+          </p>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1.5">
+            <p className="font-semibold text-amber-900">
+              Como obter esses dados:
+            </p>
+            <p>
+              1. Na VPS, gere o QR code direto:{" "}
+              <code className="bg-white px-1 rounded">
+                curl -X POST -H "Authorization: SEU_TOKEN"
+                https://api2.amzofertas.com.br:8083/session/connect
+              </code>
+            </p>
+            <p>
+              2. Escaneie no WhatsApp → Aparelhos conectados → Conectar
+              aparelho.
+            </p>
+            <p>
+              3. Cole abaixo o <strong>nome do user</strong> (instance_id) e o{" "}
+              <strong>token</strong> dele.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Instance ID (nome do user no Wuzapi)
+            </label>
+            <input
+              value={instanceId}
+              onChange={(e) => setInstanceId(e.target.value)}
+              placeholder="ex: jarvis ou medpag-jarvis"
+              className="input font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Token da instância
+            </label>
+            <input
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="ex: jarvis-byceo-2026"
+              className="input font-mono"
+              type="text"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              Token do <strong>user</strong> (não o ADMIN_TOKEN). É o que aparece
+              na lista de users do Wuzapi.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Número do bot (opcional)
+            </label>
+            <input
+              value={numero}
+              onChange={(e) => setNumero(e.target.value)}
+              placeholder="5521999998888"
+              className="input font-mono"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              Telefone do WhatsApp pareado. Pode deixar em branco — preenchemos
+              quando a sessão sincronizar.
+            </p>
+          </div>
+
+          {error && (
+            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
+        </div>
+        <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={adotar.isPending}
+            className="btn-ghost"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => adotar.mutate()}
+            disabled={!instanceId || !token || adotar.isPending}
+            className="btn-primary"
+          >
+            {adotar.isPending ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                Validando...
+              </>
+            ) : (
+              <>
+                <Link2 size={14} />
+                Adotar
+              </>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

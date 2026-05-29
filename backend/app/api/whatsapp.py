@@ -38,6 +38,7 @@ from app.models.whatsapp import (
     WhatsAppUser,
 )
 from app.schemas.whatsapp import (
+    AdotarInstanciaRequest,
     AtualizarWhatsAppUserRequest,
     CriarWhatsAppUserRequest,
     InstanciaOut,
@@ -481,3 +482,94 @@ async def desconectar_instancia(
     inst.status = StatusInstancia.DESCONECTADA
     await db.flush()
     return {"status": "desconectada"}
+
+
+@router.post("/instancia/adotar", response_model=InstanciaOut)
+async def adotar_instancia(
+    payload: AdotarInstanciaRequest,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
+) -> InstanciaOut:
+    """Adota uma instancia Wuzapi ja existente (criada manualmente na VPS).
+
+    Fluxo:
+    1. Admin gera o QR code direto no Wuzapi (via curl/UI) usando um user
+       ja criado la (ex: 'jarvis' com token 'jarvis-byceo-2026')
+    2. Escaneia o QR com o celular do bot
+    3. Cola aqui o instance_id + token + (opcional) numero
+    4. Med-Pay passa a usar essa instancia pra enviar/receber
+
+    Util quando:
+    - O fork do Wuzapi tem schema diferente que confunde o criar_instancia
+    - Voce ja tem instancias prontas e quer reaproveitar
+    - Quer controle total sobre qual sessao Wuzapi o Med-Pay usa
+    """
+    instance_id = payload.wuzapi_instance_id.strip()
+    token = payload.wuzapi_token.strip()
+    numero = (payload.numero_bot or "").strip() or None
+
+    if not instance_id or not token:
+        raise ValidacaoError(
+            "instance_id e token sao obrigatorios"
+        )
+
+    # Valida que o token funciona contra o Wuzapi (best-effort)
+    if wuzapi_client.is_configured():
+        try:
+            data = await wuzapi_client.status(token)
+            conectado = bool(
+                data.get("Connected")
+                or data.get("connected")
+                or data.get("LoggedIn")
+            )
+            status_inicial = (
+                StatusInstancia.CONECTADA
+                if conectado
+                else StatusInstancia.AGUARDANDO_QR
+            )
+        except (WuzapiIndisponivelError, WuzapiFalhouError) as exc:
+            raise ValidacaoError(
+                f"Token nao reconhecido pelo servidor Wuzapi: {exc.message}. "
+                "Confira se voce copiou o token correto do user no Wuzapi."
+            ) from exc
+    else:
+        status_inicial = StatusInstancia.DESCONECTADA
+
+    # Desativa instancia ativa antiga (so pode ter uma ativa)
+    atual = await _instancia_ativa(db)
+    if atual is not None:
+        atual.ativa = False
+        await db.flush()
+
+    # Verifica se ja existe registro com esse wuzapi_instance_id
+    existente_q = await db.execute(
+        select(WhatsAppInstancia).where(
+            WhatsAppInstancia.wuzapi_instance_id == instance_id
+        )
+    )
+    inst = existente_q.scalar_one_or_none()
+    if inst is not None:
+        inst.wuzapi_token = token
+        inst.ativa = True
+        inst.status = status_inicial
+        if numero:
+            inst.numero_bot = numero
+    else:
+        inst = WhatsAppInstancia(
+            wuzapi_instance_id=instance_id,
+            wuzapi_token=token,
+            numero_bot=numero,
+            status=status_inicial,
+            ativa=True,
+        )
+        db.add(inst)
+    await db.flush()
+
+    log.info(
+        "whatsapp.instancia_adotada",
+        instance_id=instance_id,
+        status=status_inicial.value,
+        admin_user=_admin.email,
+    )
+
+    return InstanciaOut.model_validate(inst)

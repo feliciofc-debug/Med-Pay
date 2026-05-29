@@ -93,6 +93,34 @@ class QRCodeOut(BaseModel):
     status: StatusInstancia
 
 
+class AdotarInstanciaRequest(BaseModel):
+    """Adota uma instancia ja existente no servidor Wuzapi.
+
+    Quando o admin gerou o QR code direto no servidor (via curl/UI do
+    Wuzapi) e ja pareou o WhatsApp, podemos plugar essa instancia no
+    Med-Pay sem precisar criar nada novo. Basta colar o `instance_id`
+    e o `token` que o Wuzapi gerou.
+    """
+
+    wuzapi_instance_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="ID/nome do user no servidor Wuzapi (ex: 'medpag-jarvis' ou um UUID)",
+    )
+    wuzapi_token: str = Field(
+        ...,
+        min_length=8,
+        max_length=255,
+        description="Token da instancia, gerado pelo Wuzapi quando o user foi criado",
+    )
+    numero_bot: str | None = Field(
+        None,
+        max_length=20,
+        description="Telefone do WhatsApp pareado, opcional. Ex: 5521999998888",
+    )
+
+
 # ============================================================
 # Webhook (formato Wuzapi)
 # ============================================================
@@ -114,6 +142,7 @@ class WuzapiWebhookEvent(BaseModel):
 
 
 __all__ = [
+    "AdotarInstanciaRequest",
     "AtualizarWhatsAppUserRequest",
     "CriarWhatsAppUserRequest",
     "InstanciaOut",
