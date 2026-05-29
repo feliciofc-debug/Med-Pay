@@ -23,6 +23,7 @@ Falhas:
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 
@@ -243,12 +244,17 @@ class WuzapiClient:
     ) -> dict[str, Any]:
         """Inicia conexão WhatsApp.
 
-        Body vazio: o fork da AMZ exige isso. Se `webhook_url` for passado,
-        configuramos logo em seguida via `configurar_webhook` (endpoint
-        separado, /webhook).
+        Body com Subscribe + Immediate = formato EXATO que o fork da AMZ
+        Ofertas exige. Sem isso, o servidor retorna HTTP 500
+        "failed to Connect" (descoberto comparando com pietro-cobranca
+        que esta em prod ha meses).
         """
+        payload = {
+            "Subscribe": ["Message", "ReadReceipt", "ChatPresence", "Presence"],
+            "Immediate": True,
+        }
         resultado = await self._request(
-            "POST", "/session/connect", token=instance_token, json={}
+            "POST", "/session/connect", token=instance_token, json=payload
         )
         if webhook_url:
             try:
@@ -287,13 +293,21 @@ class WuzapiClient:
     async def obter_qr(self, instance_token: str) -> str | None:
         """Devolve QR code base64 para parear o WhatsApp.
 
-        Estratégia em 2 passos (igual o que a AMZ faz e funciona):
-            1. GET /session/status — o status as vezes ja contem o QR
-            2. GET /session/qr — forca a geracao se nao veio
+        Fluxo IDENTICO ao pietro-cobranca-instance da AMZ Independent
+        (porta 8082 em prod), que funciona ha meses:
 
-        Retorna None quando ja esta conectado (loggedIn=true).
+            1. GET /session/status — se loggedIn=true, retorna None
+                                     — se qrcode inline, retorna ja
+            2. POST /session/connect com Subscribe+Immediate (formato exato)
+            3. Aguarda 2.5s — WuzAPI estabelece WebSocket e contacta WhatsApp
+            4. GET /session/status — re-checa qrcode inline
+            5. GET /session/qr — ultima tentativa
+            6. Se nada veio, retorna None (frontend faz polling)
+
+        Retorna None quando ja esta conectado OU quando ainda nao tem QR
+        pronto (o cliente deve fazer polling — clicar de novo em "Renovar").
         """
-        # Passo 1: tenta extrair QR direto do status
+        # 1. Status inicial
         try:
             st = await self.status(instance_token)
             if st.get("loggedIn") is True or st.get("LoggedIn") is True:
@@ -301,15 +315,36 @@ class WuzapiClient:
             qr_inline = st.get("qrcode") or st.get("QRCode")
             if isinstance(qr_inline, str) and len(qr_inline) > 50:
                 return qr_inline
-        except (WuzapiIndisponivelError, WuzapiFalhouError):
-            pass
+        except (WuzapiIndisponivelError, WuzapiFalhouError) as exc:
+            log.debug("wuzapi.status_inicial_falhou", erro=str(exc))
 
-        # Passo 2: forca /session/qr
+        # 2. POST /session/connect com payload EXATO
+        try:
+            await self.conectar(instance_token)
+        except (WuzapiIndisponivelError, WuzapiFalhouError) as exc:
+            # Nao bloqueia — o status pode dar QR no proximo poll
+            log.debug("wuzapi.connect_durante_qr_falhou", erro=str(exc))
+
+        # 3. Aguarda WuzAPI estabelecer o WebSocket
+        await asyncio.sleep(2.5)
+
+        # 4. Re-checa status (qrcode pode estar inline agora)
+        try:
+            st2 = await self.status(instance_token)
+            if st2.get("loggedIn") is True or st2.get("LoggedIn") is True:
+                return None  # conectou durante o aguardo
+            qr_inline = st2.get("qrcode") or st2.get("QRCode")
+            if isinstance(qr_inline, str) and len(qr_inline) > 50:
+                return qr_inline
+        except (WuzapiIndisponivelError, WuzapiFalhouError) as exc:
+            log.debug("wuzapi.status_recheck_falhou", erro=str(exc))
+
+        # 5. Ultima tentativa: forca /session/qr
         try:
             data = await self._request(
                 "GET", "/session/qr", token=instance_token
             )
-        except WuzapiFalhouError:
+        except (WuzapiIndisponivelError, WuzapiFalhouError):
             return None
 
         if isinstance(data, dict):
