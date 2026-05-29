@@ -195,18 +195,39 @@ async def baixar_template_planilha(
         ("Especialidade", "Opcional. Ex: Cardiologia, UTI, Pediatria."),
         ("Email", "Opcional."),
         ("Telefone", "Opcional. (DDD) numero, com ou sem mascara."),
-        ("Banco", "Codigo FEBRABAN de 3 digitos. Ex: 341 (Itau), 237 (Bradesco), 136 (Unicred)."),
+        (
+            "Banco",
+            "Codigo FEBRABAN de 3 digitos. Ex: 341 (Itau), 237 (Bradesco), 136 (Unicred), 260 (Nubank), 077 (Inter). Codigo invalido = linha rejeitada.",
+        ),
         ("Agencia", "Numero da agencia (4-5 digitos)."),
         ("Conta", "Numero da conta com digito (ex: 12345-6)."),
-        ("Tipo PIX", "CPF, CNPJ, EMAIL, TELEFONE ou ALEATORIA."),
+        (
+            "Tipo PIX",
+            "CPF, CNPJ, EMAIL, TELEFONE ou ALEATORIA. Se tipo=CPF, a chave precisa ser o MESMO CPF do prestador (anti-fraude).",
+        ),
         ("Chave PIX", "A chave em si. Para CPF/TELEFONE pode ser sem mascara."),
-        ("Valor padrao (R$)", "Opcional. Aceita 1500.00 ou 1500,00 ou 150000 (centavos)."),
+        (
+            "Valor padrao (R$)",
+            "Opcional. Aceita 1500.00 ou 1500,00 ou 150000 (centavos).",
+        ),
         ("Observacoes", "Texto livre."),
         ("", ""),
         ("DICA", "Se o CPF ja existir no cadastro, a planilha ATUALIZA o registro."),
         (
             "DICA",
             "Caso voce envie a planilha sem dados bancarios, o prestador entra como ATIVO mas nao recebe pagamento ate completar.",
+        ),
+        (
+            "DICA",
+            "Pagamento por PIX e por TED sao independentes - pode preencher SO PIX, SO banco, ou os DOIS (PIX e' priorizado).",
+        ),
+        (
+            "VALIDACAO",
+            "A plataforma valida: CPF com digito, Banco contra a lista oficial FEBRABAN, e PIX-CPF tem que bater com o CPF do prestador.",
+        ),
+        (
+            "VALIDACAO",
+            "Linhas com erro aparecem em vermelho na tela de pre-visualizacao - voce pode corrigir e re-enviar.",
         ),
     ]
     for r_idx, (a, b) in enumerate(instrucoes, start=1):

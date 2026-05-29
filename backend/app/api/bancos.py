@@ -114,4 +114,45 @@ async def validar_banco(
     )
 
 
+class ValidarPIXRequest(BaseModel):
+    chave: str
+    tipo: str | None = None
+    cpf_titular: str | None = None
+
+
+class ValidarPIXResponse(BaseModel):
+    valida: bool
+    tipo_detectado: str | None
+    chave_normalizada: str | None
+    codigo_erro: str | None
+    mensagem: str
+
+
+@router.post("/pix/validar", response_model=ValidarPIXResponse)
+async def validar_pix(
+    payload: ValidarPIXRequest,
+    _: User = Depends(get_current_user),
+) -> ValidarPIXResponse:
+    """Valida sintaxe + titularidade local de uma chave PIX.
+
+    Camada local (gratis): valida formato por tipo, auto-detecta o
+    tipo quando nao informado, e compara com CPF do titular quando a
+    chave for do tipo CPF. Camada DICT (paga) sera plugada depois.
+    """
+    from app.validators.pix import validar_chave_pix
+
+    resultado = validar_chave_pix(
+        payload.chave, tipo=payload.tipo, cpf_titular=payload.cpf_titular
+    )
+    return ValidarPIXResponse(
+        valida=resultado.is_valida,
+        tipo_detectado=(
+            resultado.tipo_detectado.value if resultado.tipo_detectado else None
+        ),
+        chave_normalizada=resultado.chave_normalizada,
+        codigo_erro=resultado.codigo_erro,
+        mensagem=resultado.mensagem,
+    )
+
+
 __all__ = ["router"]

@@ -42,7 +42,17 @@ from app.schemas.beneficiario import (
     LinhaImportPreview,
 )
 from app.services.importacao import _ler_planilha, _normalizar_chave
-from app.validators.cpf import validar_cpf
+from app.validators.banco import (
+    codigo_febraban_valido,
+    nome_banco,
+    normalizar_codigo_banco,
+)
+from app.validators.cpf import limpar_cpf, validar_cpf
+from app.validators.pix import (
+    TipoChavePIX,
+    detectar_tipo as detectar_tipo_pix,
+    validar_chave_pix,
+)
 
 log = logging.getLogger(__name__)
 
@@ -369,6 +379,14 @@ class BeneficiarioService:
                 f"(id={existente.id}). Use o endpoint de edição."
             )
 
+        # Valida dados bancários antes de salvar
+        self._validar_dados_bancarios_payload(
+            cpf_limpo=cpf_limpo,
+            banco_codigo=payload.banco_codigo,
+            pix_tipo=payload.pix_tipo,
+            pix_chave=payload.pix_chave,
+        )
+
         b = Beneficiario(
             cliente_id=payload.cliente_id,
             cpf_encrypted=encrypt(cpf_limpo),
@@ -432,6 +450,20 @@ class BeneficiarioService:
                 payload.pix_chave,
             )
         ):
+            # Valida antes de aplicar — protege contra "Banco 666"
+            # e contra chave PIX-CPF de outra pessoa
+            from app.core.crypto import decrypt as _decrypt
+
+            try:
+                cpf_atual = _decrypt(b.cpf_encrypted)
+            except Exception:
+                cpf_atual = ""
+            self._validar_dados_bancarios_payload(
+                cpf_limpo=limpar_cpf(cpf_atual),
+                banco_codigo=payload.banco_codigo or b.banco_codigo,
+                pix_tipo=payload.pix_tipo,
+                pix_chave=payload.pix_chave,
+            )
             self._aplicar_dados_bancarios(
                 b,
                 banco_codigo=payload.banco_codigo or b.banco_codigo,
@@ -530,6 +562,40 @@ class BeneficiarioService:
     # Importação em massa
     # ============================================================
 
+    def _validar_dados_bancarios_payload(
+        self,
+        *,
+        cpf_limpo: str,
+        banco_codigo: str | None,
+        pix_tipo: str | None,
+        pix_chave: str | None,
+    ) -> None:
+        """Valida banco FEBRABAN + chave PIX (camada local completa)
+        antes de salvar/atualizar.
+
+        Cobre:
+        - Banco existe na FEBRABAN
+        - Chave PIX tem sintaxe valida pelo tipo declarado/detectado
+        - PIX tipo CPF bate com o CPF do prestador (anti-fraude)
+
+        Raises:
+            BeneficiarioServiceError: se banco ou PIX forem invalidos.
+        """
+        if banco_codigo:
+            bcod = normalizar_codigo_banco(banco_codigo)
+            if not codigo_febraban_valido(bcod):
+                raise BeneficiarioServiceError(
+                    f"Código de banco '{banco_codigo}' não consta na lista "
+                    f"FEBRABAN. Verifique se digitou correto."
+                )
+
+        if pix_chave:
+            resultado = validar_chave_pix(
+                pix_chave, tipo=pix_tipo, cpf_titular=cpf_limpo or None
+            )
+            if not resultado.is_valida:
+                raise BeneficiarioServiceError(resultado.mensagem)
+
     async def importar_preview(
         self,
         *,
@@ -599,6 +665,42 @@ class BeneficiarioService:
                 avisos.append(
                     "Sem dados bancários nem PIX — prestador não poderá receber até completar."
                 )
+
+            # Valida código de banco contra lista oficial FEBRABAN.
+            # Banco inexistente vira ERRO (linha não importa);
+            # banco existente mas sem regra específica vira AVISO (importa
+            # mas alerta o operador).
+            if banco_codigo:
+                bcod = normalizar_codigo_banco(banco_codigo)
+                if not codigo_febraban_valido(bcod):
+                    erros.append(
+                        f"Código de banco '{banco_codigo}' não consta na lista "
+                        f"FEBRABAN. Verifique se digitou correto."
+                    )
+                else:
+                    banco_nome_resolvido = nome_banco(bcod)
+                    if banco_nome_resolvido:
+                        # Substitui pelo código normalizado pra evitar inconsistências
+                        banco_codigo = bcod
+
+            # Valida chave PIX (sintaxe completa + CPF==titular).
+            # Auto-detecta o tipo se nao veio preenchido (planilha do
+            # RH frequentemente nao tem coluna "Tipo PIX").
+            if pix_chave:
+                resultado_pix = validar_chave_pix(
+                    pix_chave,
+                    tipo=pix_tipo,
+                    cpf_titular=cpf_limpo or None,
+                )
+                if not resultado_pix.is_valida:
+                    erros.append(resultado_pix.mensagem)
+                else:
+                    # Se a planilha nao trouxe tipo, usa o detectado
+                    if not pix_tipo and resultado_pix.tipo_detectado:
+                        pix_tipo = resultado_pix.tipo_detectado.value
+                    # Normaliza a chave (email lowercase, telefone E.164, etc)
+                    if resultado_pix.chave_normalizada:
+                        pix_chave = resultado_pix.chave_normalizada
 
             # Lookup pra detectar duplicado/atualização
             status_linha = "OK"
