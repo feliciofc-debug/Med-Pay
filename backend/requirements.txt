@@ -39,6 +39,11 @@ structlog==24.4.0
 # Jarvis (Groq LLM + WhatsApp via Wuzapi)
 groq==0.13.0
 
+# Conversão PDF -> imagem (usado no Groq Vision parser de fichas).
+# pypdfium2 é pure-Python (wheel), funciona no Render sem poppler/binários.
+pypdfium2==4.30.0
+Pillow==10.4.0
+
 # Dev / Testes
 pytest==8.3.3
 pytest-asyncio==0.24.0

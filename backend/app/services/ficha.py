@@ -36,6 +36,11 @@ from app.models.ficha_plantao import FichaPlantao, StatusFicha
 from app.models.lote import Lote
 from app.models.user import User
 from app.services.ficha_parser import parsear_ficha
+from app.services.groq_vision_parser import (
+    GroqFalhouError,
+    GroqIndisponivelError,
+    groq_vision_service,
+)
 from app.services.ocr_service import OCRFalhouError, OCRIndisponivelError, ocr_service
 
 log = structlog.get_logger()
@@ -136,34 +141,97 @@ class FichaService:
         return ficha
 
     async def _executar_ocr(self, ficha: FichaPlantao, ext: str) -> None:
-        """Roda OCR + parser e atualiza a ficha. Captura erros pra ficar EM ERRO."""
+        """Roda OCR + parser e atualiza a ficha.
+
+        Pipeline híbrido (em ordem de prioridade):
+            1. Groq Vision (Llama 4 Scout) — lê IMAGEM direto, devolve JSON.
+               Funciona em qualquer layout, qualquer hospital. Free tier
+               do Groq tem ~14k requisições/dia, sobra.
+            2. Se Groq falhar (chave ausente, rate limit, timeout, JSON
+               inválido, etc), cai automaticamente em OCR.space + regex.
+            3. Se OCR.space também falhar, marca ficha como ERRO.
+
+        Em ambos os casos o `linhas_extraidas` sai no mesmo formato
+        (`LinhaExtraida.to_dict()`) — frontend não precisa saber qual
+        caminho foi usado.
+        """
+        from app.core.config import settings
+
         ficha.status = StatusFicha.PROCESSANDO
         await self.db.flush()
 
+        provider_usado: str | None = None
         try:
-            if ext in EXTENSOES_PDF:
-                resultado = await ocr_service.processar_pdf(
-                    ficha.arquivo_bytes, ficha.nome_arquivo
-                )
-            else:
-                resultado = await ocr_service.processar_imagem(
-                    ficha.arquivo_bytes, ficha.nome_arquivo
-                )
+            parse = None
+            texto_bruto: str | None = None
+            paginas_ocr = 0
 
-            parse = parsear_ficha(resultado.texto)
+            # =========== TENTATIVA 1: Groq Vision ===========
+            # Aceita IMAGEM (jpg/png) e PDF (convertido em PNG por página
+            # via pypdfium2 dentro do groq_vision_service).
+            usar_groq = getattr(
+                settings, "USAR_GROQ_VISION", True
+            ) and groq_vision_service.is_available()
+            if usar_groq:
+                try:
+                    mime = ficha.mime_type or (
+                        "application/pdf" if ext in EXTENSOES_PDF else "image/jpeg"
+                    )
+                    resultado_vision = await groq_vision_service.processar(
+                        ficha.arquivo_bytes,
+                        mime,
+                        nome_arquivo=ficha.nome_arquivo,
+                    )
+                    parse = resultado_vision.parse
+                    texto_bruto = resultado_vision.raw_response
+                    paginas_ocr = 1
+                    provider_usado = "groq-vision"
+                    log.info(
+                        "ficha.groq_vision_ok",
+                        ficha_id=str(ficha.id),
+                        linhas=len(parse.linhas),
+                        modelo=resultado_vision.modelo,
+                        tokens_in=resultado_vision.tokens_entrada,
+                        tokens_out=resultado_vision.tokens_saida,
+                    )
+                except (GroqIndisponivelError, GroqFalhouError) as exc:
+                    log.info(
+                        "ficha.groq_vision_fallback",
+                        ficha_id=str(ficha.id),
+                        motivo=exc.message,
+                    )
 
-            ficha.texto_ocr = resultado.texto
-            ficha.paginas_ocr = resultado.paginas
+            # =========== TENTATIVA 2: OCR.space + regex parser ===========
+            if parse is None:
+                if ext in EXTENSOES_PDF:
+                    resultado = await ocr_service.processar_pdf(
+                        ficha.arquivo_bytes, ficha.nome_arquivo
+                    )
+                else:
+                    resultado = await ocr_service.processar_imagem(
+                        ficha.arquivo_bytes, ficha.nome_arquivo
+                    )
+                parse = parsear_ficha(resultado.texto)
+                texto_bruto = resultado.texto
+                paginas_ocr = resultado.paginas
+                provider_usado = "ocr-space"
+
+            ficha.texto_ocr = texto_bruto
+            ficha.paginas_ocr = paginas_ocr
             ficha.linhas_extraidas = [linha.to_dict() for linha in parse.linhas]
-            ficha.metadados = parse.metadados or None
+            # Anota qual provider gerou — útil pra debug e auditoria
+            metadados_final = dict(parse.metadados or {})
+            metadados_final["_provider"] = provider_usado
+            ficha.metadados = metadados_final
             ficha.status = StatusFicha.EXTRAIDA
             ficha.mensagem_erro = None
 
             log.info(
                 "ficha.ocr_concluido",
                 ficha_id=str(ficha.id),
+                provider=provider_usado,
                 linhas=len(parse.linhas),
-                paginas=resultado.paginas,
+                paginas=paginas_ocr,
             )
 
         except (OCRIndisponivelError, OCRFalhouError) as exc:
@@ -302,6 +370,7 @@ class FichaService:
         ficha_id: UUID,
         *,
         usuario: User,
+        ignorar_incompletas: bool = False,
     ) -> Lote:
         """Gera um XLSX em memória a partir das linhas revisadas e
         cria um lote pelo pipeline normal (`LoteService`).

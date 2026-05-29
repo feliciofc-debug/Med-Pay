@@ -92,10 +92,33 @@ def _ficha_para_detalhe(ficha) -> FichaDetalhe:  # type: ignore[no-untyped-def]
     base = _ficha_para_resumo(ficha).model_dump()
     base["texto_ocr"] = ficha.texto_ocr
     base["linhas_extraidas"] = [
-        LinhaExtraidaSchema(**linha) for linha in (ficha.linhas_extraidas or [])
+        _hidratar_linha_schema(linha) for linha in (ficha.linhas_extraidas or [])
     ]
     base["metadados"] = ficha.metadados
     return FichaDetalhe.model_validate(base)
+
+
+def _hidratar_linha_schema(linha_raw: dict) -> LinhaExtraidaSchema:  # type: ignore[type-arg]
+    """Carrega uma linha do JSON e recalcula essenciais_faltantes/esta_pronta.
+
+    Recalcular sempre garante que mesmo após edição manual via PUT /linhas
+    os indicadores ficam corretos sem o frontend precisar fazer essa lógica.
+    """
+    schema = LinhaExtraidaSchema(**linha_raw)
+    faltam: list[str] = []
+    if not schema.cpf:
+        faltam.append("cpf")
+    if not schema.nome:
+        faltam.append("nome")
+    if not schema.valor_centavos or schema.valor_centavos <= 0:
+        faltam.append("valor")
+    tem_pix = bool(schema.chave_pix)
+    tem_conta = bool(schema.banco_codigo and schema.agencia and schema.conta)
+    if not (tem_pix or tem_conta):
+        faltam.append("forma_pagamento")
+    schema.essenciais_faltantes = faltam
+    schema.esta_pronta = not faltam
+    return schema
 
 
 # ============================================================
@@ -481,17 +504,77 @@ async def reprocessar_ocr(
 @router.post("/{ficha_id}/converter", response_model=ConverterEmLoteResponse)
 async def converter_em_lote(
     ficha_id: UUID,
+    forcar: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_aprovador),
 ) -> ConverterEmLoteResponse:
     """Gera um lote de pagamento a partir das linhas revisadas da ficha.
 
+    Validação obrigatória: por padrão, exige que TODAS as linhas tenham
+    CPF + nome + valor + (PIX OU banco completo). Se houver linha com
+    essenciais faltantes, devolve 422 com a lista de problemas pra UI
+    apontar o que falta.
+
+    Param `forcar=true`: ignora linhas incompletas (descarta) e segue
+    com as válidas. Reservado pra admin que sabe o que tá fazendo.
+
     Após sucesso, a ficha vai pra status CONVERTIDA e fica linkada via
     `lote_gerado_id`. O lote nasce em RECEBIDO e segue o pipeline normal
     (validação → AGUARDANDO_REVISAO → APROVADO → CNAB).
     """
+    from app.core.exceptions import ValidacaoError
+    from app.models.user import UserRole
+
     service = FichaService(db)
-    lote = await service.converter_em_lote(ficha_id, usuario=current_user)
+    ficha = await service.get(ficha_id)
+    from app.core.deps import verificar_acesso_cliente
+
+    verificar_acesso_cliente(current_user, ficha.cliente_id)
+
+    # Recalcula essenciais por linha (mesma regra do serializer)
+    linhas_raw = ficha.linhas_extraidas or []
+    problemas: list[dict] = []
+    for idx, l in enumerate(linhas_raw):
+        faltam: list[str] = []
+        if not (l.get("cpf") or "").strip():
+            faltam.append("cpf")
+        if not (l.get("nome") or "").strip():
+            faltam.append("nome")
+        valor = l.get("valor_centavos") or 0
+        if not isinstance(valor, int) or valor <= 0:
+            faltam.append("valor")
+        tem_pix = bool((l.get("chave_pix") or "").strip())
+        tem_conta = bool(
+            (l.get("banco_codigo") or "").strip()
+            and (l.get("agencia") or "").strip()
+            and (l.get("conta") or "").strip()
+        )
+        if not (tem_pix or tem_conta):
+            faltam.append("forma_pagamento")
+        if faltam:
+            problemas.append({
+                "linha_index": idx,
+                "nome": l.get("nome"),
+                "cpf": l.get("cpf"),
+                "faltando": faltam,
+            })
+
+    if problemas and not forcar:
+        # Só admin pode forçar via ?forcar=true
+        permite_forcar = current_user.role == UserRole.ADMIN
+        raise ValidacaoError(
+            f"{len(problemas)} linha(s) com campos essenciais faltando. "
+            "Complete os dados na tela de revisão antes de gerar o lote.",
+            details={
+                "problemas": problemas,
+                "total_problemas": len(problemas),
+                "pode_forcar": permite_forcar,
+            },
+        )
+
+    lote = await service.converter_em_lote(
+        ficha_id, usuario=current_user, ignorar_incompletas=forcar
+    )
     return ConverterEmLoteResponse(
         lote_id=lote.id,
         qtd_pagamentos=lote.total_pagamentos,

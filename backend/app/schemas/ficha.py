@@ -27,12 +27,19 @@ class LinhaExtraidaSchema(BaseModel):
     valor_centavos: int | None = Field(default=None, ge=0)
     qtd_plantoes: int | None = Field(default=None, ge=0)
     horas: int | None = Field(default=None, ge=0)
+    especialidade: str | None = None
     banco_codigo: str | None = None
     agencia: str | None = None
     conta: str | None = None
     chave_pix: str | None = None
     linha_origem: str = ""
     avisos: list[str] = Field(default_factory=list)
+
+    # Calculados a partir dos campos acima — backend preenche, frontend só lê.
+    # Indica se a linha tem todos os essenciais (CPF + nome + valor +
+    # PIX ou banco completo) pra virar pagamento.
+    essenciais_faltantes: list[str] = Field(default_factory=list)
+    esta_pronta: bool = False
 
 
 class FichaResumo(BaseModel):

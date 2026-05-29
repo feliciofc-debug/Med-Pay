@@ -653,18 +653,23 @@ export type StatusFicha =
   | "CONVERTIDA"
   | "ERRO";
 
+export type EssencialFaltante = "cpf" | "nome" | "valor" | "forma_pagamento";
+
 export interface LinhaExtraida {
   cpf: string | null;
   nome: string | null;
   valor_centavos: number | null;
   qtd_plantoes: number | null;
   horas: number | null;
+  especialidade?: string | null;
   banco_codigo: string | null;
   agencia: string | null;
   conta: string | null;
   chave_pix: string | null;
   linha_origem: string;
   avisos: string[];
+  essenciais_faltantes?: EssencialFaltante[];
+  esta_pronta?: boolean;
 }
 
 export interface FichaResumo {

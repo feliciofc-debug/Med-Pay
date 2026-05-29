@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 import { api, getErrorMessage } from "@/lib/api";
-import { formatBRL, formatDateTime } from "@/lib/utils";
+import { cn, formatBRL, formatDateTime } from "@/lib/utils";
 import type { FichaDetalhe, LinhaExtraida } from "@/types";
 
 const LINHA_VAZIA: LinhaExtraida = {
@@ -65,15 +65,32 @@ export function FichaDetalhePage() {
     }
   }, [ficha?.linhas_extraidas]);
 
+  // Calcula campos faltantes pra cada linha (mesma regra do backend).
+  // Não usamos `essenciais_faltantes` do servidor porque queremos ver o
+  // problema atualizando em tempo real conforme o usuário digita.
+  function camposFaltantes(l: LinhaExtraida): string[] {
+    const faltam: string[] = [];
+    if (!l.cpf || !l.cpf.trim()) faltam.push("cpf");
+    if (!l.nome || !l.nome.trim()) faltam.push("nome");
+    if (!l.valor_centavos || l.valor_centavos <= 0) faltam.push("valor");
+    const temPix = !!(l.chave_pix && l.chave_pix.trim());
+    const temConta = !!(
+      l.banco_codigo?.trim() &&
+      l.agencia?.trim() &&
+      l.conta?.trim()
+    );
+    if (!temPix && !temConta) faltam.push("forma_pagamento");
+    return faltam;
+  }
+
   const totaisLocal = useMemo(() => {
     const valor = linhas.reduce(
       (acc, l) => acc + (l.valor_centavos ?? 0),
       0,
     );
-    const validas = linhas.filter(
-      (l) => l.cpf && l.nome && (l.valor_centavos ?? 0) > 0,
-    ).length;
-    return { valor, validas };
+    const prontas = linhas.filter((l) => camposFaltantes(l).length === 0).length;
+    const incompletas = linhas.length - prontas;
+    return { valor, prontas, incompletas, validas: prontas };
   }, [linhas]);
 
   const salvar = useMutation({
@@ -106,11 +123,11 @@ export function FichaDetalhePage() {
   });
 
   const converter = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (forcar: boolean = false) => {
       const { data } = await api.post<{
         lote_id: string;
         qtd_pagamentos: number;
-      }>(`/api/fichas/${id}/converter`);
+      }>(`/api/fichas/${id}/converter${forcar ? "?forcar=true" : ""}`);
       return data;
     },
     onSuccess: (data) => {
@@ -295,8 +312,15 @@ export function FichaDetalhePage() {
           <div className="flex items-center gap-4 text-xs">
             <div>
               <div className="text-slate-500">Linhas válidas</div>
-              <div className="font-semibold text-slate-900 text-base">
-                {totaisLocal.validas}/{linhas.length}
+              <div
+                className={cn(
+                  "font-semibold text-base",
+                  totaisLocal.incompletas > 0
+                    ? "text-amber-700"
+                    : "text-emerald-700",
+                )}
+              >
+                {totaisLocal.prontas}/{linhas.length}
               </div>
             </div>
             <div>
@@ -334,8 +358,21 @@ export function FichaDetalhePage() {
                   </td>
                 </tr>
               ) : (
-                linhas.map((linha, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/40">
+                linhas.map((linha, idx) => {
+                  const faltam = camposFaltantes(linha);
+                  const linhaPronta = faltam.length === 0;
+                  const faltaCpf = faltam.includes("cpf");
+                  const faltaNome = faltam.includes("nome");
+                  const faltaValor = faltam.includes("valor");
+                  const faltaForma = faltam.includes("forma_pagamento");
+                  return (
+                  <tr
+                    key={idx}
+                    className={cn(
+                      "hover:bg-slate-50/40",
+                      !linhaPronta && "bg-amber-50/40",
+                    )}
+                  >
                     <td className="px-2 py-1">
                       <input
                         value={linha.cpf ?? ""}
@@ -346,7 +383,11 @@ export function FichaDetalhePage() {
                         }
                         placeholder="000.000.000-00"
                         disabled={!podeEditar}
-                        className="input-mini font-mono"
+                        className={cn(
+                          "input-mini font-mono",
+                          faltaCpf && "ring-1 ring-amber-400 bg-amber-50",
+                        )}
+                        title={faltaCpf ? "CPF obrigatório" : undefined}
                       />
                     </td>
                     <td className="px-2 py-1">
@@ -359,7 +400,11 @@ export function FichaDetalhePage() {
                         }
                         placeholder="Nome do médico"
                         disabled={!podeEditar}
-                        className="input-mini"
+                        className={cn(
+                          "input-mini",
+                          faltaNome && "ring-1 ring-amber-400 bg-amber-50",
+                        )}
+                        title={faltaNome ? "Nome obrigatório" : undefined}
                       />
                     </td>
                     <td className="px-2 py-1">
@@ -387,7 +432,11 @@ export function FichaDetalhePage() {
                         }}
                         placeholder="0,00"
                         disabled={!podeEditar}
-                        className="input-mini text-right tabular-nums"
+                        className={cn(
+                          "input-mini text-right tabular-nums",
+                          faltaValor && "ring-1 ring-amber-400 bg-amber-50",
+                        )}
+                        title={faltaValor ? "Valor obrigatório" : undefined}
                       />
                     </td>
                     <td className="px-2 py-1">
@@ -417,7 +466,15 @@ export function FichaDetalhePage() {
                         }
                         placeholder="000"
                         disabled={!podeEditar}
-                        className="input-mini font-mono"
+                        className={cn(
+                          "input-mini font-mono",
+                          faltaForma && "ring-1 ring-amber-400 bg-amber-50",
+                        )}
+                        title={
+                          faltaForma
+                            ? "Preencha PIX OU Banco+Agência+Conta"
+                            : undefined
+                        }
                       />
                     </td>
                     <td className="px-2 py-1">
@@ -429,7 +486,10 @@ export function FichaDetalhePage() {
                           })
                         }
                         disabled={!podeEditar}
-                        className="input-mini"
+                        className={cn(
+                          "input-mini",
+                          faltaForma && "ring-1 ring-amber-400 bg-amber-50",
+                        )}
                       />
                     </td>
                     <td className="px-2 py-1">
@@ -441,7 +501,10 @@ export function FichaDetalhePage() {
                           })
                         }
                         disabled={!podeEditar}
-                        className="input-mini"
+                        className={cn(
+                          "input-mini",
+                          faltaForma && "ring-1 ring-amber-400 bg-amber-50",
+                        )}
                       />
                     </td>
                     <td className="px-2 py-1">
@@ -452,9 +515,12 @@ export function FichaDetalhePage() {
                             chave_pix: e.target.value || null,
                           })
                         }
-                        placeholder="opcional"
+                        placeholder="ou PIX"
                         disabled={!podeEditar}
-                        className="input-mini"
+                        className={cn(
+                          "input-mini",
+                          faltaForma && "ring-1 ring-amber-400 bg-amber-50",
+                        )}
                       />
                     </td>
                     <td className="px-2 py-1 text-right">
@@ -470,47 +536,97 @@ export function FichaDetalhePage() {
                       )}
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
 
         {podeEditar && (
-          <div className="px-4 py-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={adicionarLinha}
-              className="btn-ghost text-xs"
-            >
-              <Plus size={12} />
-              Adicionar linha manualmente
-            </button>
-            <div className="flex items-center gap-2 ml-auto">
+          <div className="px-4 py-3 border-t border-slate-200 space-y-3">
+            {totaisLocal.incompletas > 0 && (
+              <div className="flex items-start gap-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold mb-0.5">
+                    {totaisLocal.incompletas} linha(s) com dados faltando
+                  </p>
+                  <p className="text-amber-800">
+                    Cada pagamento precisa de <b>CPF</b>, <b>nome</b>,{" "}
+                    <b>valor</b> e <b>PIX</b> ou{" "}
+                    <b>Banco + Agência + Conta</b>. As linhas em amarelo
+                    estão incompletas — complete os campos destacados antes
+                    de gerar o lote.
+                  </p>
+                </div>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
-                onClick={() => salvar.mutate()}
-                disabled={salvar.isPending}
-                className="btn-ghost"
+                onClick={adicionarLinha}
+                className="btn-ghost text-xs"
               >
-                <Save size={14} />
-                {salvar.isPending ? "Salvando..." : "Salvar"}
+                <Plus size={12} />
+                Adicionar linha manualmente
               </button>
-              <button
-                type="button"
-                onClick={() => converter.mutate()}
-                disabled={
-                  converter.isPending ||
-                  totaisLocal.validas === 0 ||
-                  ficha.status === "CONVERTIDA"
-                }
-                className="btn-primary"
-              >
-                <Wand2 size={14} />
-                {converter.isPending
-                  ? "Gerando lote..."
-                  : `Gerar lote (${totaisLocal.validas} pagamento${totaisLocal.validas === 1 ? "" : "s"})`}
-              </button>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  type="button"
+                  onClick={() => salvar.mutate()}
+                  disabled={salvar.isPending}
+                  className="btn-ghost"
+                >
+                  <Save size={14} />
+                  {salvar.isPending ? "Salvando..." : "Salvar"}
+                </button>
+                {totaisLocal.incompletas > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        confirm(
+                          `${totaisLocal.incompletas} linha(s) incompletas serão DESCARTADAS. ` +
+                            `Apenas ${totaisLocal.prontas} pagamento(s) entrarão no lote. Continuar?`,
+                        )
+                      ) {
+                        converter.mutate(true);
+                      }
+                    }}
+                    disabled={
+                      converter.isPending ||
+                      totaisLocal.prontas === 0 ||
+                      ficha.status === "CONVERTIDA"
+                    }
+                    className="btn-ghost text-amber-700 hover:bg-amber-50"
+                    title="Pular linhas incompletas (descartar) e gerar lote com as válidas"
+                  >
+                    Forçar com {totaisLocal.prontas} válida(s)
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => converter.mutate(false)}
+                  disabled={
+                    converter.isPending ||
+                    totaisLocal.prontas === 0 ||
+                    totaisLocal.incompletas > 0 ||
+                    ficha.status === "CONVERTIDA"
+                  }
+                  className="btn-primary"
+                  title={
+                    totaisLocal.incompletas > 0
+                      ? "Resolva as linhas incompletas primeiro"
+                      : "Gerar lote com todos os pagamentos"
+                  }
+                >
+                  <Wand2 size={14} />
+                  {converter.isPending
+                    ? "Gerando lote..."
+                    : `Gerar lote (${totaisLocal.prontas} pagamento${totaisLocal.prontas === 1 ? "" : "s"})`}
+                </button>
+              </div>
             </div>
           </div>
         )}

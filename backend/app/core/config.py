@@ -84,6 +84,21 @@ class Settings(BaseSettings):
     GROQ_TEMPERATURE: float = 0.2
     GROQ_MAX_TOKENS: int = 1024
 
+    # Modelo multimodal (vision) — usado pelo parser de fichas
+    # pra ler IMAGEM/PDF da ficha e devolver JSON estruturado direto,
+    # sem depender do OCR.space + regex. Llama 4 Scout é gratuito no
+    # plano free do Groq e foi o mais preciso nos testes em fichas
+    # de plantão (tabelas, manuscritos parciais, carimbos).
+    GROQ_VISION_MODEL: str = "meta-llama/llama-4-scout-17b-16e-instruct"
+    GROQ_VISION_MAX_TOKENS: int = 4096
+    GROQ_VISION_TIMEOUT_S: int = 90
+
+    # Quando True, fichas usam Groq Vision como caminho principal e
+    # caem no OCR.space + regex só se Groq falhar.
+    # Quando False, ignora Groq e usa direto OCR.space.
+    # (Mesmo com True, se GROQ_API_KEY estiver vazio, cai no OCR.space.)
+    USAR_GROQ_VISION: bool = True
+
     # Wuzapi (WhatsApp não oficial, rodado em VPS Contabo)
     WUZAPI_URL: str | None = None  # ex: http://seuvps:8080
     WUZAPI_ADMIN_TOKEN: str | None = None  # Bearer admin

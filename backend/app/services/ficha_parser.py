@@ -91,6 +91,30 @@ _PIX_REGEX = re.compile(
     r"pix\s*[:\-]?\s*(\S+@\S+|\+?\d[\d.\-/\s]{6,})", re.IGNORECASE
 )
 
+# Especialidade médica — token informativo, NÃO entra no pagamento mas
+# ajuda a identificar que a linha é de plantão (vs cabeçalho/rodapé)
+_ESPECIALIDADES = (
+    "anestesist",
+    "cirurgi",
+    "clínic",
+    "clinic",
+    "obstetr",
+    "ginecolog",
+    "pediatr",
+    "cardiolog",
+    "ortoped",
+    "neurolog",
+    "intensivist",
+    "plantonist",
+    "radiolog",
+    "urologist",
+    "psiquiatr",
+)
+_ESPECIALIDADE_REGEX = re.compile(
+    r"\b(" + "|".join(_ESPECIALIDADES) + r")[a-zçãõéíóúâêô]*\b",
+    re.IGNORECASE,
+)
+
 # Cabeçalho: hospital, competência, coordenador
 _HOSPITAL_REGEX = re.compile(
     r"(?:hospital|cl[ií]nica|institui[çc][aã]o)\s*[:\-]?\s*([^\n]+?)$",
@@ -157,12 +181,42 @@ class LinhaExtraida:
     valor_centavos: int | None = None
     qtd_plantoes: int | None = None
     horas: int | None = None
+    especialidade: str | None = None
     banco_codigo: str | None = None
     agencia: str | None = None
     conta: str | None = None
     chave_pix: str | None = None
     linha_origem: str = ""
     avisos: list[str] = field(default_factory=list)
+
+    @property
+    def essenciais_faltantes(self) -> list[str]:
+        """Campos obrigatórios pra virar pagamento.
+
+        Pra ser convertida em Pagamento, uma linha precisa de:
+            - CPF válido
+            - Nome
+            - Valor > 0
+            - Forma de pagamento: chave_pix OU (banco + agencia + conta)
+
+        Retorna lista de chaves faltantes (vazia se a linha tá completa).
+        """
+        faltam: list[str] = []
+        if not self.cpf:
+            faltam.append("cpf")
+        if not self.nome:
+            faltam.append("nome")
+        if not self.valor_centavos or self.valor_centavos <= 0:
+            faltam.append("valor")
+        tem_pix = bool(self.chave_pix)
+        tem_conta = bool(self.banco_codigo and self.agencia and self.conta)
+        if not (tem_pix or tem_conta):
+            faltam.append("forma_pagamento")
+        return faltam
+
+    @property
+    def esta_pronta(self) -> bool:
+        return not self.essenciais_faltantes
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -171,12 +225,15 @@ class LinhaExtraida:
             "valor_centavos": self.valor_centavos,
             "qtd_plantoes": self.qtd_plantoes,
             "horas": self.horas,
+            "especialidade": self.especialidade,
             "banco_codigo": self.banco_codigo,
             "agencia": self.agencia,
             "conta": self.conta,
             "chave_pix": self.chave_pix,
             "linha_origem": self.linha_origem,
             "avisos": self.avisos,
+            "essenciais_faltantes": self.essenciais_faltantes,
+            "esta_pronta": self.esta_pronta,
         }
 
 
