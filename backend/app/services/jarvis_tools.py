@@ -1829,17 +1829,14 @@ async def reprocessar_ficha(
     ficha.status = StatusFicha.RECEBIDA
     ficha.mensagem_erro = None
     await db.flush()
-    # Dispara processamento via Celery se disponível
-    try:
-        from app.workers.tasks import processar_ficha as task_proc
-        task_proc.delay(str(ficha.id))
-    except Exception:  # noqa: BLE001
-        log.warning("jarvis.reprocessar_ficha_sem_celery", ficha_id=str(ficha.id))
-
+    # Por enquanto só reseta o status — o processamento OCR ainda
+    # acontece via upload manual (ou via celery quando criarmos a task
+    # `processar_ficha` dedicada). Coordenador vê a ficha como
+    # RECEBIDA e pode reprocessar pelo painel.
     return {
         "sucesso": True,
         "ficha_id": str(ficha.id)[:8],
-        "mensagem": "Ficha reenfileirada pra OCR.",
+        "mensagem": "Ficha resetada pra RECEBIDA — reprocessa pelo painel.",
     }
 
 
@@ -1927,14 +1924,18 @@ async def executar_tool(
 ) -> dict[str, Any]:
     """Despacha o tool_call do LLM para a função Python correspondente.
 
-    Sempre retorna dict serializável em JSON.
+    Cada tool roda dentro de um SAVEPOINT (`begin_nested`) — assim, se
+    uma query falhar (ex: tabela inexistente, FK inválida), o rollback
+    isolado mantém a sessão principal limpa e as próximas tools e o
+    fluxo do agent seguem normalmente. Sempre retorna dict JSON-safe.
     """
     func_alvo = _DISPATCH.get(nome)
     if func_alvo is None:
         return {"erro": "tool_desconhecida", "mensagem": f"Tool '{nome}' não existe."}
 
     try:
-        result = await func_alvo(db, user, **(args or {}))
+        async with db.begin_nested():
+            result = await func_alvo(db, user, **(args or {}))
         return result if isinstance(result, dict) else {"resultado": result}
     except TypeError as exc:
         return {"erro": "args_invalidos", "mensagem": f"Parâmetros inválidos: {exc}"}

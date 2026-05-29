@@ -113,12 +113,20 @@ async def _system_prompt_para(
             "rankings, panorama agregado.\n"
         )
 
-    # Memórias persistentes — entram como bloco extra do prompt
+    # Memórias persistentes — entram como bloco extra do prompt.
+    # IMPORTANTE: usamos SAVEPOINT (begin_nested) pra isolar essa query.
+    # Se a tabela ainda não existe no banco (migration 022 não aplicada)
+    # ou qualquer outro erro, o rollback do savepoint mantém a sessão
+    # principal limpa pra continuar processando o resto do fluxo.
     memorias_bloco = ""
+    memorias: list = []
     try:
-        memorias = await carregar_memorias_para_prompt(db, user, limite=20)
+        async with db.begin_nested():
+            memorias = await carregar_memorias_para_prompt(
+                db, user, limite=20
+            )
     except Exception:  # noqa: BLE001
-        log.exception("jarvis.carregar_memorias_falhou")
+        log.warning("jarvis.carregar_memorias_falhou", exc_info=True)
         memorias = []
 
     if memorias:
