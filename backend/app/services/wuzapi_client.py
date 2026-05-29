@@ -368,13 +368,13 @@ class WuzapiClient:
     ) -> dict[str, Any]:
         """Configura URL de webhook para a instancia.
 
-        Wuzapi aceita tanto camelCase quanto lowercase nos campos —
-        mandamos ambos pra maxima compatibilidade entre forks.
+        Formato EXATO descoberto via teste contra o servidor da AMZ
+        (porta 8082): POST /webhook com {"WebhookURL": str, "Events": list[str]}.
+        Chaves em PascalCase e Events como ARRAY (nao string).
+        Outros formatos retornam 400 "could not decode payload" ou 404.
         """
         payload = {
-            "webhook": url,
-            "Webhook": url,
-            "events": eventos or ["Message"],
+            "WebhookURL": url,
             "Events": eventos or ["Message"],
         }
         return await self._request(
