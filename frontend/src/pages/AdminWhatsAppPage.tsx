@@ -238,6 +238,26 @@ interface AdotarInstanciaModalProps {
   onAdopted: () => void;
 }
 
+interface DiagnosticoUser {
+  name: string;
+  id: string;
+  token: string;
+  token_preview: string;
+  jid: string | null;
+  numero: string | null;
+  connected: boolean | null;
+  loggedIn: boolean | null;
+  webhook: string | null;
+}
+
+interface DiagnosticoResponse {
+  wuzapi_url: string | null;
+  ok: boolean;
+  erro?: string;
+  total?: number;
+  users: DiagnosticoUser[];
+}
+
 function AdotarInstanciaModal({
   onClose,
   onAdopted,
@@ -246,6 +266,17 @@ function AdotarInstanciaModal({
   const [token, setToken] = useState("");
   const [numero, setNumero] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const { data: diag, isLoading: loadingDiag, refetch: recarregarDiag } = useQuery({
+    queryKey: ["whatsapp", "diagnostico"],
+    queryFn: async () => {
+      const { data } = await api.get<DiagnosticoResponse>(
+        "/api/whatsapp/instancia/diagnostico",
+      );
+      return data;
+    },
+    refetchOnWindowFocus: false,
+  });
 
   const adotar = useMutation({
     mutationFn: async () => {
@@ -276,25 +307,95 @@ function AdotarInstanciaModal({
             aqui que o Med-Pay passa a usar essa sessão.
           </p>
         </div>
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <div className="flex items-center justify-between bg-slate-50 px-3 py-2 border-b border-slate-200">
+              <div>
+                <p className="text-xs font-semibold text-slate-700">
+                  Sessões disponíveis na VPS
+                </p>
+                {diag?.wuzapi_url && (
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    {diag.wuzapi_url}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => void recarregarDiag()}
+                disabled={loadingDiag}
+                className="text-xs text-brand-700 hover:underline disabled:opacity-50"
+              >
+                {loadingDiag ? "Carregando..." : "Recarregar"}
+              </button>
+            </div>
+            {loadingDiag ? (
+              <div className="p-4 text-xs text-slate-500 text-center">
+                <Loader2 size={14} className="animate-spin inline mr-2" />
+                Consultando servidor...
+              </div>
+            ) : diag && !diag.ok ? (
+              <div className="p-3 text-xs text-red-700 bg-red-50">
+                {diag.erro ?? "Falha ao consultar servidor"}
+              </div>
+            ) : diag && diag.users.length === 0 ? (
+              <div className="p-4 text-xs text-slate-500 text-center">
+                Nenhuma sessão no servidor ainda.
+              </div>
+            ) : diag && diag.users.length > 0 ? (
+              <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                {diag.users.map((u) => (
+                  <button
+                    key={u.id || u.name}
+                    type="button"
+                    onClick={() => {
+                      setInstanceId(u.name || u.id);
+                      setToken(u.token);
+                      if (u.numero) setNumero(u.numero);
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-emerald-50/40 transition flex items-center gap-3"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-800 truncate">
+                          {u.name || "(sem nome)"}
+                        </span>
+                        {u.loggedIn ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">
+                            CONECTADO
+                          </span>
+                        ) : u.connected ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">
+                            AGUARDANDO QR
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
+                            DESLIGADO
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-mono truncate">
+                        {u.token_preview}
+                        {u.numero && ` • +${u.numero}`}
+                      </div>
+                    </div>
+                    <span className="text-xs text-brand-700 font-medium whitespace-nowrap">
+                      Usar este →
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
           <div className="text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1.5">
             <p className="font-semibold text-amber-900">
-              Como obter esses dados:
+              Ou cole os dados manualmente:
             </p>
             <p>
-              1. Na VPS, gere o QR code direto:{" "}
-              <code className="bg-white px-1 rounded">
-                curl -X POST -H "Authorization: SEU_TOKEN"
-                https://api2.amzofertas.com.br:8083/session/connect
-              </code>
-            </p>
-            <p>
-              2. Escaneie no WhatsApp → Aparelhos conectados → Conectar
-              aparelho.
-            </p>
-            <p>
-              3. Cole abaixo o <strong>nome do user</strong> (instance_id) e o{" "}
-              <strong>token</strong> dele.
+              Se você gerou o QR direto no servidor (via curl/UI da VPS) e já
+              escaneou com o celular, cole o <strong>nome do user</strong>{" "}
+              (instance_id) e o <strong>token</strong> dele abaixo.
             </p>
           </div>
 

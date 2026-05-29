@@ -490,6 +490,97 @@ async def desconectar_instancia(
     return {"status": "desconectada"}
 
 
+@router.get("/instancia/diagnostico")
+async def diagnostico_wuzapi(
+    _admin: User = Depends(require_admin),
+) -> dict[str, Any]:
+    """Diagnostico do servidor Wuzapi: lista users disponiveis com status.
+
+    Util para:
+    - Ver o que ja existe na VPS sem precisar de SSH
+    - Decidir qual sessao adotar via "Adotar instancia existente"
+    - Confirmar que admin token + header estao funcionando
+
+    Resposta:
+    {
+        "wuzapi_url": "http://...",
+        "ok": true,
+        "users": [
+            {
+                "name": "jarvis",
+                "id": "...",
+                "token_preview": "jarvis-byc...",
+                "loggedIn": true,
+                "jid": "5521...@s.whatsapp.net",
+                "webhook": "https://...",
+            },
+            ...
+        ],
+        "raw": {...}  # so primeiros 1000 chars em modo debug
+    }
+    """
+    if not wuzapi_client.is_configured():
+        return {
+            "wuzapi_url": None,
+            "ok": False,
+            "erro": (
+                "WUZAPI_URL ou WUZAPI_ADMIN_TOKEN nao configurados. "
+                "Verifique as variaveis de ambiente no Render."
+            ),
+            "users": [],
+        }
+
+    try:
+        users = await wuzapi_client.listar_instancias()
+    except (WuzapiIndisponivelError, WuzapiFalhouError) as exc:
+        return {
+            "wuzapi_url": wuzapi_client.base_url,
+            "ok": False,
+            "erro": exc.message,
+            "users": [],
+        }
+
+    # Normaliza cada user pra UI conseguir mostrar bonito
+    resultado: list[dict[str, Any]] = []
+    for u in users:
+        token = u.get("token") or u.get("Token") or u.get("apiToken") or ""
+        nome = u.get("name") or u.get("Name") or u.get("username") or ""
+        instance_id = (
+            u.get("id") or u.get("ID") or u.get("userid") or nome or ""
+        )
+        jid = u.get("jid") or u.get("JID") or None
+        connected = u.get("connected") if u.get("connected") is not None else u.get("Connected")
+        logged_in = u.get("loggedIn") if u.get("loggedIn") is not None else u.get("LoggedIn")
+        webhook = u.get("webhook") or u.get("Webhook") or None
+
+        resultado.append(
+            {
+                "name": nome,
+                "id": str(instance_id) if instance_id else "",
+                "token": token,
+                "token_preview": (
+                    f"{token[:12]}..." if token and len(token) > 14 else token
+                ),
+                "jid": jid,
+                "numero": (
+                    jid.split(":")[0]
+                    if isinstance(jid, str) and ":" in jid
+                    else None
+                ),
+                "connected": connected,
+                "loggedIn": logged_in,
+                "webhook": webhook,
+            }
+        )
+
+    return {
+        "wuzapi_url": wuzapi_client.base_url,
+        "ok": True,
+        "total": len(resultado),
+        "users": resultado,
+    }
+
+
 @router.post("/instancia/adotar", response_model=InstanciaOut)
 async def adotar_instancia(
     payload: AdotarInstanciaRequest,

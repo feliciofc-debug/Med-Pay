@@ -62,8 +62,12 @@ class WuzapiClient:
     def __init__(self) -> None:
         self.base_url: str | None = (settings.WUZAPI_URL or "").rstrip("/") or None
         self.admin_token: str | None = settings.WUZAPI_ADMIN_TOKEN
-        # Configurável: Wuzapi oficial usa "Token", forks tipo AMZ usam
-        # "Authorization". Default = "Token" pra manter compatibilidade.
+        # WUZAPI_AUTH_HEADER ainda existe pra compatibilidade, mas agora
+        # mandamos AMBOS os headers em toda chamada (ver _request). Foi
+        # descoberto que o fork da AMZ Ofertas usa:
+        #   - "Authorization" no admin (/admin/users)
+        #   - "Token" / "token" em endpoints de sessao (/session/*)
+        # Mandando os dois sempre, funcionamos com qualquer fork.
         self.auth_header: str = (settings.WUZAPI_AUTH_HEADER or "Token").strip() or "Token"
 
     def is_configured(self) -> bool:
@@ -88,10 +92,19 @@ class WuzapiClient:
             )
         url = f"{self.base_url}{path}"
         headers = {"Content-Type": "application/json"}
-        # Nome do header é configurável via WUZAPI_AUTH_HEADER porque
-        # forks como o da AMZ Ofertas usam "Authorization" em vez de "Token".
         if token:
-            headers[self.auth_header] = token
+            # Mandamos AMBOS porque diferentes endpoints aceitam um ou outro
+            # (admin = Authorization, sessao = Token). Em forks que ja
+            # checam ambos, o ultimo vence — sem prejuizo.
+            headers["Token"] = token
+            headers["Authorization"] = token
+            # Tambem expoe o header customizado da config (caso o user
+            # queira testar com Bearer-style num fork especifico).
+            if (
+                self.auth_header
+                and self.auth_header not in ("Token", "Authorization")
+            ):
+                headers[self.auth_header] = token
 
         try:
             async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
@@ -106,9 +119,10 @@ class WuzapiClient:
 
         if resp.status_code in (401, 403):
             raise WuzapiIndisponivelError(
-                f"Token Wuzapi inválido ({resp.status_code} no header "
-                f"'{self.auth_header}'). Verifique WUZAPI_ADMIN_TOKEN e "
-                "WUZAPI_AUTH_HEADER (Token=oficial, Authorization=fork AMZ)."
+                f"Token Wuzapi invalido ({resp.status_code}). Mandamos "
+                "os headers 'Token' e 'Authorization'. Verifique o valor de "
+                "WUZAPI_ADMIN_TOKEN no Render (precisa ser exatamente igual "
+                "ao admin token do servidor na VPS)."
             )
 
         if resp.status_code >= 400:
