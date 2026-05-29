@@ -116,17 +116,34 @@ def _validar_linha(linha: LinhaPlanilha) -> ResumoLinha:
         codigos.append(res_valor.codigo_erro)
         mensagens.append(res_valor.mensagem)
 
-    # Banco
-    res_banco = validar_dados_bancarios(linha.banco_raw, linha.agencia_raw, linha.conta_raw)
-    if res_banco.codigo_erro:
-        codigos.append(res_banco.codigo_erro)
-        mensagens.append(res_banco.mensagem)
+    # Banco — só valida se a linha NÃO tem PIX
+    # Pagamento por PIX dispensa banco/agência/conta.
+    chave_pix_raw = (linha.chave_pix_raw or "").strip() or None
+    tem_pix = chave_pix_raw is not None and len(chave_pix_raw) >= 3
+
+    if tem_pix:
+        # Quando há PIX, os campos bancários são opcionais. Tentamos
+        # parsear se vierem, mas qualquer erro NÃO bloqueia o pagamento.
+        res_banco = validar_dados_bancarios(
+            linha.banco_raw, linha.agencia_raw, linha.conta_raw
+        )
+        # Não propagamos erros bancários quando há PIX.
+    else:
+        res_banco = validar_dados_bancarios(
+            linha.banco_raw, linha.agencia_raw, linha.conta_raw
+        )
+        if res_banco.codigo_erro:
+            codigos.append(res_banco.codigo_erro)
+            mensagens.append(res_banco.mensagem)
 
     # Determina status final
+    banco_invalido = not tem_pix and (
+        res_banco.status == StatusBanco.INVALIDO
+        or res_banco.status == StatusBanco.NAO_SUPORTADO
+    )
     if (
         res_cpf.status == CPFStatus.INVALIDO
-        or res_banco.status == StatusBanco.INVALIDO
-        or res_banco.status == StatusBanco.NAO_SUPORTADO
+        or banco_invalido
         or res_valor.status == ValorStatus.INVALIDO
     ):
         status = StatusPagamento.BLOQUEADO
@@ -144,7 +161,7 @@ def _validar_linha(linha: LinhaPlanilha) -> ResumoLinha:
         mensagens.append("Nome do beneficiário não informado")
         status = StatusPagamento.BLOQUEADO
 
-    modalidade = _decidir_modalidade(res_banco.banco_codigo, chave_pix=None)
+    modalidade = _decidir_modalidade(res_banco.banco_codigo, chave_pix=chave_pix_raw)
 
     return ResumoLinha(
         linha=linha,
@@ -160,7 +177,7 @@ def _validar_linha(linha: LinhaPlanilha) -> ResumoLinha:
         agencia_limpa=res_banco.agencia_limpa,
         conta_limpa=res_banco.conta_limpa,
         modalidade=modalidade,
-        chave_pix=None,
+        chave_pix=chave_pix_raw,
     )
 
 
@@ -236,6 +253,25 @@ def _construir_pagamento(
         ),
         cpf_sugerido=resumo.cpf_sugerido,
     )
+
+
+async def _carregar_avisos_conta(
+    db: AsyncSession, beneficiario_ids: set[UUID]
+) -> dict[UUID, str]:
+    """Retorna {beneficiario_id: motivo} para beneficiários com conta marcada
+    como inválida em pagamentos anteriores (estratégia de aprendizado
+    contínuo — ver `aplicar_retorno` em conciliacao.py).
+    """
+    if not beneficiario_ids:
+        return {}
+    result = await db.execute(
+        select(Beneficiario.id, Beneficiario.conta_invalida_motivo).where(
+            Beneficiario.id.in_(beneficiario_ids),
+            Beneficiario.conta_verificada.is_(False),
+            Beneficiario.conta_invalida_motivo.is_not(None),
+        )
+    )
+    return {row.id: row.conta_invalida_motivo for row in result.all()}
 
 
 async def _carregar_beneficiarios_por_cpf(
@@ -320,11 +356,47 @@ async def processar_lote(
         db, lote.cliente_id, hashes_validos
     )
 
+    # Carrega motivos de conta_invalida pra alertar beneficiários
+    # com histórico de rejeição em lotes anteriores.
+    motivos_conta_invalida = await _carregar_avisos_conta(
+        db, set(mapa_beneficiarios.values())
+    )
+
     pagamentos: list[Pagamento] = []
     for r in resumos:
         ben_id: UUID | None = None
         if r.cpf_limpo:
             ben_id = mapa_beneficiarios.get(hash_for_lookup(r.cpf_limpo))
+        # Promove a CORRIGIVEL e adiciona aviso se este beneficiário já
+        # teve a conta rejeitada antes. Não bloqueia (o usuário pode ter
+        # corrigido), apenas chama a atenção.
+        if (
+            ben_id is not None
+            and ben_id in motivos_conta_invalida
+            and r.status == StatusPagamento.VALIDO
+        ):
+            r.codigos_erro.append("HISTORICO_CONTA_REJEITADA")
+            r.mensagens.append(
+                f"Atenção: conta deste beneficiário foi rejeitada em pagamento "
+                f"anterior ({motivos_conta_invalida[ben_id]}). Revise os dados "
+                f"bancários antes de aprovar."
+            )
+            r = ResumoLinha(
+                linha=r.linha,
+                status=StatusPagamento.CORRIGIVEL,
+                codigos_erro=r.codigos_erro,
+                mensagens=r.mensagens,
+                cpf_limpo=r.cpf_limpo,
+                cpf_sugerido=r.cpf_sugerido,
+                cpf_mascarado=r.cpf_mascarado,
+                valor_centavos=r.valor_centavos,
+                nome=r.nome,
+                banco_codigo=r.banco_codigo,
+                agencia_limpa=r.agencia_limpa,
+                conta_limpa=r.conta_limpa,
+                modalidade=r.modalidade,
+                chave_pix=r.chave_pix,
+            )
         pagamentos.append(_construir_pagamento(lote, r, beneficiario_id=ben_id))
     db.add_all(pagamentos)
 

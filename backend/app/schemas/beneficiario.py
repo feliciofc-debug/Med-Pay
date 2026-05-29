@@ -61,6 +61,9 @@ class BeneficiarioOut(BaseModel):
     ultimo_pagamento_at: datetime | None = None
 
     ativo: bool
+    conta_verificada: bool = False
+    conta_invalida_motivo: str | None = None
+    conta_verificada_em: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

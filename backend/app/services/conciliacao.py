@@ -20,6 +20,7 @@ from app.core.exceptions import (
     LoteNaoEncontradoError,
     LoteNaoAprovavelError,
 )
+from app.models.beneficiario import Beneficiario
 from app.models.lote import Lote, StatusLote
 from app.models.pagamento import Pagamento, StatusPagamento
 from app.models.user import User
@@ -89,6 +90,24 @@ class ConciliacaoService:
             str(p.id)[:20]: p for p in lote.pagamentos
         }
 
+        # Códigos de retorno CNAB que indicam problema na conta do favorecido.
+        # Quando aparecem, marcamos o beneficiário como "conta inválida" para
+        # alertar no próximo lote. Fonte: layout FEBRABAN CNAB 240.
+        codigos_conta_invalida = {
+            "02",  # Agência/Conta favorecido inválida
+            "03",  # Conta favorecido inexistente
+            "AG",  # Agência inválida
+            "AH",  # Tipo conta favorecido inválido
+            "AI",  # Conta corrente do cliente inválida
+            "AJ",  # CGC/CPF inválido
+            "AN",  # Endereço favorecido não informado
+            "BC",  # Conta destino inválida
+            "BD",  # Agência destino inválida
+        }
+
+        beneficiarios_a_marcar: dict[UUID, str] = {}
+        beneficiarios_a_verificar: set[UUID] = set()
+
         atualizados = 0
         for ret in resultado.pagamentos:
             pagamento = pagamentos_por_id.get(ret.id_documento)
@@ -100,12 +119,46 @@ class ConciliacaoService:
             if ret.foi_pago:
                 pagamento.status = StatusPagamento.PAGO
                 pagamento.pago_at = datetime.now(UTC)
+                # Pagamento confirmado → conta validada
+                if pagamento.beneficiario_id is not None:
+                    beneficiarios_a_verificar.add(pagamento.beneficiario_id)
             else:
                 pagamento.status = StatusPagamento.NAO_PAGO
+                cod = (ret.codigo_ocorrencia or "").strip().upper()
+                if (
+                    cod in codigos_conta_invalida
+                    and pagamento.beneficiario_id is not None
+                ):
+                    beneficiarios_a_marcar[pagamento.beneficiario_id] = (
+                        f"{cod} — {ret.descricao_ocorrencia or 'Conta rejeitada pelo banco'}"
+                    )
 
             pagamento.retorno_codigo = ret.codigo_ocorrencia
             pagamento.retorno_descricao = ret.descricao_ocorrencia
             atualizados += 1
+
+        # Aplica marcação nos beneficiários (1 query batch cada lado)
+        if beneficiarios_a_marcar:
+            result_inv = await self.db.execute(
+                select(Beneficiario).where(
+                    Beneficiario.id.in_(beneficiarios_a_marcar.keys())
+                )
+            )
+            for ben in result_inv.scalars().all():
+                ben.conta_verificada = False
+                ben.conta_invalida_motivo = beneficiarios_a_marcar[ben.id]
+                ben.conta_verificada_em = datetime.now(UTC)
+
+        if beneficiarios_a_verificar:
+            result_ok = await self.db.execute(
+                select(Beneficiario).where(
+                    Beneficiario.id.in_(beneficiarios_a_verificar)
+                )
+            )
+            for ben in result_ok.scalars().all():
+                ben.conta_verificada = True
+                ben.conta_invalida_motivo = None
+                ben.conta_verificada_em = datetime.now(UTC)
 
         lote.status = StatusLote.CONCILIADO
         lote.caminho_arquivo_retorno = str(caminho)

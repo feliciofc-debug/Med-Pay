@@ -44,6 +44,7 @@ class LinhaPlanilha:
     agencia_raw: str | None
     conta_raw: str | None
     valor_raw: Any  # pode vir como str, float, int
+    chave_pix_raw: str | None = None  # opcional, ativa modalidade PIX
 
     @property
     def linha_resumo(self) -> str:
@@ -123,6 +124,15 @@ _ALIASES_CAMPO: dict[str, list[str]] = {
         "valorpagar",
         "valorrepasse",
         "vlr",
+    ],
+    "chave_pix": [
+        "chavepix",
+        "pix",
+        "chavepixcadastrada",
+        "pixchave",
+        "pixfavorecido",
+        "pixbeneficiario",
+        "tipopix",
     ],
 }
 
@@ -288,6 +298,7 @@ def importar_planilha(
             agencia_raw=_get(row, "agencia"),
             conta_raw=_get(row, "conta"),
             valor_raw=_get(row, "valor"),
+            chave_pix_raw=_get(row, "chave_pix"),
         )
         linhas.append(linha)
 

@@ -331,6 +331,87 @@ async def download_cnab(
 
 
 # ============================================================
+# Download da lista PIX (XLSX) — pagamentos PIX deste lote
+# ============================================================
+
+
+@router.get("/{lote_id}/pix.xlsx")
+async def download_lista_pix(
+    lote_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    """Baixa planilha com os pagamentos PIX aprovados deste lote.
+
+    PIX não entra no CNAB Unicred (layout PIX não homologado no convênio).
+    A planilha tem: Nome, CPF (mascarado), Chave PIX, Valor. O financeiro
+    do hospital usa para pagar via Internet Banking ou enviar para a
+    operadora de PIX em lote (Asaas etc.).
+    """
+    import io
+
+    import pandas as pd
+
+    from app.models.pagamento import ModalidadePagamento, StatusPagamento
+
+    service = LoteService(db)
+    lote = await service.get_com_pagamentos(lote_id)
+
+    pix = [
+        p
+        for p in lote.pagamentos
+        if p.modalidade == ModalidadePagamento.PIX
+        and p.status in (StatusPagamento.APROVADO, StatusPagamento.VALIDO)
+    ]
+    if not pix:
+        raise ValidacaoError(
+            "Este lote não tem pagamentos PIX. Use 'Baixar CNAB' para pagamentos TED."
+        )
+
+    total_centavos = sum(p.valor_centavos for p in pix)
+    rows = []
+    for p in pix:
+        rows.append(
+            {
+                "Linha": p.linha_planilha,
+                "Nome": p.nome,
+                "CPF": p.cpf_mascarado,
+                "Chave PIX": p.chave_pix or "",
+                "Valor (R$)": f"{p.valor_centavos / 100:.2f}".replace(".", ","),
+                "Status": p.status.value,
+            }
+        )
+    # linha total
+    rows.append(
+        {
+            "Linha": "",
+            "Nome": "TOTAL",
+            "CPF": "",
+            "Chave PIX": "",
+            "Valor (R$)": f"{total_centavos / 100:.2f}".replace(".", ","),
+            "Status": "",
+        }
+    )
+
+    df = pd.DataFrame(rows)
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="PIX")
+    conteudo = buf.getvalue()
+
+    nome_arquivo = f"MEDPAG-PIX-{lote.id.hex[:8].upper()}.xlsx"
+    return Response(
+        content=conteudo,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": f'attachment; filename="{nome_arquivo}"'
+        },
+    )
+
+
+# ============================================================
 # Regerar CNAB (forçar geração nova)
 # ============================================================
 

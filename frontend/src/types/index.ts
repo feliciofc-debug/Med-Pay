@@ -39,6 +39,9 @@ export interface Beneficiario {
   valor_max_centavos: number;
   ultimo_pagamento_at: string | null;
   ativo: boolean;
+  conta_verificada?: boolean;
+  conta_invalida_motivo?: string | null;
+  conta_verificada_em?: string | null;
   created_at: string;
   updated_at: string;
 }

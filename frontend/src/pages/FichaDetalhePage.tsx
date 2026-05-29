@@ -45,6 +45,25 @@ export function FichaDetalhePage() {
   const [showOcrText, setShowOcrText] = useState(false);
   const [showOriginal, setShowOriginal] = useState(true);
 
+  const { data: bancos } = useQuery({
+    queryKey: ["bancos-febraban"],
+    queryFn: async () => {
+      const resp = await api.get<{ codigo: string; nome: string; suportado_cnab: boolean }[]>(
+        "/api/bancos",
+      );
+      const mapa = new Map<string, string>();
+      for (const b of resp.data) mapa.set(b.codigo, b.nome);
+      return mapa;
+    },
+    staleTime: 1000 * 60 * 60, // 1 hora
+  });
+
+  const nomeBanco = (codigo: string | null | undefined) => {
+    if (!codigo) return null;
+    const c = codigo.padStart(3, "0");
+    return bancos?.get(c) ?? null;
+  };
+
   const { data: ficha, isLoading } = useQuery({
     queryKey: ["ficha", id],
     queryFn: async () => {
@@ -473,13 +492,27 @@ export function FichaDetalhePage() {
                         className={cn(
                           "input-mini font-mono",
                           faltaForma && "ring-1 ring-amber-400 bg-amber-50",
+                          linha.banco_codigo &&
+                            linha.banco_codigo.length === 3 &&
+                            !nomeBanco(linha.banco_codigo) &&
+                            "ring-1 ring-red-400 bg-red-50",
                         )}
                         title={
-                          faltaForma
-                            ? "Preencha PIX OU Banco+Agência+Conta"
-                            : undefined
+                          linha.banco_codigo &&
+                          linha.banco_codigo.length === 3 &&
+                          !nomeBanco(linha.banco_codigo)
+                            ? `Banco ${linha.banco_codigo} não existe na FEBRABAN`
+                            : nomeBanco(linha.banco_codigo) ??
+                              (faltaForma
+                                ? "Preencha PIX OU Banco+Agência+Conta"
+                                : "Código FEBRABAN (3 dígitos)")
                         }
                       />
+                      {nomeBanco(linha.banco_codigo) && (
+                        <div className="text-[10px] text-slate-500 truncate max-w-[120px] mt-0.5">
+                          {nomeBanco(linha.banco_codigo)}
+                        </div>
+                      )}
                     </td>
                     <td className="px-2 py-1">
                       <input

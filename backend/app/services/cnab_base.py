@@ -119,8 +119,22 @@ class CNABGeneratorBase(ABC):
         agora: datetime | None = None,
     ) -> None:
         self.lote = lote
+        # Só CNAB para TED/Transf bancária. PIX é exportado em fluxo separado
+        # (relatório/Asaas) porque a Unicred não homologou layout PIX no
+        # nosso convênio. Pagamentos PIX aprovados continuam no banco com
+        # status APROVADO; apenas são pulados na remessa CNAB.
+        from app.models.pagamento import ModalidadePagamento
         self.pagamentos = [
-            p for p in pagamentos if p.status == StatusPagamento.APROVADO
+            p
+            for p in pagamentos
+            if p.status == StatusPagamento.APROVADO
+            and p.modalidade != ModalidadePagamento.PIX
+        ]
+        self.pagamentos_pix = [
+            p
+            for p in pagamentos
+            if p.status == StatusPagamento.APROVADO
+            and p.modalidade == ModalidadePagamento.PIX
         ]
         self.empresa = empresa
         self.numero_sequencial = numero_sequencial_arquivo
@@ -389,6 +403,12 @@ class CNABGeneratorBase(ABC):
     def gerar(self) -> CNABResult:
         """Monta o arquivo, valida largura por linha e calcula hash."""
         if not self.pagamentos:
+            if self.pagamentos_pix:
+                raise CNABGeneratorError(
+                    "Este lote só tem pagamentos PIX aprovados. "
+                    "PIX é processado em fluxo separado (use 'Baixar lista PIX'). "
+                    "Nenhum pagamento TED/Transf para gerar CNAB."
+                )
             raise CNABGeneratorError(
                 "Lote não tem nenhum pagamento APROVADO — nada a gerar"
             )

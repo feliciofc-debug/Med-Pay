@@ -498,7 +498,11 @@ def _linhas_para_xlsx(linhas: list[dict[str, Any]]) -> bytes:
     """Gera um XLSX em memória com colunas no padrão do importador.
 
     Layout — colunas que o `importacao.py` reconhece automaticamente:
-        CPF | Nome | Banco | Agência | Conta | Valor
+        CPF | Nome | Banco | Agência | Conta | Valor | Chave PIX
+
+    A coluna "Chave PIX" aciona modalidade PIX no `_decidir_modalidade`
+    e dispensa banco/ag/conta na validação. Usado pra pagamentos que
+    vieram da ficha já com PIX preenchido (Felipe / Rafael na Santa Casa).
 
     Valor sai em reais com vírgula (formato BR) pra preservar o que o
     parser/heurística de importação espera.
@@ -516,6 +520,7 @@ def _linhas_para_xlsx(linhas: list[dict[str, Any]]) -> bytes:
                 "Agência": str(linha.get("agencia") or ""),
                 "Conta": str(linha.get("conta") or ""),
                 "Valor": valor_str,
+                "Chave PIX": str(linha.get("chave_pix") or ""),
             }
         )
 

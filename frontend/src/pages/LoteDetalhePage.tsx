@@ -127,6 +127,28 @@ export function LoteDetalhePage() {
     }
   }
 
+  async function baixarListaPix() {
+    try {
+      const resp = await api.get(`/api/lotes/${lote!.id}/pix.xlsx`, {
+        responseType: "blob",
+      });
+      const filename = `MEDPAG-PIX-${lote!.id.replace(/-/g, "").slice(0, 8).toUpperCase()}.xlsx`;
+      const url = window.URL.createObjectURL(resp.data as Blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Erro ao baixar PIX: ${getErrorMessage(err)}`);
+    }
+  }
+
+  const temPagamentosPix =
+    lote.pagamentos?.some((p) => p.modalidade === "PIX") ?? false;
+
   return (
     <div className="space-y-6">
       <div>
@@ -228,6 +250,17 @@ export function LoteDetalhePage() {
               <Download size={16} />
               Baixar arquivo CNAB (.rem)
             </button>
+            {temPagamentosPix && (
+              <button
+                type="button"
+                className="px-3 py-2 text-sm rounded-md border border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100 inline-flex items-center gap-2"
+                onClick={baixarListaPix}
+                title="Pagamentos PIX deste lote (planilha para pagar via Internet Banking ou Asaas)"
+              >
+                <Download size={16} />
+                Baixar lista PIX (.xlsx)
+              </button>
+            )}
             <button
               type="button"
               className="px-3 py-2 text-sm rounded-md border border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100 inline-flex items-center gap-2 disabled:opacity-50"

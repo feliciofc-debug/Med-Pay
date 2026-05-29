@@ -326,7 +326,25 @@ function ListaPrestadores({
                       {b.banco_codigo || "—"}
                     </td>
                     <td className="px-4 py-2 font-mono text-xs">
-                      {b.conta_mascarada || "—"}
+                      <div className="flex items-center gap-1">
+                        {b.conta_mascarada || "—"}
+                        {b.conta_invalida_motivo && (
+                          <span
+                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-red-100 text-red-800 border border-red-200"
+                            title={b.conta_invalida_motivo}
+                          >
+                            ⚠ rejeitada
+                          </span>
+                        )}
+                        {b.conta_verificada && (
+                          <span
+                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-200"
+                            title={`Verificada em ${b.conta_verificada_em || ""}`}
+                          >
+                            ✓ validada
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-2 text-xs">
                       {b.pix_chave_mascarada || "—"}

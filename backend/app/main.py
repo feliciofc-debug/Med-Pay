@@ -161,6 +161,7 @@ def create_app() -> FastAPI:
         asaas,
         auditoria,
         auth,
+        bancos,
         beneficiarios,
         clientes,
         consolidacao,
@@ -180,6 +181,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
     app.include_router(asaas.router, prefix="/api/asaas", tags=["asaas"])
+    app.include_router(bancos.router, prefix="/api/bancos", tags=["bancos"])
     app.include_router(
         auditoria.router, prefix="/api/auditoria", tags=["auditoria"]
     )

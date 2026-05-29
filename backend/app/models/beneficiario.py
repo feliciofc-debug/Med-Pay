@@ -171,6 +171,22 @@ class Beneficiario(Base):
     # passa a ser `status`. Quando status==ATIVO -> ativo=True; senão False.
     ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    # ===== Verificação de conta bancária =====
+    # Como não temos API pública pra validar conta antes de pagar, usamos
+    # estratégia de aprendizado contínuo: quando o banco devolve CNAB com
+    # erro de conta (códigos 02, 03, AG, AI, etc), marcamos a conta deste
+    # beneficiário como inválida. Próximos lotes mostram alerta antes de
+    # tentar pagar de novo.
+    conta_verificada: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    conta_invalida_motivo: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    conta_verificada_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

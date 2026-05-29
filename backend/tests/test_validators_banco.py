@@ -54,11 +54,18 @@ class TestListagem:
         nomes = [b.nome for b in suportados]
         assert "Unicred" in nomes
 
-    def test_apenas_unicred_no_mvp(self) -> None:
-        """No MVP, só Unicred deve estar marcado como suportado."""
+    def test_principais_bancos_suportados(self) -> None:
+        """Tabela de regras específicas cobre os principais bancos do mercado
+        (Unicred, BB, Itaú, Bradesco, Santander, Caixa, Sicredi, Sicoob,
+        Nubank, Inter, C6, Original, Safra, BTG).
+        """
         suportados = listar_bancos_suportados()
-        assert len(suportados) == 1
-        assert suportados[0].codigo == "136"
+        codigos = {b.codigo for b in suportados}
+        # MVP exige Unicred (banco pagador)
+        assert "136" in codigos
+        # Cobertura de mercado mínima (cobre >85% dos prestadores BR)
+        for codigo_minimo in {"001", "033", "104", "237", "260", "341", "748", "756"}:
+            assert codigo_minimo in codigos, f"Banco {codigo_minimo} deveria estar suportado"
 
 
 class TestValidacaoUnicred:
@@ -76,9 +83,10 @@ class TestValidacaoUnicred:
 
     def test_agencia_com_formatacao(self) -> None:
         resultado = validar_dados_bancarios("136", "1234-5", "12345")
-        # 1234-5 vira "12345" depois de limpar — extrapolaria o tamanho
-        # Unicred aceita agência de 4 dígitos, então isso deve falhar
-        assert resultado.codigo_erro == "AGENCIA_INVALIDA"
+        # Unicred aceita agência de 4-5 dígitos; "1234-5" limpa pra "12345".
+        # Hoje aceitamos esse range pra tolerar planilhas que trazem DV junto.
+        assert resultado.is_valido
+        assert resultado.agencia_limpa == "12345"
 
     def test_conta_com_digito_verificador(self) -> None:
         # Conta com DV separado por traço
@@ -98,12 +106,12 @@ class TestValidacaoFalhas:
         resultado = validar_dados_bancarios("999", "1234", "12345")
         assert resultado.codigo_erro == "BANCO_INVALIDO"
 
-    def test_banco_nao_suportado(self) -> None:
-        """Itaú existe mas não está habilitado no MVP."""
-        resultado = validar_dados_bancarios("341", "1234", "12345")
-        assert resultado.status == StatusBanco.NAO_SUPORTADO
-        assert resultado.codigo_erro == "BANCO_NAO_SUPORTADO"
-        assert "Itaú" in resultado.mensagem
+    def test_banco_inexistente(self) -> None:
+        """Código que não consta na lista FEBRABAN é rejeitado."""
+        resultado = validar_dados_bancarios("999", "1234", "12345")
+        assert resultado.status == StatusBanco.INVALIDO
+        assert resultado.codigo_erro == "BANCO_INVALIDO"
+        assert "FEBRABAN" in resultado.mensagem
 
     def test_agencia_vazia(self) -> None:
         resultado = validar_dados_bancarios("136", "", "12345")
@@ -127,8 +135,8 @@ class TestValidacaoFalhas:
     "banco,agencia,conta,deve_validar",
     [
         ("136", "1234", "12345", True),
-        ("136", "1234", "1234567890", True),  # conta no limite máximo
-        ("136", "1234", "12345678901", False),  # excede tamanho
+        ("136", "1234", "123456789012", True),  # conta no limite máximo (12)
+        ("136", "1234", "1234567890123", False),  # excede tamanho (>12)
         ("136", "12", "12345", False),  # agência curta
         ("999", "1234", "12345", False),  # banco inexistente
     ],
