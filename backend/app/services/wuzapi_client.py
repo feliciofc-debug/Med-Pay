@@ -62,6 +62,9 @@ class WuzapiClient:
     def __init__(self) -> None:
         self.base_url: str | None = (settings.WUZAPI_URL or "").rstrip("/") or None
         self.admin_token: str | None = settings.WUZAPI_ADMIN_TOKEN
+        # Configurável: Wuzapi oficial usa "Token", forks tipo AMZ usam
+        # "Authorization". Default = "Token" pra manter compatibilidade.
+        self.auth_header: str = (settings.WUZAPI_AUTH_HEADER or "Token").strip() or "Token"
 
     def is_configured(self) -> bool:
         return bool(self.base_url and self.admin_token)
@@ -85,9 +88,10 @@ class WuzapiClient:
             )
         url = f"{self.base_url}{path}"
         headers = {"Content-Type": "application/json"}
-        # Wuzapi aceita token no header `Token` (não Authorization)
+        # Nome do header é configurável via WUZAPI_AUTH_HEADER porque
+        # forks como o da AMZ Ofertas usam "Authorization" em vez de "Token".
         if token:
-            headers["Token"] = token
+            headers[self.auth_header] = token
 
         try:
             async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
@@ -102,7 +106,9 @@ class WuzapiClient:
 
         if resp.status_code in (401, 403):
             raise WuzapiIndisponivelError(
-                "Token Wuzapi inválido. Verifique WUZAPI_ADMIN_TOKEN."
+                f"Token Wuzapi inválido ({resp.status_code} no header "
+                f"'{self.auth_header}'). Verifique WUZAPI_ADMIN_TOKEN e "
+                "WUZAPI_AUTH_HEADER (Token=oficial, Authorization=fork AMZ)."
             )
 
         if resp.status_code >= 400:

@@ -103,6 +103,10 @@ class Settings(BaseSettings):
     WUZAPI_URL: str | None = None  # ex: http://seuvps:8080
     WUZAPI_ADMIN_TOKEN: str | None = None  # Bearer admin
     WUZAPI_INSTANCE_TOKEN: str | None = None  # Token da instância
+    # Nome do header HTTP onde mandamos o token. O Wuzapi oficial usa
+    # "Token", mas forks customizados (ex: AMZ Ofertas) usam "Authorization".
+    # Default mantém compatibilidade com upstream.
+    WUZAPI_AUTH_HEADER: str = "Token"
 
     # Segredo compartilhado pra autenticar webhooks vindos do Wuzapi
     # (configurado no provisionamento, header X-Webhook-Secret).
