@@ -28,6 +28,7 @@ class WhatsAppUserOut(BaseModel):
     numero_e164: str
     apelido: str | None
     pode_aprovar_pagamento: bool
+    receber_relatorio_diario: bool = False
     ativo: bool
     created_at: datetime
 
@@ -42,11 +43,13 @@ class CriarWhatsAppUserRequest(BaseModel):
     )
     apelido: str | None = None
     pode_aprovar_pagamento: bool = False
+    receber_relatorio_diario: bool = False
 
 
 class AtualizarWhatsAppUserRequest(BaseModel):
     apelido: str | None = None
     pode_aprovar_pagamento: bool | None = None
+    receber_relatorio_diario: bool | None = None
     ativo: bool | None = None
 
 

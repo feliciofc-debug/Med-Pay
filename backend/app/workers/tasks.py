@@ -105,4 +105,33 @@ def processar_lote_task(
     return asyncio.run(_processar_lote_async(lote_id, linhas_dict))
 
 
-__all__ = ["processar_lote_task"]
+# ============================================================
+# Jarvis proativo — relatório diário 8h Brasília
+# ============================================================
+
+
+async def _jarvis_relatorio_diario_async() -> dict[str, int]:
+    from app.services.jarvis_proativo import rodar_relatorio_diario
+
+    async with AsyncSessionLocal() as db:
+        try:
+            resultado = await rodar_relatorio_diario(db)
+            await db.commit()
+            return resultado
+        except Exception:
+            await db.rollback()
+            log.exception("worker.jarvis_relatorio_diario_falhou")
+            raise
+
+
+@celery_app.task(name="app.workers.tasks.jarvis_relatorio_diario")
+def jarvis_relatorio_diario() -> dict[str, int]:
+    """Task agendada (Celery beat) — roda às 8h America/Sao_Paulo.
+
+    Envia o "bom dia" do Jarvis pra todos os usuários que ativaram
+    `receber_relatorio_diario` no whitelist.
+    """
+    return asyncio.run(_jarvis_relatorio_diario_async())
+
+
+__all__ = ["jarvis_relatorio_diario", "processar_lote_task"]

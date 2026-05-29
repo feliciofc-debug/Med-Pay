@@ -630,6 +630,7 @@ export interface WhatsAppUserOut {
   numero_e164: string;
   apelido: string | null;
   pode_aprovar_pagamento: boolean;
+  receber_relatorio_diario: boolean;
   ativo: boolean;
   created_at: string;
 }

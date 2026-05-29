@@ -102,7 +102,10 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     autoDeploy: true
-    dockerCommand: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+    # -B embute o beat scheduler no mesmo processo do worker.
+    # OK enquanto tivermos 1 worker (plano starter). Se escalar, mover
+    # o beat pra um serviço dedicado pra evitar disparo duplicado.
+    dockerCommand: celery -A app.workers.celery_app worker -B --loglevel=info --concurrency=2
     envVars:
       - key: ENVIRONMENT
         value: production

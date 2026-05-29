@@ -16,6 +16,7 @@ from app.models.empresa_config import BancoEmissor, EmpresaConfig, TipoInscricao
 from app.models.equipe_flex import EquipeFlex, FechamentoEquipe, MembroEquipe
 from app.models.fechamento_periodo import FechamentoPeriodo, StatusFechamento
 from app.models.ficha_plantao import FichaPlantao, StatusFicha
+from app.models.jarvis_memoria import JarvisMemoria, TipoMemoria
 from app.models.lancamento_servico import LancamentoServico, StatusLancamento
 from app.models.lote import Lote, StatusLote
 from app.models.pagamento import Pagamento, StatusPagamento
@@ -53,6 +54,7 @@ __all__ = [
     "FechamentoEquipe",
     "FechamentoPeriodo",
     "FichaPlantao",
+    "JarvisMemoria",
     "LancamentoServico",
     "Lote",
     "MembroEquipe",
@@ -73,6 +75,7 @@ __all__ = [
     "TipoAmbiente",
     "TipoEvento",
     "TipoInscricao",
+    "TipoMemoria",
     "TipoSensor",
     "User",
     "UserRole",

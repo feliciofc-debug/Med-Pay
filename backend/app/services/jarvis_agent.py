@@ -49,6 +49,7 @@ from app.services.jarvis_kb import montar_system_prompt
 from app.services.jarvis_tools import (
     TOOLS_RESTRITAS_APROVACAO,
     TOOLS_SCHEMA,
+    carregar_memorias_para_prompt,
     executar_tool,
 )
 
@@ -70,12 +71,17 @@ class JarvisFalhouError(MedPagException):
 # ============================================================
 
 
-def _system_prompt_para(user: User, *, pode_aprovar: bool) -> str:
-    """Monta o system prompt completo (KB Med-Pay + contexto do usuario).
+async def _system_prompt_para(
+    db: AsyncSession,
+    user: User,
+    *,
+    pode_aprovar: bool,
+) -> str:
+    """Monta o system prompt completo (KB Med-Pay + contexto + memorias).
 
     O KB com identidade, stack, modulos, planos, roles, fluxo, glossario
-    e como_responder fica em jarvis_kb.py. Aqui so injetamos o contexto
-    de QUEM esta conversando agora.
+    e como_responder fica em jarvis_kb.py. Aqui injetamos o contexto de
+    QUEM esta conversando agora E as memorias persistentes desse user.
     """
     contexto_usuario = (
         "# Quem está conversando com você agora\n"
@@ -107,7 +113,30 @@ def _system_prompt_para(user: User, *, pode_aprovar: bool) -> str:
             "rankings, panorama agregado.\n"
         )
 
-    return montar_system_prompt(contexto_usuario)
+    # Memórias persistentes — entram como bloco extra do prompt
+    memorias_bloco = ""
+    try:
+        memorias = await carregar_memorias_para_prompt(db, user, limite=20)
+    except Exception:  # noqa: BLE001
+        log.exception("jarvis.carregar_memorias_falhou")
+        memorias = []
+
+    if memorias:
+        linhas = ["# Memórias persistentes (coisas que você lembra desse usuário)"]
+        linhas.append(
+            "Use isto como CONTEXTO de longo prazo. Se algo aqui parecer "
+            "desatualizado, sugira esquecer (use a tool 'esquecer'). Se quiser "
+            "guardar algo novo, use 'lembrar'."
+        )
+        for m in memorias:
+            tags = f" [{m.tags}]" if m.tags else ""
+            linhas.append(
+                f"- ({m.tipo.value} rel{m.relevancia}/10){tags} "
+                f"id={str(m.id)[:8]}: {m.conteudo}"
+            )
+        memorias_bloco = "\n".join(linhas)
+
+    return montar_system_prompt(contexto_usuario, memorias_bloco)
 
 
 # ============================================================
@@ -231,8 +260,11 @@ async def _gerar_resposta(
         )
     ]
 
+    system_text = await _system_prompt_para(
+        db, user, pode_aprovar=pode_aprovar
+    )
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": _system_prompt_para(user, pode_aprovar=pode_aprovar)},
+        {"role": "system", "content": system_text},
     ]
     messages.extend(historico)
     messages.append({"role": "user", "content": texto_usuario})

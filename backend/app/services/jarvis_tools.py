@@ -26,6 +26,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.cliente import Cliente
 from app.models.ficha_plantao import FichaPlantao, StatusFicha
+from app.models.jarvis_memoria import JarvisMemoria, TipoMemoria
 from app.models.lote import Lote, StatusLote
 from app.models.pagamento import Pagamento, StatusPagamento
 from app.models.plano import Plano, StatusAssinatura
@@ -312,6 +313,210 @@ TOOLS_SCHEMA: list[dict[str, Any]] = [
                     }
                 },
             },
+        },
+    },
+    # =====================================================
+    # MEMÓRIA PERSISTENTE
+    # =====================================================
+    {
+        "type": "function",
+        "function": {
+            "name": "lembrar",
+            "description": (
+                "Salva uma memória persistente — fato, preferência, decisão "
+                "ou nota — que VOCÊ (Jarvis) quer lembrar nas próximas "
+                "conversas com este usuário. Use quando o usuário disser "
+                "algo tipo 'anota que…', 'lembra disso…', 'pra próxima', "
+                "ou quando você espontaneamente perceber algo importante "
+                "que deve persistir além da conversa atual."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tipo": {
+                        "type": "string",
+                        "enum": ["PREFERENCIA", "FATO", "DECISAO", "NOTA"],
+                        "description": (
+                            "PREFERENCIA = jeito que ele gosta. "
+                            "FATO = informação concreta da operação/cliente. "
+                            "DECISAO = decisão estratégica tomada. "
+                            "NOTA = observação solta."
+                        ),
+                    },
+                    "conteudo": {
+                        "type": "string",
+                        "description": (
+                            "Texto da memória (1-2 frases, claro). "
+                            "Escreva em 3a pessoa: 'Felício prefere…' não 'você prefere…'."
+                        ),
+                    },
+                    "tags": {
+                        "type": "string",
+                        "description": (
+                            "Tags separadas por vírgula pra facilitar "
+                            "recuperação (ex: 'auris,banco,pix'). Opcional."
+                        ),
+                    },
+                    "relevancia": {
+                        "type": "integer",
+                        "description": (
+                            "1-10. 10 = sempre presente no contexto. "
+                            "Default 5."
+                        ),
+                    },
+                },
+                "required": ["tipo", "conteudo"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "listar_memorias",
+            "description": (
+                "Lista as memórias persistentes do usuário (opcionalmente "
+                "filtrando por tipo ou tag). Use quando ele perguntar "
+                "'do que você lembra?', 'o que você sabe sobre mim?', "
+                "ou quando precisar revisar antes de decidir."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tipo": {
+                        "type": "string",
+                        "enum": ["PREFERENCIA", "FATO", "DECISAO", "NOTA"],
+                    },
+                    "tag": {
+                        "type": "string",
+                        "description": "Filtra memorias contendo essa tag",
+                    },
+                    "limite": {
+                        "type": "integer",
+                        "description": "Quantas (default 20, max 50)",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "esquecer",
+            "description": (
+                "Marca uma memória como inativa (soft-delete). Use quando "
+                "o usuário disser 'esquece isso', 'descarta a anotação X', "
+                "'isso não é mais verdade'. Pede o ID curto da memória "
+                "(primeiros 8 chars) — peça pra listar antes se precisar."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "memoria_id_curto": {
+                        "type": "string",
+                        "description": "Primeiros 8 chars do ID da memória",
+                    }
+                },
+                "required": ["memoria_id_curto"],
+            },
+        },
+    },
+    # =====================================================
+    # AÇÕES DE ESCRITA CONTROLADAS (exigem CONFIRMO)
+    # =====================================================
+    {
+        "type": "function",
+        "function": {
+            "name": "marcar_beneficiario_inativo",
+            "description": (
+                "INATIVA um beneficiário (médico/prestador) — não aparecerá "
+                "mais em novos lotes. EXIGE confirmação 'CONFIRMO' explícita "
+                "do usuário no mesmo fluxo do aprovar_lote: 1) você diz "
+                "'vou inativar X (CPF Y, hospital Z)? Responde CONFIRMO'. "
+                "2) só chama essa tool se ele responder CONFIRMO/SIM INATIVAR. "
+                "Apenas usuários com pode_aprovar_pagamento podem usar."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "beneficiario_id_curto": {
+                        "type": "string",
+                        "description": "Primeiros 8 chars do ID do beneficiário",
+                    },
+                    "motivo": {
+                        "type": "string",
+                        "description": "Por que está inativando (vira nota de auditoria)",
+                    },
+                },
+                "required": ["beneficiario_id_curto", "motivo"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "renovar_trial_cliente",
+            "description": (
+                "Estende o trial de um cliente em N dias. EXIGE CONFIRMO "
+                "explícito. Útil quando hospital pede mais tempo pra "
+                "avaliar. Apenas ADMIN MedPag (cliente_id NULL) + "
+                "pode_aprovar_pagamento usa."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "cliente_nome_parcial": {
+                        "type": "string",
+                        "description": "Trecho do nome do cliente",
+                    },
+                    "dias": {
+                        "type": "integer",
+                        "description": "Quantos dias adicionar (max 90)",
+                    },
+                },
+                "required": ["cliente_nome_parcial", "dias"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reprocessar_ficha",
+            "description": (
+                "Reseta uma ficha em ERRO/EXTRAIDA pra status RECEBIDA, "
+                "forçando reprocessamento do OCR. EXIGE CONFIRMO. "
+                "Use quando o usuário disser 'tenta de novo a ficha X' "
+                "depois que você mostrou que ela tá em ERRO."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ficha_id_curto": {
+                        "type": "string",
+                        "description": "Primeiros 8 chars do ID da ficha",
+                    }
+                },
+                "required": ["ficha_id_curto"],
+            },
+        },
+    },
+    # =====================================================
+    # INSIGHT ESTRATÉGICO (compõe múltiplas métricas)
+    # =====================================================
+    {
+        "type": "function",
+        "function": {
+            "name": "gerar_insight_estrategico",
+            "description": (
+                "Compõe um pacote DENSO de métricas pra análise estratégica: "
+                "diagnóstico + pipeline + tendência + ranking + problemas — "
+                "tudo num único retorno. Use quando o gestor pedir "
+                "'me dá uma visão completa', 'quero analisar a operação', "
+                "'me prepara pra reunião', 'overview executivo'. "
+                "Depois disso, você compõe uma narrativa textual rica "
+                "(3-5 parágrafos) explicando o que os números dizem e "
+                "sugerindo ações."
+            ),
+            "parameters": {"type": "object", "properties": {}},
         },
     },
 ]
@@ -1318,6 +1523,358 @@ async def ranking_hospitais(
 
 
 # ============================================================
+# Memória persistente
+# ============================================================
+
+
+async def lembrar(
+    db: AsyncSession,
+    user: User,
+    *,
+    tipo: str,
+    conteudo: str,
+    tags: str | None = None,
+    relevancia: int = 5,
+) -> dict[str, Any]:
+    """Salva um item de memória pro Jarvis usar em futuras conversas."""
+    try:
+        tipo_enum = TipoMemoria(tipo.upper())
+    except ValueError:
+        return {
+            "erro": "tipo_invalido",
+            "mensagem": "tipo precisa ser PREFERENCIA, FATO, DECISAO ou NOTA",
+        }
+
+    conteudo = (conteudo or "").strip()
+    if not conteudo or len(conteudo) < 3:
+        return {"erro": "vazio", "mensagem": "conteudo curto demais"}
+
+    rel = max(1, min(int(relevancia or 5), 10))
+    memoria = JarvisMemoria(
+        user_id=user.id,
+        tipo=tipo_enum,
+        conteudo=conteudo[:2000],
+        tags=tags[:255] if tags else None,
+        relevancia=rel,
+    )
+    db.add(memoria)
+    await db.flush()
+    return {
+        "sucesso": True,
+        "id_curto": str(memoria.id)[:8],
+        "tipo": tipo_enum.value,
+        "mensagem": f"Memória salva como {tipo_enum.value} (rel {rel}/10)",
+    }
+
+
+async def listar_memorias(
+    db: AsyncSession,
+    user: User,
+    *,
+    tipo: str | None = None,
+    tag: str | None = None,
+    limite: int = 20,
+) -> dict[str, Any]:
+    """Lista memorias ativas do usuario, ordenadas por relevancia desc."""
+    limite = max(1, min(int(limite or 20), 50))
+    q = (
+        select(JarvisMemoria)
+        .where(
+            JarvisMemoria.user_id == user.id,
+            JarvisMemoria.ativa.is_(True),
+        )
+        .order_by(
+            desc(JarvisMemoria.relevancia),
+            desc(JarvisMemoria.updated_at),
+        )
+        .limit(limite)
+    )
+    if tipo:
+        try:
+            q = q.where(JarvisMemoria.tipo == TipoMemoria(tipo.upper()))
+        except ValueError:
+            return {"erro": "tipo_invalido"}
+    if tag:
+        q = q.where(JarvisMemoria.tags.ilike(f"%{tag}%"))
+
+    result = await db.execute(q)
+    memorias = list(result.scalars().all())
+    return {
+        "total": len(memorias),
+        "memorias": [
+            {
+                "id_curto": str(m.id)[:8],
+                "tipo": m.tipo.value,
+                "conteudo": m.conteudo,
+                "tags": m.tags,
+                "relevancia": m.relevancia,
+                "criada_em": m.created_at.isoformat(),
+            }
+            for m in memorias
+        ],
+    }
+
+
+async def esquecer(
+    db: AsyncSession, user: User, *, memoria_id_curto: str
+) -> dict[str, Any]:
+    """Soft-delete de uma memoria."""
+    s = (memoria_id_curto or "").strip().lower()
+    if not s:
+        return {"erro": "id_vazio"}
+
+    result = await db.execute(
+        select(JarvisMemoria)
+        .where(
+            JarvisMemoria.user_id == user.id,
+            JarvisMemoria.ativa.is_(True),
+            sa.cast(JarvisMemoria.id, String).ilike(f"{s}%"),
+        )
+        .limit(2)
+    )
+    rows = list(result.scalars().all())
+    if not rows:
+        return {"erro": "nao_encontrada", "mensagem": f"sem memoria '{s}'"}
+    if len(rows) > 1:
+        return {
+            "erro": "ambigua",
+            "mensagem": "mais de uma memoria casa esse prefixo; use mais chars",
+        }
+    rows[0].ativa = False
+    await db.flush()
+    return {
+        "sucesso": True,
+        "id_curto": str(rows[0].id)[:8],
+        "mensagem": f"Esqueci: '{rows[0].conteudo[:80]}'",
+    }
+
+
+async def carregar_memorias_para_prompt(
+    db: AsyncSession, user: User, *, limite: int = 20
+) -> list[JarvisMemoria]:
+    """Helper consumido pelo `jarvis_agent.py` ao montar system prompt."""
+    result = await db.execute(
+        select(JarvisMemoria)
+        .where(
+            JarvisMemoria.user_id == user.id,
+            JarvisMemoria.ativa.is_(True),
+        )
+        .order_by(
+            desc(JarvisMemoria.relevancia),
+            desc(JarvisMemoria.updated_at),
+        )
+        .limit(limite)
+    )
+    return list(result.scalars().all())
+
+
+# ============================================================
+# Ações de escrita (exigem CONFIRMO)
+# ============================================================
+
+
+async def marcar_beneficiario_inativo(
+    db: AsyncSession,
+    user: User,
+    *,
+    beneficiario_id_curto: str,
+    motivo: str,
+) -> dict[str, Any]:
+    from app.models.auditoria import Auditoria
+    from app.models.beneficiario import Beneficiario, StatusBeneficiario
+
+    s = (beneficiario_id_curto or "").strip().lower()
+    if not s or len(s) < 4:
+        return {"erro": "id_curto", "mensagem": "preciso de pelo menos 4 chars do ID"}
+    if not motivo or len(motivo) < 5:
+        return {"erro": "motivo_vazio", "mensagem": "preciso de motivo (mín 5 chars)"}
+
+    result = await db.execute(
+        select(Beneficiario)
+        .where(sa.cast(Beneficiario.id, String).ilike(f"{s}%"))
+        .limit(2)
+    )
+    rows = list(result.scalars().all())
+    if not rows:
+        return {"erro": "nao_encontrado"}
+    if len(rows) > 1:
+        return {"erro": "ambiguo", "mensagem": "+ de 1 casa esse prefixo"}
+
+    benef = rows[0]
+    # Tenant check: se user é hospital, só pode mexer no próprio
+    if user.cliente_id and benef.cliente_id != user.cliente_id:
+        return {"erro": "permissao", "mensagem": "beneficiario de outro hospital"}
+
+    if benef.status == StatusBeneficiario.INATIVO:
+        return {"erro": "ja_inativo", "mensagem": "já está inativo"}
+
+    benef.status = StatusBeneficiario.INATIVO
+    audit = Auditoria(
+        acao="beneficiario_inativado_jarvis",
+        entidade_tipo="beneficiario",
+        entidade_id=benef.id,
+        user_id=user.id,
+        detalhes={"motivo": motivo, "via": "jarvis_whatsapp"},
+    )
+    db.add(audit)
+    await db.flush()
+    return {
+        "sucesso": True,
+        "beneficiario_id": str(benef.id)[:8],
+        "nome": benef.nome,
+        "mensagem": f"Beneficiário {benef.nome} marcado como INATIVO",
+    }
+
+
+async def renovar_trial_cliente(
+    db: AsyncSession,
+    user: User,
+    *,
+    cliente_nome_parcial: str,
+    dias: int,
+) -> dict[str, Any]:
+    from app.models.auditoria import Auditoria
+
+    # Só MedPag interno (ADMIN sem cliente_id) pode
+    if user.cliente_id is not None or user.role != UserRole.ADMIN:
+        return {
+            "erro": "permissao",
+            "mensagem": "só ADMIN MedPag pode renovar trial",
+        }
+    dias = max(1, min(int(dias or 0), 90))
+    s = (cliente_nome_parcial or "").strip()
+    if not s or len(s) < 2:
+        return {"erro": "nome_curto"}
+
+    result = await db.execute(
+        select(Cliente).where(Cliente.nome.ilike(f"%{s}%")).limit(2)
+    )
+    rows = list(result.scalars().all())
+    if not rows:
+        return {"erro": "nao_encontrado"}
+    if len(rows) > 1:
+        return {
+            "erro": "ambiguo",
+            "mensagem": "+ de 1 cliente casa; seja específico",
+        }
+
+    cliente = rows[0]
+    agora = datetime.now(UTC)
+    base = (
+        cliente.trial_termina_em
+        if cliente.trial_termina_em and cliente.trial_termina_em > agora
+        else agora
+    )
+    nova_data = base + timedelta(days=dias)
+    cliente.trial_termina_em = nova_data
+    if cliente.status_assinatura != StatusAssinatura.TRIAL:
+        cliente.status_assinatura = StatusAssinatura.TRIAL
+
+    audit = Auditoria(
+        acao="trial_renovado_jarvis",
+        entidade_tipo="cliente",
+        entidade_id=cliente.id,
+        user_id=user.id,
+        detalhes={
+            "dias_adicionados": dias,
+            "nova_data_fim": nova_data.isoformat(),
+            "via": "jarvis_whatsapp",
+        },
+    )
+    db.add(audit)
+    await db.flush()
+    return {
+        "sucesso": True,
+        "cliente": cliente.nome,
+        "dias_adicionados": dias,
+        "novo_fim_trial": nova_data.strftime("%d/%m/%Y"),
+        "mensagem": (
+            f"Trial de {cliente.nome} estendido por +{dias}d, "
+            f"agora vence em {nova_data.strftime('%d/%m/%Y')}"
+        ),
+    }
+
+
+async def reprocessar_ficha(
+    db: AsyncSession,
+    user: User,
+    *,
+    ficha_id_curto: str,
+) -> dict[str, Any]:
+    s = (ficha_id_curto or "").strip().lower()
+    if not s or len(s) < 4:
+        return {"erro": "id_curto"}
+
+    result = await db.execute(
+        select(FichaPlantao)
+        .where(sa.cast(FichaPlantao.id, String).ilike(f"{s}%"))
+        .limit(2)
+    )
+    rows = list(result.scalars().all())
+    if not rows:
+        return {"erro": "nao_encontrada"}
+    if len(rows) > 1:
+        return {"erro": "ambigua"}
+    ficha = rows[0]
+
+    if user.cliente_id and ficha.cliente_id != user.cliente_id:
+        return {"erro": "permissao", "mensagem": "ficha de outro hospital"}
+
+    if ficha.status not in (StatusFicha.ERRO, StatusFicha.EXTRAIDA):
+        return {
+            "erro": "status_invalido",
+            "mensagem": f"ficha em {ficha.status.value}, só reprocesso ERRO/EXTRAIDA",
+        }
+
+    ficha.status = StatusFicha.RECEBIDA
+    ficha.mensagem_erro = None
+    await db.flush()
+    # Dispara processamento via Celery se disponível
+    try:
+        from app.workers.tasks import processar_ficha as task_proc
+        task_proc.delay(str(ficha.id))
+    except Exception:  # noqa: BLE001
+        log.warning("jarvis.reprocessar_ficha_sem_celery", ficha_id=str(ficha.id))
+
+    return {
+        "sucesso": True,
+        "ficha_id": str(ficha.id)[:8],
+        "mensagem": "Ficha reenfileirada pra OCR.",
+    }
+
+
+# ============================================================
+# Insight estratégico (compõe múltiplas tools)
+# ============================================================
+
+
+async def gerar_insight_estrategico(
+    db: AsyncSession, user: User
+) -> dict[str, Any]:
+    """Pacote denso pra Jarvis fazer análise narrativa."""
+    diag = await diagnostico_plataforma(db, user)
+    pipe = await pipeline_comercial(db, user)
+    tend = await tendencias_3_meses(db, user)
+    rank = await ranking_hospitais(db, user, limite=5)
+    probs = await identificar_problemas(db, user)
+    return {
+        "diagnostico": diag,
+        "pipeline": pipe,
+        "tendencia": tend,
+        "top_hospitais": rank,
+        "problemas": probs,
+        "instrucao": (
+            "Compõe agora uma narrativa rica (3-5 parágrafos curtos) "
+            "explicando: 1) como está a saúde geral, 2) como o comercial "
+            "está performando (MRR, trials), 3) tendência (subindo/caindo "
+            "e por quê), 4) quais hospitais merecem atenção e 5) prox "
+            "ações sugeridas. Se quiser, oferece salvar conclusões "
+            "como DECISAO via lembrar()."
+        ),
+    }
+
+
+# ============================================================
 # Dispatcher
 # ============================================================
 
@@ -1338,13 +1895,27 @@ _DISPATCH: dict[str, Any] = {
     "tendencias_3_meses": tendencias_3_meses,
     "pipeline_comercial": pipeline_comercial,
     "ranking_hospitais": ranking_hospitais,
+    "lembrar": lembrar,
+    "listar_memorias": listar_memorias,
+    "esquecer": esquecer,
+    "marcar_beneficiario_inativo": marcar_beneficiario_inativo,
+    "renovar_trial_cliente": renovar_trial_cliente,
+    "reprocessar_ficha": reprocessar_ficha,
+    "gerar_insight_estrategico": gerar_insight_estrategico,
 }
 
 
 # Tools que exigem `pode_aprovar_pagamento=True` no WhatsAppUser.
-# Se o usuário não tiver a flag, o agente responde "Você não tem permissão"
-# sem nem chamar.
-TOOLS_RESTRITAS_APROVACAO: frozenset[str] = frozenset({"aprovar_lote"})
+# Se o usuário não tiver a flag, essas tools são filtradas do schema
+# antes da chamada ao LLM (ele nem enxerga elas).
+TOOLS_RESTRITAS_APROVACAO: frozenset[str] = frozenset(
+    {
+        "aprovar_lote",
+        "marcar_beneficiario_inativo",
+        "renovar_trial_cliente",
+        "reprocessar_ficha",
+    }
+)
 
 
 async def executar_tool(

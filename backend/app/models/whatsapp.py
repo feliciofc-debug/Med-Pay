@@ -91,6 +91,11 @@ class WhatsAppUser(Base):
     # ^ flag explícita: só quem ADMIN + tem essa flag aprova lote pelo zap.
     # Não confiamos em só checar role pra essa ação especifíca.
 
+    # Opt-in pra Jarvis enviar diagnostico todo dia 8h (Sao Paulo)
+    receber_relatorio_diario: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+
     ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

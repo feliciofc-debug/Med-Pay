@@ -1,11 +1,17 @@
 """App Celery — broker e backend = Redis.
 
 Inclui automaticamente todas as tasks definidas em `app.workers.tasks`.
+
+Beat schedule:
+- jarvis_relatorio_diario: roda às 8h America/Sao_Paulo, todos os dias.
+  Para cada WhatsAppUser com `receber_relatorio_diario=True`, monta um
+  diagnóstico e envia via WhatsApp.
 """
 
 from __future__ import annotations
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import settings
 
@@ -27,6 +33,13 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,         # não pega mais que está executando
     task_reject_on_worker_lost=True,      # devolve task pra fila se worker morrer
     result_expires=60 * 60 * 24,          # resultado guardado por 24h
+    beat_schedule={
+        "jarvis-relatorio-diario": {
+            "task": "app.workers.tasks.jarvis_relatorio_diario",
+            # 8h de Sao Paulo, todos os dias
+            "schedule": crontab(hour=8, minute=0),
+        },
+    },
 )
 
 

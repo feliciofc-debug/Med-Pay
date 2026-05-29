@@ -88,6 +88,7 @@ def _wpp_user_para_out(wpp: WhatsAppUser) -> WhatsAppUserOut:
             "numero_e164": wpp.numero_e164,
             "apelido": wpp.apelido,
             "pode_aprovar_pagamento": wpp.pode_aprovar_pagamento,
+            "receber_relatorio_diario": wpp.receber_relatorio_diario,
             "ativo": wpp.ativo,
             "created_at": wpp.created_at,
         }
@@ -278,6 +279,7 @@ async def criar_user(
         existente.user_id = payload.user_id
         existente.apelido = payload.apelido
         existente.pode_aprovar_pagamento = payload.pode_aprovar_pagamento
+        existente.receber_relatorio_diario = payload.receber_relatorio_diario
         existente.ativo = True
         await db.flush()
         result = await db.execute(
@@ -292,6 +294,7 @@ async def criar_user(
         numero_e164=numero,
         apelido=payload.apelido,
         pode_aprovar_pagamento=payload.pode_aprovar_pagamento,
+        receber_relatorio_diario=payload.receber_relatorio_diario,
         ativo=True,
     )
     db.add(novo)
@@ -324,6 +327,8 @@ async def atualizar_user(
         wpp.apelido = payload.apelido
     if payload.pode_aprovar_pagamento is not None:
         wpp.pode_aprovar_pagamento = payload.pode_aprovar_pagamento
+    if payload.receber_relatorio_diario is not None:
+        wpp.receber_relatorio_diario = payload.receber_relatorio_diario
     if payload.ativo is not None:
         wpp.ativo = payload.ativo
 
@@ -350,6 +355,18 @@ async def deletar_user(
     await db.delete(wpp)
     await db.flush()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/jarvis/relatorio-diario/disparar")
+async def disparar_relatorio_diario(
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
+) -> dict[str, int]:
+    """Gatilho manual do "bom dia" do Jarvis — útil pra testar antes
+    do beat schedule. Roda a mesma rotina da task agendada."""
+    from app.services.jarvis_proativo import rodar_relatorio_diario
+
+    return await rodar_relatorio_diario(db)
 
 
 # ============================================================

@@ -521,6 +521,36 @@ function UsuariosCard() {
       queryClient.invalidateQueries({ queryKey: ["whatsapp", "users"] }),
   });
 
+  const toggleRelatorio = useMutation({
+    mutationFn: async (usuario: WhatsAppUserOut) => {
+      await api.put(`/api/whatsapp/users/${usuario.id}`, {
+        receber_relatorio_diario: !usuario.receber_relatorio_diario,
+      });
+    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["whatsapp", "users"] }),
+  });
+
+  const dispararRelatorio = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<{
+        inscritos: number;
+        enviados: number;
+        falhas: number;
+      }>("/api/whatsapp/jarvis/relatorio-diario/disparar");
+      return data;
+    },
+    onSuccess: (data) => {
+      window.alert(
+        `Relatório disparado!\n` +
+          `Inscritos: ${data.inscritos}\nEnviados: ${data.enviados}\nFalhas: ${data.falhas}`,
+      );
+    },
+    onError: (err) => {
+      window.alert(`Erro ao disparar: ${(err as Error).message}`);
+    },
+  });
+
   const remover = useMutation({
     mutationFn: async (id: string) => {
       await api.delete(`/api/whatsapp/users/${id}`);
@@ -542,14 +572,25 @@ function UsuariosCard() {
             ignorado silenciosamente.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowModal(true)}
-          className="btn-primary"
-        >
-          <Plus size={14} />
-          Adicionar número
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => dispararRelatorio.mutate()}
+            disabled={dispararRelatorio.isPending}
+            className="btn-secondary text-xs"
+            title="Envia o relatório diário do Jarvis AGORA para todos os inscritos"
+          >
+            {dispararRelatorio.isPending ? "Disparando..." : "Testar bom dia Jarvis"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowModal(true)}
+            className="btn-primary"
+          >
+            <Plus size={14} />
+            Adicionar número
+          </button>
+        </div>
       </div>
 
       {showModal && (
@@ -577,6 +618,7 @@ function UsuariosCard() {
               <th className="px-4 py-2">Telefone</th>
               <th className="px-4 py-2">Usuário</th>
               <th className="px-4 py-2">Aprova pagamento</th>
+              <th className="px-4 py-2">Bom dia Jarvis (8h)</th>
               <th className="px-4 py-2">Ativo</th>
               <th className="px-4 py-2 w-10"></th>
             </tr>
@@ -607,6 +649,20 @@ function UsuariosCard() {
                     />
                     <span className="text-xs text-slate-600">
                       {u.pode_aprovar_pagamento ? "Sim" : "Não"}
+                    </span>
+                  </label>
+                </td>
+                <td className="px-4 py-3">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={u.receber_relatorio_diario}
+                      onChange={() => toggleRelatorio.mutate(u)}
+                      disabled={toggleRelatorio.isPending}
+                      className="h-4 w-4"
+                    />
+                    <span className="text-xs text-slate-600">
+                      {u.receber_relatorio_diario ? "Sim" : "Não"}
                     </span>
                   </label>
                 </td>
@@ -655,6 +711,7 @@ function NovoUsuarioModal({ onClose, onCreated }: NovoUsuarioModalProps) {
   const [numero, setNumero] = useState("");
   const [apelido, setApelido] = useState("");
   const [podeAprovar, setPodeAprovar] = useState(false);
+  const [receberRelatorio, setReceberRelatorio] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data: usuariosPlat = [] } = useQuery({
@@ -672,6 +729,7 @@ function NovoUsuarioModal({ onClose, onCreated }: NovoUsuarioModalProps) {
         numero_e164: numero.replace(/\D/g, ""),
         apelido: apelido || null,
         pode_aprovar_pagamento: podeAprovar,
+        receber_relatorio_diario: receberRelatorio,
       });
     },
     onSuccess: onCreated,
@@ -742,6 +800,22 @@ function NovoUsuarioModal({ onClose, onCreated }: NovoUsuarioModalProps) {
               </div>
               <div className="text-xs text-slate-500">
                 Risco financeiro alto: marque só pra sócios autorizados.
+              </div>
+            </div>
+          </label>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={receberRelatorio}
+              onChange={(e) => setReceberRelatorio(e.target.checked)}
+              className="mt-1 h-4 w-4"
+            />
+            <div className="text-sm">
+              <div className="font-medium text-slate-800">
+                Receber "bom dia" do Jarvis (8h)
+              </div>
+              <div className="text-xs text-slate-500">
+                Resumo diário com saúde da plataforma e itens críticos.
               </div>
             </div>
           </label>
