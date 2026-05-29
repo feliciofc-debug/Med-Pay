@@ -211,47 +211,104 @@ class WuzapiClient:
     # ============================================================
     # Operações da instância (precisam token da instância)
     # ============================================================
+    #
+    # Padrao do fork (AMZ Ofertas) descoberto via engenharia reversa do
+    # codigo do projeto irmao "amzofertas-independent":
+    #
+    # - Header de auth = "Token: <token>" (lowercase nao funciona)
+    # - /session/connect aceita body vazio {} e nao suporta webhook inline
+    # - /session/logout (NAO /session/disconnect) e o jeito de derrubar
+    # - Respostas vem aninhadas: { code: 200, data: { loggedIn, qrcode, jid } }
+    # - O /session/status as vezes ja traz o QR no proprio payload (poupa
+    #   uma chamada)
+    # - Webhook se configura em endpoint separado, POST /webhook
+    # ============================================================
 
     async def conectar(
         self, instance_token: str, *, webhook_url: str | None = None
     ) -> dict[str, Any]:
         """Inicia conexão WhatsApp.
 
-        Após chamar, deve-se chamar `obter_qr` em loop até pareamento.
+        Body vazio: o fork da AMZ exige isso. Se `webhook_url` for passado,
+        configuramos logo em seguida via `configurar_webhook` (endpoint
+        separado, /webhook).
         """
-        payload: dict[str, Any] = {}
-        if webhook_url:
-            payload["Webhook"] = webhook_url
-            payload["Events"] = ["Message"]
-        return await self._request(
-            "POST", "/session/connect", token=instance_token, json=payload
+        resultado = await self._request(
+            "POST", "/session/connect", token=instance_token, json={}
         )
+        if webhook_url:
+            try:
+                await self.configurar_webhook(
+                    instance_token, url=webhook_url
+                )
+            except (WuzapiIndisponivelError, WuzapiFalhouError) as exc:
+                log.warning(
+                    "wuzapi.webhook_setup_falhou",
+                    erro=str(exc),
+                    webhook_url=webhook_url,
+                )
+        return resultado
 
     async def desconectar(self, instance_token: str) -> dict[str, Any]:
+        """Faz logout da sessao. Endpoint correto = /session/logout."""
         return await self._request(
-            "POST", "/session/disconnect", token=instance_token
+            "POST", "/session/logout", token=instance_token
         )
 
     async def status(self, instance_token: str) -> dict[str, Any]:
-        return await self._request(
+        """Devolve o status da sessao.
+
+        Normaliza o payload do fork: ele aninha tudo em `data: {...}`.
+        Devolvemos sempre o dict de dentro pra simplificar uso.
+        """
+        raw = await self._request(
             "GET", "/session/status", token=instance_token
         )
+        if isinstance(raw, dict):
+            inner = raw.get("data")
+            if isinstance(inner, dict):
+                return inner
+        return raw if isinstance(raw, dict) else {}
 
     async def obter_qr(self, instance_token: str) -> str | None:
-        """Devolve QR code base64 (data URI) para parear o WhatsApp.
+        """Devolve QR code base64 para parear o WhatsApp.
 
-        Retorna None quando já está conectado.
+        Estratégia em 2 passos (igual o que a AMZ faz e funciona):
+            1. GET /session/status — o status as vezes ja contem o QR
+            2. GET /session/qr — forca a geracao se nao veio
+
+        Retorna None quando ja esta conectado (loggedIn=true).
         """
+        # Passo 1: tenta extrair QR direto do status
+        try:
+            st = await self.status(instance_token)
+            if st.get("loggedIn") is True or st.get("LoggedIn") is True:
+                return None  # ja conectado
+            qr_inline = st.get("qrcode") or st.get("QRCode")
+            if isinstance(qr_inline, str) and len(qr_inline) > 50:
+                return qr_inline
+        except (WuzapiIndisponivelError, WuzapiFalhouError):
+            pass
+
+        # Passo 2: forca /session/qr
         try:
             data = await self._request(
                 "GET", "/session/qr", token=instance_token
             )
         except WuzapiFalhouError:
             return None
-        qr = data.get("data") if isinstance(data, dict) else None
-        if not qr and isinstance(data, dict):
-            qr = data.get("QRCode") or data.get("qrcode")
-        return str(qr) if qr else None
+
+        if isinstance(data, dict):
+            inner = data.get("data") if isinstance(data.get("data"), dict) else data
+            qr = (
+                inner.get("qrcode")
+                or inner.get("QRCode")
+                if isinstance(inner, dict)
+                else None
+            )
+            if isinstance(qr, str) and len(qr) > 50:
+                return qr
+        return None
 
     async def configurar_webhook(
         self,
@@ -260,9 +317,16 @@ class WuzapiClient:
         url: str,
         eventos: list[str] | None = None,
     ) -> dict[str, Any]:
+        """Configura URL de webhook para a instancia.
+
+        Wuzapi aceita tanto camelCase quanto lowercase nos campos —
+        mandamos ambos pra maxima compatibilidade entre forks.
+        """
         payload = {
             "webhook": url,
+            "Webhook": url,
             "events": eventos or ["Message"],
+            "Events": eventos or ["Message"],
         }
         return await self._request(
             "POST", "/webhook", token=instance_token, json=payload

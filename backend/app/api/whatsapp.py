@@ -406,17 +406,23 @@ async def obter_instancia(
         return None
 
     # Sincroniza status com Wuzapi (best-effort)
+    # O client ja normaliza o payload aninhado {data: {...}}.
     if wuzapi_client.is_configured():
         try:
             data = await wuzapi_client.status(inst.wuzapi_token)
             conectado = bool(
-                data.get("Connected")
-                or data.get("connected")
+                data.get("loggedIn")
                 or data.get("LoggedIn")
+                or data.get("connected")
+                or data.get("Connected")
             )
             inst.status = (
                 StatusInstancia.CONECTADA if conectado else StatusInstancia.DESCONECTADA
             )
+            # Se ja tem JID (telefone pareado), atualiza numero_bot
+            jid = data.get("jid") or data.get("Jid")
+            if isinstance(jid, str) and ":" in jid and not inst.numero_bot:
+                inst.numero_bot = jid.split(":")[0]
             await db.flush()
         except (WuzapiIndisponivelError, WuzapiFalhouError):
             pass  # mantém o que já estava
@@ -514,19 +520,25 @@ async def adotar_instancia(
         )
 
     # Valida que o token funciona contra o Wuzapi (best-effort)
+    # Tambem captura o numero do bot se a sessao ja estiver pareada.
+    numero_detectado: str | None = None
     if wuzapi_client.is_configured():
         try:
             data = await wuzapi_client.status(token)
             conectado = bool(
-                data.get("Connected")
-                or data.get("connected")
+                data.get("loggedIn")
                 or data.get("LoggedIn")
+                or data.get("connected")
+                or data.get("Connected")
             )
             status_inicial = (
                 StatusInstancia.CONECTADA
                 if conectado
                 else StatusInstancia.AGUARDANDO_QR
             )
+            jid = data.get("jid") or data.get("Jid")
+            if isinstance(jid, str) and ":" in jid:
+                numero_detectado = jid.split(":")[0]
         except (WuzapiIndisponivelError, WuzapiFalhouError) as exc:
             raise ValidacaoError(
                 f"Token nao reconhecido pelo servidor Wuzapi: {exc.message}. "
@@ -548,17 +560,18 @@ async def adotar_instancia(
         )
     )
     inst = existente_q.scalar_one_or_none()
+    numero_final = numero or numero_detectado
     if inst is not None:
         inst.wuzapi_token = token
         inst.ativa = True
         inst.status = status_inicial
-        if numero:
-            inst.numero_bot = numero
+        if numero_final:
+            inst.numero_bot = numero_final
     else:
         inst = WhatsAppInstancia(
             wuzapi_instance_id=instance_id,
             wuzapi_token=token,
-            numero_bot=numero,
+            numero_bot=numero_final,
             status=status_inicial,
             ativa=True,
         )
