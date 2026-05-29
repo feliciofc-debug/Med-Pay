@@ -126,15 +126,6 @@ function SessionCard() {
           )}
           <button
             type="button"
-            onClick={() => setShowAdotar(true)}
-            className="btn-ghost"
-            title="Use uma sessao Wuzapi ja existente na VPS"
-          >
-            <Link2 size={14} />
-            Adotar instância existente
-          </button>
-          <button
-            type="button"
             onClick={() => conectar.mutate()}
             disabled={conectar.isPending || isLoading}
             className="btn-primary"
@@ -221,8 +212,17 @@ function SessionCard() {
       )}
 
       {error && (
-        <div className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          {error}
+        <div className="mt-4 space-y-2">
+          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {error}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAdotar(true)}
+            className="text-xs text-slate-500 hover:text-slate-700 underline"
+          >
+            Configuração avançada: adotar sessão existente
+          </button>
         </div>
       )}
     </div>

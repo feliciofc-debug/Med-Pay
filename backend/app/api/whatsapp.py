@@ -436,37 +436,107 @@ async def conectar_instancia(
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
 ) -> QRCodeOut:
-    """Cria/recupera instância e dispara conexão.
+    """Conecta uma sessao WhatsApp e devolve o QR code.
 
-    Devolve o QR code base64 pra escanear no app do WhatsApp.
+    Fluxo simplificado (replica o que a AMZ Ofertas faz e funciona):
+
+    1. Resolve a instancia a usar:
+        a. Se ja existe WhatsAppInstancia ativa no DB → usa essa
+        b. Senao, se WUZAPI_INSTANCE_TOKEN esta configurado → cria
+           registro local apontando pra essa sessao fixa (caminho recomendado)
+        c. Senao, tenta criar via /admin/users (fallback)
+    2. Chama obter_qr() que sozinho cuida de:
+        - GET /session/status (as vezes ja vem QR)
+        - GET /session/qr
+        - POST /session/connect + retry no /session/qr
+        (mesmo padrao do amzofertas-independent que funciona em prod)
+    3. Configura webhook (best-effort, nao bloqueia se falhar)
+    4. Retorna o QR code (ou null se ja conectado)
     """
     if not wuzapi_client.is_configured():
         raise WuzapiIndisponivelError(
-            "WUZAPI_URL e WUZAPI_ADMIN_TOKEN precisam estar configurados."
+            "WUZAPI_URL precisa estar configurada. Adicione no Render."
         )
 
+    # 1. Resolve a instancia
     inst = await _instancia_ativa(db)
     if inst is None:
-        # Cria nova instância no Wuzapi
-        wuz = await wuzapi_client.criar_instancia("medpag-jarvis")
-        inst = WhatsAppInstancia(
-            wuzapi_instance_id=wuz.instance_id,
-            wuzapi_token=wuz.token,
-            status=StatusInstancia.AGUARDANDO_QR,
-            ativa=True,
-        )
-        db.add(inst)
-        await db.flush()
+        # Estrategia recomendada: usar uma sessao fixa configurada por env
+        token_fixo = settings.WUZAPI_INSTANCE_TOKEN
+        if token_fixo:
+            instance_id = (
+                settings.WUZAPI_INSTANCE_ID or "medpag-jarvis"
+            )
+            inst = WhatsAppInstancia(
+                wuzapi_instance_id=instance_id,
+                wuzapi_token=token_fixo,
+                status=StatusInstancia.AGUARDANDO_QR,
+                ativa=True,
+            )
+            db.add(inst)
+            await db.flush()
+            log.info(
+                "whatsapp.instancia_criada_via_env",
+                instance_id=instance_id,
+            )
+        elif settings.WUZAPI_ADMIN_TOKEN:
+            # Fallback: cria via admin/users (depende do schema do fork)
+            try:
+                wuz = await wuzapi_client.criar_instancia("medpag-jarvis")
+                inst = WhatsAppInstancia(
+                    wuzapi_instance_id=wuz.instance_id,
+                    wuzapi_token=wuz.token,
+                    status=StatusInstancia.AGUARDANDO_QR,
+                    ativa=True,
+                )
+                db.add(inst)
+                await db.flush()
+            except (WuzapiIndisponivelError, WuzapiFalhouError) as exc:
+                raise WuzapiFalhouError(
+                    f"Nao foi possivel criar a sessao no Wuzapi: {exc.message}. "
+                    "Configure WUZAPI_INSTANCE_TOKEN nas env vars do Render "
+                    "apontando pra um user ja criado no servidor."
+                ) from exc
+        else:
+            raise WuzapiIndisponivelError(
+                "Configure WUZAPI_INSTANCE_TOKEN no Render apontando pra "
+                "um user/sessao ja criada no servidor Wuzapi. Esse e o "
+                "jeito recomendado."
+            )
 
-    webhook_url = str(request.url_for("wuzapi_webhook"))
-    await wuzapi_client.conectar(inst.wuzapi_token, webhook_url=webhook_url)
+    # 2. Tenta obter QR (a logica de fluxo esta no client)
+    # Erros de connect/qr nao quebram aqui: o obter_qr retorna None se ja
+    # esta conectado, e tambem retorna None se algo deu erro nas chamadas
+    # internas (logs no client).
     qr = await wuzapi_client.obter_qr(inst.wuzapi_token)
 
+    # 3. Configura webhook (best-effort, nao falha o request)
+    if qr is None:
+        # Ja conectado — sincroniza numero_bot
+        try:
+            st = await wuzapi_client.status(inst.wuzapi_token)
+            jid = st.get("jid") or st.get("Jid")
+            if isinstance(jid, str) and ":" in jid and not inst.numero_bot:
+                inst.numero_bot = jid.split(":")[0]
+        except (WuzapiIndisponivelError, WuzapiFalhouError):
+            pass
+
+    try:
+        webhook_url = str(request.url_for("wuzapi_webhook"))
+        await wuzapi_client.configurar_webhook(
+            inst.wuzapi_token, url=webhook_url
+        )
+    except (WuzapiIndisponivelError, WuzapiFalhouError) as exc:
+        log.warning("whatsapp.webhook_setup_falhou", erro=exc.message)
+
+    # 4. Atualiza estado e retorna
     inst.status = (
         StatusInstancia.CONECTADA if qr is None else StatusInstancia.AGUARDANDO_QR
     )
     inst.ultimo_qr_base64 = qr
-    inst.ultimo_qr_at = __import__("datetime").datetime.now(__import__("datetime").UTC)
+    if qr is not None:
+        from datetime import UTC, datetime as _dt
+        inst.ultimo_qr_at = _dt.now(UTC)
     await db.flush()
 
     return QRCodeOut(qr_base64=qr, status=inst.status)

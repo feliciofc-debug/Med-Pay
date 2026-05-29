@@ -1,0 +1,34 @@
+fix(jarvis): fluxo simplificado igual a AMZ - 1 botao, QR direto
+
+Antes: cliente clicava em "Conectar WhatsApp", o backend tentava criar
+um user no /admin/users (que falha em forks customizados como o da
+AMZ), depois chamava /session/connect explicitamente (que dava HTTP 500
+"failed to Connect" quando a sessao ja estava com estado inconsistente).
+
+Agora replicamos EXATAMENTE o fluxo do amzofertas-independent que esta
+em prod ha meses:
+
+Backend (api/whatsapp.py conectar_instancia):
+1. Pega WhatsAppInstancia ativa do DB (cria uma se nao existe usando
+   WUZAPI_INSTANCE_TOKEN da env — sem precisar de admin/users)
+2. Chama wuzapi_client.obter_qr() que SOZINHO faz o fluxo todo:
+   - GET /session/status (as vezes ja tem QR)
+   - GET /session/qr
+   - POST /session/connect (body vazio) + retry no /session/qr
+3. Configura webhook (best-effort, nao bloqueia)
+4. Retorna QR ou null (se ja conectado)
+
+Backend (core/config.py):
+- Documenta WUZAPI_INSTANCE_TOKEN como caminho RECOMENDADO
+- Adiciona WUZAPI_INSTANCE_ID (nome do user, opcional)
+
+Frontend:
+- Removido o botao "Adotar instancia existente" do fluxo principal
+  — cliente final nao precisa ver isso
+- A opcao "Configuracao avancada: adotar sessao existente" aparece
+  APENAS em caso de erro, como um link discreto
+- Fluxo feliz: cliente clica "Conectar WhatsApp" → QR aparece. So.
+
+Mensagens de erro melhoradas: quando WUZAPI_INSTANCE_TOKEN nao esta
+setado e admin/users falha, retorna mensagem explicita pedindo pra
+configurar a env var.

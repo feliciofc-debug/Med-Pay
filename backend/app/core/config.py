@@ -101,11 +101,24 @@ class Settings(BaseSettings):
 
     # Wuzapi (WhatsApp não oficial, rodado em VPS Contabo)
     WUZAPI_URL: str | None = None  # ex: http://seuvps:8080
-    WUZAPI_ADMIN_TOKEN: str | None = None  # Bearer admin
-    WUZAPI_INSTANCE_TOKEN: str | None = None  # Token da instância
+
+    # Token admin do servidor Wuzapi (usado em endpoints /admin/*).
+    # Opcional se WUZAPI_INSTANCE_TOKEN ja estiver configurado.
+    WUZAPI_ADMIN_TOKEN: str | None = None
+
+    # ⭐ JEITO RECOMENDADO (e que funciona em 100% dos casos):
+    # Crie um user/sessao manualmente no servidor Wuzapi e cole aqui o token.
+    # O Med-Pay vai usar essa sessao diretamente, sem precisar criar/listar
+    # nada via /admin/users (que muda de schema entre forks).
+    WUZAPI_INSTANCE_TOKEN: str | None = None
+    # Nome/ID do user no Wuzapi (para identificacao). Se nao setar,
+    # geramos um automatico ("medpag-jarvis").
+    WUZAPI_INSTANCE_ID: str | None = None
+
     # Nome do header HTTP onde mandamos o token. O Wuzapi oficial usa
-    # "Token", mas forks customizados (ex: AMZ Ofertas) usam "Authorization".
-    # Default mantém compatibilidade com upstream.
+    # "Token", mas forks customizados (ex: AMZ Ofertas) usam "Authorization"
+    # em endpoints admin. Default = mandamos AMBOS, entao essa flag e
+    # so pra forks bem exoticos.
     WUZAPI_AUTH_HEADER: str = "Token"
 
     # Segredo compartilhado pra autenticar webhooks vindos do Wuzapi
