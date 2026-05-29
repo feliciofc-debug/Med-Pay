@@ -8,6 +8,7 @@ import { SignupPage } from "@/pages/SignupPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DashboardExecutivoPage } from "@/pages/DashboardExecutivoPage";
 import { MedicoHomePage } from "@/pages/MedicoHomePage";
+import { FechamentoPeriodoPage } from "@/pages/FechamentoPeriodoPage";
 import { ContratosPage } from "@/pages/ContratosPage";
 import { UploadPage } from "@/pages/UploadPage";
 import { LoteDetalhePage } from "@/pages/LoteDetalhePage";
@@ -96,6 +97,17 @@ export default function App() {
         element={
           <ProtectedRoute roles={["ADMIN", "APROVADOR", "GESTOR"]}>
             <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      {/* Fechamento de período */}
+      <Route
+        path="/app/fechamento"
+        element={
+          <ProtectedRoute
+            roles={["ADMIN", "APROVADOR", "GESTOR", "FINANCEIRO"]}
+          >
+            <FechamentoPeriodoPage />
           </ProtectedRoute>
         }
       />

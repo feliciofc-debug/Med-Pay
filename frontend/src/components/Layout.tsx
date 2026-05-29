@@ -8,6 +8,7 @@ import {
   Briefcase,
   Building2,
   Camera,
+  CalendarCheck2,
   ClipboardList,
   Cog,
   FileSpreadsheet,
@@ -135,6 +136,12 @@ const SECOES: NavSection[] = [
         label: "Extrato Consolidado",
         icon: Layers3,
         roles: ["ADMIN", "APROVADOR", "GESTOR"],
+      },
+      {
+        to: "/app/fechamento",
+        label: "Fechamento de período",
+        icon: CalendarCheck2,
+        roles: ["ADMIN", "APROVADOR", "GESTOR", "FINANCEIRO"],
       },
       {
         to: "/app/prestadores",

@@ -14,6 +14,7 @@ from app.models.codigo_servico import CodigoServico
 from app.models.contrato_hospital import ContratoHospital, ModoCobranca
 from app.models.empresa_config import BancoEmissor, EmpresaConfig, TipoInscricao
 from app.models.equipe_flex import EquipeFlex, FechamentoEquipe, MembroEquipe
+from app.models.fechamento_periodo import FechamentoPeriodo, StatusFechamento
 from app.models.ficha_plantao import FichaPlantao, StatusFicha
 from app.models.lancamento_servico import LancamentoServico, StatusLancamento
 from app.models.lote import Lote, StatusLote
@@ -50,6 +51,7 @@ __all__ = [
     "EquipeFlex",
     "EventoVital",
     "FechamentoEquipe",
+    "FechamentoPeriodo",
     "FichaPlantao",
     "LancamentoServico",
     "Lote",
@@ -61,6 +63,7 @@ __all__ = [
     "Plano",
     "StatusAssinatura",
     "StatusBeneficiario",
+    "StatusFechamento",
     "StatusFicha",
     "StatusInstancia",
     "StatusLancamento",
