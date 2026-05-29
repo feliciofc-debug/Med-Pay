@@ -405,7 +405,7 @@ async def obter_instancia(
     if inst is None:
         return None
 
-    # Sincroniza status com Wuzapi (best-effort)
+    # Sincroniza status com Wuzapi (best-effort, NUNCA quebra o endpoint).
     # O client ja normaliza o payload aninhado {data: {...}}.
     if wuzapi_client.is_configured():
         try:
@@ -422,10 +422,25 @@ async def obter_instancia(
             # Se ja tem JID (telefone pareado), atualiza numero_bot
             jid = data.get("jid") or data.get("Jid")
             if isinstance(jid, str) and ":" in jid and not inst.numero_bot:
-                inst.numero_bot = jid.split(":")[0]
-            await db.flush()
-        except (WuzapiIndisponivelError, WuzapiFalhouError):
-            pass  # mantém o que já estava
+                numero_extraido = jid.split(":")[0]
+                # Guard contra valor muito longo (campo e VARCHAR(20))
+                if len(numero_extraido) <= 20:
+                    inst.numero_bot = numero_extraido
+            try:
+                await db.flush()
+            except Exception as flush_exc:  # noqa: BLE001
+                log.warning(
+                    "whatsapp.flush_falhou", erro=str(flush_exc)
+                )
+                await db.rollback()
+        except Exception as exc:  # noqa: BLE001
+            # Qualquer erro no Wuzapi (timeout, rede, schema, etc) NUNCA
+            # pode quebrar este endpoint. So loga.
+            log.warning(
+                "whatsapp.sync_status_falhou",
+                erro=str(exc),
+                tipo=type(exc).__name__,
+            )
 
     return InstanciaOut.model_validate(inst)
 
