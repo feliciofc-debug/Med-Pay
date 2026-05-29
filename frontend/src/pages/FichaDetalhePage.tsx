@@ -282,13 +282,17 @@ export function FichaDetalhePage() {
         )}
       </div>
 
-      {ficha.metadados && Object.keys(ficha.metadados).length > 0 && (
+      {ficha.metadados &&
+        Object.keys(ficha.metadados).filter((k) => !k.startsWith("_")).length >
+          0 && (
         <div className="card">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
             Cabeçalho identificado
           </h3>
           <dl className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-            {Object.entries(ficha.metadados).map(([k, v]) => (
+            {Object.entries(ficha.metadados)
+              .filter(([k]) => !k.startsWith("_"))
+              .map(([k, v]) => (
               <div key={k}>
                 <dt className="text-xs text-slate-500 capitalize">{k}</dt>
                 <dd className="font-medium text-slate-800">{String(v)}</dd>
