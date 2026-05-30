@@ -235,14 +235,32 @@ async def wuzapi_webhook(
 async def _enviar_resposta_via_wuzapi(
     db: AsyncSession, *, numero: str, texto: str
 ) -> None:
-    """Envia mensagem usando o token da instância configurada."""
+    """Envia mensagem usando o token da instância.
+
+    Token escolhido por ordem de confiança:
+      1. settings.WUZAPI_INSTANCE_TOKEN (config explícita = fonte da verdade)
+      2. instancia.wuzapi_token (registro no banco)
+
+    IMPORTANTE: NÃO bloqueamos no `instancia.status` em cache. Esse status
+    fica obsoleto facilmente (ex: depois de um restart, ou se a sync do
+    GET /instancia não rodou). Como a sessão real pode estar conectada
+    mesmo com o status do banco dizendo o contrário, tentamos o envio de
+    fato e deixamos o Wuzapi ser a autoridade. Se falhar, o erro sobe e é
+    logado pelo caller.
+    """
     instancia = await _instancia_ativa(db)
-    if instancia is None or instancia.status != StatusInstancia.CONECTADA:
-        # Sem instância conectada não tem como enviar
-        log.warning("whatsapp.sem_instancia_conectada")
+    token = settings.WUZAPI_INSTANCE_TOKEN or (
+        instancia.wuzapi_token if instancia else None
+    )
+    if not token:
+        log.warning(
+            "whatsapp.sem_token_envio",
+            tem_instancia=bool(instancia),
+            tem_env_token=bool(settings.WUZAPI_INSTANCE_TOKEN),
+        )
         return
     await wuzapi_client.enviar_texto(
-        instancia.wuzapi_token, numero_e164=numero, texto=texto
+        token, numero_e164=numero, texto=texto
     )
 
 
