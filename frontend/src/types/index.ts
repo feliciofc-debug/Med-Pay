@@ -752,6 +752,32 @@ export interface CriarHospitalPayload {
   login_nome?: string | null;
 }
 
+/** Aporte: depósito recebido de um hospital da carteira. */
+export type StatusAporte = "PENDENTE" | "CONFIRMADO";
+
+export interface Aporte {
+  id: string;
+  cliente_id: string;
+  cliente_nome: string | null;
+  conta_pagadora_id: string | null;
+  lote_id: string | null;
+  valor_centavos: number;
+  data_recebimento: string;
+  competencia: string | null;
+  referencia: string | null;
+  status: StatusAporte;
+}
+
+export interface CriarAportePayload {
+  cliente_id: string;
+  conta_pagadora_id?: string | null;
+  lote_id?: string | null;
+  valor_centavos: number;
+  data_recebimento: string;
+  competencia?: string | null;
+  referencia?: string | null;
+}
+
 // =============================================================================
 // Jarvis — WhatsApp + LLM
 // =============================================================================

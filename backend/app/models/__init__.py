@@ -3,6 +3,7 @@
 Importar TODOS os models aqui para que o Alembic os descubra automaticamente.
 """
 
+from app.models.aporte import AporteHospital, StatusAporte
 from app.models.auditoria import Auditoria
 from app.models.beneficiario import (
     Beneficiario,
@@ -48,6 +49,7 @@ from app.models.whatsapp import (
 
 __all__ = [
     "AmbienteMonitorado",
+    "AporteHospital",
     "ApuracaoSCP",
     "Auditoria",
     "BancoEmissor",
@@ -75,6 +77,7 @@ __all__ = [
     "ParticipanteSCP",
     "Plano",
     "RegraCota",
+    "StatusAporte",
     "StatusApuracaoSCP",
     "StatusAssinatura",
     "StatusBeneficiario",

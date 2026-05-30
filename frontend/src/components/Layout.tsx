@@ -2,6 +2,7 @@ import { type ReactNode, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowDownToLine,
   ArrowLeftRight,
   Activity,
   BarChart3,
@@ -231,6 +232,14 @@ const SECOES: NavSection[] = [
         to: "/app/carteira",
         label: "Carteira de hospitais",
         icon: Hospital,
+        roles: ["ADMIN", "GESTOR"],
+        feature: "pagamento.execucao",
+      },
+      {
+        // Aportes recebidos dos hospitais (libera a distribuição).
+        to: "/app/aportes",
+        label: "Aportes recebidos",
+        icon: ArrowDownToLine,
         roles: ["ADMIN", "GESTOR"],
         feature: "pagamento.execucao",
       },
