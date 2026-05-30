@@ -8,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.deps import get_current_user, get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, RefreshRequest, TokenPair, UserOut
+from app.schemas.auth import ClienteMini, LoginRequest, RefreshRequest, TokenPair, UserOut
 from app.services.auth import AuthService
+from app.services.feature_flags import features_resolvidas
 
 router = APIRouter()
 
@@ -74,6 +75,32 @@ async def logout(response: Response) -> dict[str, bool]:
 
 
 @router.get("/me", response_model=UserOut)
-async def me(current_user: User = Depends(get_current_user)) -> User:
-    """Retorna o usuário atualmente autenticado."""
-    return current_user
+async def me(current_user: User = Depends(get_current_user)) -> UserOut:
+    """Retorna o usuário autenticado + contexto do tenant.
+
+    Inclui os 3 eixos do cliente (tipo, modo_pagamento e o dict de
+    features resolvido) pro frontend derivar menu/dashboard dinamicamente,
+    sem `if tipo == 'hospital'` espalhado.
+    """
+    cliente_out: ClienteMini | None = None
+    cliente = current_user.cliente
+    if cliente is not None:
+        cliente_out = ClienteMini(
+            id=cliente.id,
+            nome=cliente.nome,
+            tipo=cliente.tipo,
+            modo_pagamento=cliente.modo_pagamento,
+            features=features_resolvidas(cliente),
+        )
+
+    return UserOut(
+        id=current_user.id,
+        email=current_user.email,
+        nome=current_user.nome,
+        role=current_user.role,
+        ativo=current_user.ativo,
+        cliente_id=current_user.cliente_id,
+        cliente=cliente_out,
+        created_at=current_user.created_at,
+        last_login_at=current_user.last_login_at,
+    )

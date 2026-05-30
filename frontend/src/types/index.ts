@@ -222,9 +222,101 @@ export interface FechamentoEquipe {
   created_at: string | null;
 }
 
+export type TipoCliente =
+  | "HOSPITAL"
+  | "EMPRESA_REPASSE"
+  | "MEDPAG_REPASSE"
+  | "ONG";
+
+export type ModoPagamento =
+  | "CNAB_BANCARIO"
+  | "EXPORT_RH"
+  | "REPASSE_SCP"
+  | "SOMENTE_GESTAO";
+
 export interface ClienteMini {
   id: string;
   nome: string;
+  // Eixos da engenharia de modelos de negócio (ver mapa mental).
+  tipo?: TipoCliente;
+  modo_pagamento?: ModoPagamento;
+  // Dict resolvido de capacidades ligadas pro tenant (Eixo 2).
+  features?: Record<string, boolean | number | null>;
+}
+
+// ============================================================
+// SCP (Sociedade em Conta de Participação) + modelos de negócio
+// ============================================================
+
+export type RegraCota =
+  | "PERCENTUAL_FIXO"
+  | "PROPORCIONAL_SERVICO"
+  | "POR_APORTE";
+
+export type StatusApuracaoSCP = "ABERTA" | "FECHADA" | "DISTRIBUIDA";
+
+export interface ParticipanteSCP {
+  id: string;
+  beneficiario_id: string;
+  beneficiario_nome: string | null;
+  regra_cota: RegraCota;
+  percentual_bp: number;
+  aporte_centavos: number;
+  vigencia_inicio: string;
+  vigencia_fim: string | null;
+  ativo: boolean;
+}
+
+export interface ParticipanteSCPPayload {
+  beneficiario_id: string;
+  regra_cota: RegraCota;
+  percentual_bp: number;
+  aporte_centavos: number;
+  vigencia_inicio?: string | null;
+  vigencia_fim?: string | null;
+}
+
+export interface DistribuicaoSCP {
+  beneficiario_id: string;
+  base_centavos: number;
+  percentual_aplicado_bp: number;
+  valor_centavos: number;
+}
+
+export interface ApuracaoSCP {
+  id: string;
+  cliente_id: string;
+  competencia: string;
+  receita_bruta_centavos: number;
+  custos_centavos: number;
+  resultado_centavos: number;
+  status: StatusApuracaoSCP;
+  distribuicoes: DistribuicaoSCP[];
+}
+
+export interface ApuracaoSCPPayload {
+  competencia: string;
+  receita_bruta_centavos: number;
+  custos_centavos: number;
+  observacoes?: string | null;
+}
+
+export interface EstrategiaRepasse {
+  modo: ModoPagamento;
+  label: string;
+  descricao: string;
+  gera_arquivo: boolean;
+  formato: string | null;
+  executa_pagamento: boolean;
+}
+
+export type ResultadoPix = "CONFERE" | "DIVERGENTE" | "PENDENTE";
+
+export interface VeredictoPix {
+  resultado: ResultadoPix;
+  mensagem: string;
+  nome_titular: string | null;
+  doc_titular: string | null;
 }
 
 export interface User {

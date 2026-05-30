@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
@@ -17,6 +18,52 @@ from app.models.plano import Plano, StatusAssinatura
 
 if TYPE_CHECKING:
     from app.models.lote import Lote
+
+
+class TipoCliente(str, Enum):
+    """QUEM é o tenant (Eixo 1 da engenharia de modelos de negócio).
+
+    Define a "natureza" do cliente — não confunda com features (Eixo 2,
+    o QUE pode fazer) nem com modo de pagamento (Eixo 3, COMO o dinheiro
+    sai). Cada tipo é só um preset de defaults; ajuste fino vai no
+    `features_override`.
+
+    HOSPITAL         — hospital/clínica que paga os próprios médicos.
+                       Dashboard de gestão (sem lucro), foco presença.
+    EMPRESA_REPASSE  — empresa de repasse que CONTRATA a MedPag e atende
+                       vários hospitais (tenant "pai" com filhos).
+    MEDPAG_REPASSE   — a própria MedPag operando o repasse (modelo SCP,
+                       médicos como sócios participantes).
+    ONG              — organização do terceiro setor, perfil enxuto.
+    """
+
+    HOSPITAL = "HOSPITAL"
+    EMPRESA_REPASSE = "EMPRESA_REPASSE"
+    MEDPAG_REPASSE = "MEDPAG_REPASSE"
+    ONG = "ONG"
+
+
+class ModoPagamento(str, Enum):
+    """COMO o repasse ao médico é executado (Eixo 3).
+
+    IMPORTANTE: o dinheiro do repasse NUNCA passa pela MedPag — sai da
+    conta do hospital (ou da SCP), sempre em banco tradicional. A MedPag
+    orquestra/gera o arquivo, não custodia. O Asaas só recebe a
+    mensalidade SaaS e valida CPF/PIX — nunca faz repasse.
+
+    CNAB_BANCARIO  — gera CNAB 240; o hospital deposita pelo banco dele.
+    EXPORT_RH      — exporta arquivo/planilha pro RH do cliente processar
+                     (hospital público, folha municipal/eSocial).
+    REPASSE_SCP    — MedPag opera como sócio ostensivo (SCP): apura
+                     resultado e distribui aos médicos participantes,
+                     ainda via banco tradicional.
+    SOMENTE_GESTAO — não executa pagamento; só gestão/relatórios.
+    """
+
+    CNAB_BANCARIO = "CNAB_BANCARIO"
+    EXPORT_RH = "EXPORT_RH"
+    REPASSE_SCP = "REPASSE_SCP"
+    SOMENTE_GESTAO = "SOMENTE_GESTAO"
 
 
 class Cliente(Base):
@@ -45,6 +92,50 @@ class Cliente(Base):
     # Mapeamento de colunas da planilha deste cliente
     # Ex: {"cpf": "Documento", "nome": "Beneficiário", "valor": "Valor Bruto", ...}
     mapeamento_colunas: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+    # ---------- Eixo 1: Tipo de tenant (modelo de negócio) ----------
+    # Define a natureza do cliente. Só um preset de defaults — o que ele
+    # PODE fazer continua nas features (Eixo 2). Default HOSPITAL pra
+    # clientes legados nascerem como hospital sem migração de dados.
+    tipo: Mapped[TipoCliente] = mapped_column(
+        SAEnum(
+            TipoCliente,
+            name="tipo_cliente",
+            values_callable=lambda x: [e.value for e in x],
+            create_type=False,  # type criado via migration idempotente
+        ),
+        nullable=False,
+        default=TipoCliente.HOSPITAL,
+        server_default=TipoCliente.HOSPITAL.value,
+        index=True,
+    )
+
+    # ---------- Eixo 3: Modo de execução do repasse ----------
+    # COMO o pagamento ao médico sai. Default CNAB_BANCARIO (o que já
+    # existe hoje). Ver `ModoPagamento` — o dinheiro nunca passa pela
+    # MedPag; Asaas é só mensalidade + validação de CPF.
+    modo_pagamento: Mapped[ModoPagamento] = mapped_column(
+        SAEnum(
+            ModoPagamento,
+            name="modo_pagamento_cliente",
+            values_callable=lambda x: [e.value for e in x],
+            create_type=False,
+        ),
+        nullable=False,
+        default=ModoPagamento.CNAB_BANCARIO,
+        server_default=ModoPagamento.CNAB_BANCARIO.value,
+    )
+
+    # ---------- Hierarquia (empresa de repasse → hospitais filhos) ----------
+    # Quando setado, este cliente é "filho" de um tenant pai (ex.: uma
+    # empresa de repasse que administra vários hospitais). Null = raiz.
+    # A visão consolidada do pai soma os filhos.
+    cliente_pai_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("clientes.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # ---------- Plano + Assinatura ----------
     # Cada cliente assina um plano que define features padrão e limites.
@@ -145,5 +236,21 @@ class Cliente(Base):
     lotes: Mapped[list["Lote"]] = relationship("Lote", back_populates="cliente")
     plano: Mapped["Plano | None"] = relationship("Plano", lazy="joined")
 
+    # Hierarquia: empresa de repasse (pai) ↔ hospitais administrados (filhos).
+    cliente_pai: Mapped["Cliente | None"] = relationship(
+        "Cliente",
+        remote_side=[id],
+        back_populates="filhos",
+        foreign_keys=[cliente_pai_id],
+    )
+    filhos: Mapped[list["Cliente"]] = relationship(
+        "Cliente",
+        back_populates="cliente_pai",
+        foreign_keys=[cliente_pai_id],
+    )
+
     def __repr__(self) -> str:
-        return f"<Cliente id={self.id} nome={self.nome}>"
+        return f"<Cliente id={self.id} nome={self.nome} tipo={self.tipo}>"
+
+
+__all__ = ["Cliente", "ModoPagamento", "TipoCliente"]

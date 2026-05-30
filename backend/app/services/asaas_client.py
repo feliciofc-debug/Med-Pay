@@ -200,6 +200,25 @@ class AsaasClient:
         )
 
     # =================================================
+    # Pix — consulta de titularidade (antifraude)
+    # =================================================
+
+    async def consultar_chave_pix(self, chave: str) -> dict[str, Any]:
+        """Consulta a titularidade de uma chave PIX (nome + CPF/CNPJ do dono).
+
+        Usado no antifraude: cruzar o dono da chave com o CPF do médico
+        cadastrado. Decodifica a chave como "copia e cola" via Pix do
+        Asaas e devolve o JSON cru (quem traduz é o `pix_validacao`).
+
+        NOTA: o path exato pode mudar conforme a liberação do Asaas pra
+        conta de produção. Mantido isolado aqui pra trocar num lugar só.
+        Hoje cai em erro gracioso (503) se a chave não for configurada.
+        """
+        return await self._request(
+            "POST", "/pix/qrCodes/decode", json={"payload": chave}
+        )
+
+    # =================================================
     # Checkout (link de pagamento pro signup self-service)
     # =================================================
 

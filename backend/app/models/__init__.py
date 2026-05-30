@@ -9,7 +9,7 @@ from app.models.beneficiario import (
     OrigemCadastroBeneficiario,
     StatusBeneficiario,
 )
-from app.models.cliente import Cliente
+from app.models.cliente import Cliente, ModoPagamento, TipoCliente
 from app.models.codigo_servico import CodigoServico
 from app.models.contrato_hospital import ContratoHospital, ModoCobranca
 from app.models.empresa_config import BancoEmissor, EmpresaConfig, TipoInscricao
@@ -21,6 +21,13 @@ from app.models.lancamento_servico import LancamentoServico, StatusLancamento
 from app.models.lote import Lote, StatusLote
 from app.models.pagamento import Pagamento, StatusPagamento
 from app.models.plano import Plano, StatusAssinatura
+from app.models.scp import (
+    ApuracaoSCP,
+    DistribuicaoSCP,
+    ParticipanteSCP,
+    RegraCota,
+    StatusApuracaoSCP,
+)
 from app.models.user import User, UserRole
 from app.models.vital import (
     AmbienteMonitorado,
@@ -41,6 +48,7 @@ from app.models.whatsapp import (
 
 __all__ = [
     "AmbienteMonitorado",
+    "ApuracaoSCP",
     "Auditoria",
     "BancoEmissor",
     "Beneficiario",
@@ -48,6 +56,7 @@ __all__ = [
     "CodigoServico",
     "ContratoHospital",
     "DirecaoMensagem",
+    "DistribuicaoSCP",
     "EmpresaConfig",
     "EquipeFlex",
     "EventoVital",
@@ -59,10 +68,14 @@ __all__ = [
     "Lote",
     "MembroEquipe",
     "ModoCobranca",
+    "ModoPagamento",
     "NoVital",
     "OrigemCadastroBeneficiario",
     "Pagamento",
+    "ParticipanteSCP",
     "Plano",
+    "RegraCota",
+    "StatusApuracaoSCP",
     "StatusAssinatura",
     "StatusBeneficiario",
     "StatusFechamento",
@@ -73,6 +86,7 @@ __all__ = [
     "StatusNo",
     "StatusPagamento",
     "TipoAmbiente",
+    "TipoCliente",
     "TipoEvento",
     "TipoInscricao",
     "TipoMemoria",

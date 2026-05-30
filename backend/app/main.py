@@ -171,9 +171,12 @@ def create_app() -> FastAPI:
         fichas,
         lotes,
         medico,
+        modelos_negocio,
         operacao,
         pagamentos,
         planos,
+        repasse,
+        scp,
         signup,
         super_admin,
         vital,
@@ -211,6 +214,13 @@ def create_app() -> FastAPI:
     )
     app.include_router(pagamentos.router, prefix="/api/pagamentos", tags=["pagamentos"])
     app.include_router(planos.router, prefix="/api/planos", tags=["planos"])
+    app.include_router(
+        modelos_negocio.router,
+        prefix="/api/modelos-negocio",
+        tags=["modelos-negocio"],
+    )
+    app.include_router(repasse.router, prefix="/api/repasse", tags=["repasse"])
+    app.include_router(scp.router, prefix="/api/scp", tags=["scp"])
     app.include_router(signup.router, prefix="/api/signup", tags=["signup"])
     app.include_router(
         super_admin.router, prefix="/api/super-admin", tags=["super-admin"]

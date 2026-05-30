@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MedPag — Engenharia de Modelos de Negócio</title>
+<style>
+  :root{
+    --bg:#0c1714; --bg2:#0f201b; --card:#14241f; --card2:#182d26;
+    --ink:#e8f5ee; --muted:#9db8ac; --line:#27433a;
+    --green:#2D5F3F; --green2:#3ddc84; --green3:#1f7a4d;
+    --amber:#ffcc66; --blue:#6fb1ff; --pink:#ff8fb1; --purple:#c5a3ff;
+    --ok:#3ddc84; --no:#5a6b63;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    background:radial-gradient(1200px 600px at 20% -10%, #14342a 0%, var(--bg) 60%);
+    color:var(--ink);line-height:1.5;padding:0 0 80px}
+  header{padding:34px 28px 18px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(61,220,132,.08), transparent)}
+  header h1{margin:0;font-size:26px;letter-spacing:.3px}
+  header h1 span{color:var(--green2)}
+  header p{margin:6px 0 0;color:var(--muted);max-width:820px}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:12.5px;color:var(--muted)}
+  .legend b{color:var(--ink)}
+  .tag{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;vertical-align:middle}
+  .tag.have{background:rgba(61,220,132,.15);color:var(--green2);border:1px solid rgba(61,220,132,.35)}
+  .tag.build{background:rgba(255,204,102,.13);color:var(--amber);border:1px solid rgba(255,204,102,.35)}
+  .tag.q{background:rgba(197,163,255,.13);color:var(--purple);border:1px solid rgba(197,163,255,.35)}
+
+  section{margin-top:30px}
+  .stitle{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+  .stitle h2{font-size:18px;margin:0}
+  .stitle .dot{width:10px;height:10px;border-radius:50%;background:var(--green2)}
+  .stitle .chev{margin-left:auto;color:var(--muted);transition:transform .2s}
+  .collapsed .chev{transform:rotate(-90deg)}
+  .collapsed .sbody{display:none}
+  .sbody{margin-top:14px}
+  .sub{color:var(--muted);font-size:13.5px;margin:2px 0 0}
+
+  /* 3 eixos */
+  .axes{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:880px){.axes{grid-template-columns:1fr}}
+  .axis{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);
+    border-radius:16px;padding:16px;position:relative;overflow:hidden}
+  .axis::before{content:"";position:absolute;inset:0 0 auto 0;height:3px}
+  .axis.a1::before{background:var(--blue)} .axis.a2::before{background:var(--green2)} .axis.a3::before{background:var(--amber)}
+  .axis h3{margin:4px 0 2px;font-size:15px}
+  .axis .k{font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+  .chip{display:inline-block;margin:6px 6px 0 0;padding:6px 10px;border-radius:10px;
+    background:var(--bg2);border:1px solid var(--line);font-size:12.5px}
+  .chip b{color:var(--green2)}
+  .chip.code{font-family:ui-monospace,Consolas,monospace;color:var(--blue)}
+
+  /* fluxos */
+  .flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .node{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+    min-width:120px;flex:1}
+  .node .src{font-size:11px;color:var(--muted)}
+  .node b{display:block;font-size:13px}
+  .arrow{display:flex;align-items:center;color:var(--green2);font-size:20px;font-weight:700}
+  @media(max-width:880px){.arrow{transform:rotate(90deg)}}
+
+  /* tabela presets */
+  table{width:100%;border-collapse:collapse;margin-top:6px;font-size:13px;overflow:hidden;border-radius:12px}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line)}
+  th{background:var(--card2);color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+  tr:hover td{background:rgba(61,220,132,.04)}
+  td .code{font-family:ui-monospace,Consolas,monospace;color:var(--blue);font-size:12px}
+  .yes{color:var(--ok);font-weight:700} .nah{color:var(--no)} .opt{color:var(--amber)}
+
+  /* cards genéricos */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:880px){.grid2{grid-template-columns:1fr}}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .panel h4{margin:0 0 8px;font-size:14px}
+  ul.clean{margin:6px 0 0;padding-left:18px} ul.clean li{margin:5px 0}
+  .decision{border-left:3px solid var(--purple);background:rgba(197,163,255,.06);
+    border-radius:8px;padding:10px 12px;margin:8px 0}
+  .decision b{color:var(--purple)}
+  .note{font-size:12.5px;color:var(--muted)}
+  .pill{font-family:ui-monospace,Consolas,monospace;background:var(--bg2);border:1px solid var(--line);
+    padding:1px 6px;border-radius:6px;font-size:12px;color:var(--blue)}
+  footer{margin-top:36px;color:var(--muted);font-size:12.5px;text-align:center}
+
+  /* app mock */
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 14px}
+  .tab{padding:8px 13px;border-radius:10px;border:1px solid var(--line);background:var(--card);
+    cursor:pointer;font-size:13px;color:var(--muted);transition:.15s}
+  .tab:hover{border-color:var(--green3)}
+  .tab.active{border-color:var(--green2);color:var(--ink);background:rgba(61,220,132,.12)}
+  .app{display:grid;grid-template-columns:228px 1fr;border:1px solid var(--line);
+    border-radius:16px;overflow:hidden;background:var(--bg2);min-height:430px}
+  @media(max-width:880px){.app{grid-template-columns:1fr}}
+  .app .side{background:#091410;border-right:1px solid var(--line);padding:14px 10px}
+  .app .brand{display:flex;align-items:center;gap:9px;padding:4px 8px 14px;font-weight:700}
+  .app .brand .logo{width:28px;height:28px;border-radius:8px;
+    background:linear-gradient(135deg,var(--green2),var(--green3));display:grid;place-items:center;
+    color:#06140d;font-weight:800;font-size:14px}
+  .mi{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;color:var(--muted);font-size:13px;margin-bottom:2px}
+  .mi:hover{background:rgba(61,220,132,.06)}
+  .mi.active{background:rgba(61,220,132,.14);color:var(--ink)}
+  .mi .ic{width:18px;text-align:center}
+  .mi .star{margin-left:auto;font-size:9px;color:var(--green2)}
+  .app .main{padding:16px 18px}
+  .app .top{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  .app .top .tn{font-size:15px;font-weight:700}
+  .badge{font-size:11px;padding:3px 9px;border-radius:999px;font-weight:600;border:1px solid}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  @media(max-width:880px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .kpi .v{font-size:18px;font-weight:700} .kpi .l{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .hidden-note{margin-top:14px;font-size:12px;color:var(--muted);border-top:1px dashed var(--line);padding-top:10px}
+  .hidden-note .x{color:var(--no)}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>MedPag — Engenharia de <span>Modelos de Negócio</span></h1>
+    <p>Mapa mental pra arquitetar UM motor que atende vários modelos (hospital, repasse, SCP, público)
+       sem virar dezenas de produtos diferentes. Ideia central: <b>não modelar "modelos", modelar capacidades</b>.</p>
+    <div class="legend">
+      <span><span class="tag have">JÁ EXISTE</span> no código hoje</span>
+      <span><span class="tag build">CONSTRUIR</span> incremento</span>
+      <span><span class="tag q">DECISÃO</span> definir juntos</span>
+      <span class="note">· clique nos títulos pra recolher/expandir</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- IDEIA CENTRAL -->
+  <section id="s0">
+    <div class="stitle"><span class="dot"></span><h2>💡 A ideia que desembola tudo</h2><span class="chev">▾</span></div>
+    <div class="sbody">
+      <p class="sub">Um "modelo de negócio" <b>não é código novo</b>. É um <b>preset</b> — uma combinação de 3 eixos
+      independentes. Define ~5 presets, cliente novo escolhe um, e ajustes finos vão no override (que já existe).</p>
+      <div class="flow">
+        <div class="node"><span class="src">Eixo 1</span><b>QUEM é o cliente</b><span class="note">tipo de tenant</span></div>
+        <div class="arrow">＋</div>
+        <div class="node"><span class="src">Eixo 2</span><b>O QUE pode fazer</b><span class="note">capacidades / features</span></div>
+        <div class="arrow">＋</div>
+        <div class="node"><span class="src">Eixo 3</span><b>COMO o dinheiro sai</b><span class="note">estratégia de pagamento</span></div>
+        <div class="arrow">＝</div>
+        <div class="node" style="border-color:var(--green3);background:rgba(61,220,132,.08)"><span class="src">resultado</span><b>Preset do modelo</b><span class="note">menu + dashboard derivados</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 EIXOS -->
+  <section id="s1">
+    <div class="stitle"><span class="dot"></span><h2>🧭 Os 3 eixos</h2><span class="chev">▾</span></div>
+    <div class="sbody">
+      <div class="axes">
+        <div class="axis a1">
+          <span class="k">Eixo 1 · Quem</span>
+          <h3>Tipo de tenant <span class="tag build">CONSTRUIR</span></h3>
+          <p class="note">Campo novo <span class="pill">Cliente.tipo</span></p>
+          <span class="chip"><b>HOSPITAL</b></span>
+          <span class="chip"><b>EMPRESA_REPASSE</b></span>
+          <span class="chip"><b>MEDPAG_REPASSE</b> (você/SCP)</span>
+          <span class="chip"><b>ONG</b></span>
+          <p class="note" style="margin-top:10px">Empresa de repasse = tenant <b>pai</b> com hospitais
+          <b>filhos</b> — e os planos <u>já têm</u> a coluna "Filhos" (sub-contas)! <span class="tag have">JÁ EXISTE</span></p>
+        </div>
+        <div class="axis a2">
+          <span class="k">Eixo 2 · O quê</span>
+          <h3>Capacidades <span class="tag have">JÁ EXISTE</span></h3>
+          <p class="note"><span class="pill">Plano.features</span> + <span class="pill">Cliente.features_override</span> + resolver <span class="pill">feature_flags</span></p>
+          <span class="chip code">pagamento.cnab</span>
+          <span class="chip code">modulo.whatsapp_jarvis</span>
+          <span class="chip code">modulo.sentinela_vital</span>
+          <span class="chip code">analise.lucro <span class="tag build">novo</span></span>
+          <span class="chip code">gestao.presenca_compliance <span class="tag build">novo</span></span>
+          <span class="chip code">limite.pagamentos_mes</span>
+          <p class="note" style="margin-top:10px">Cada flag liga/desliga sozinha → combinações infinitas sem código novo.</p>
+        </div>
+        <div class="axis a3">
+          <span class="k">Eixo 3 · Como</span>
+          <h3>Estratégia de repasse <span class="tag build">CONSTRUIR</span></h3>
+          <p class="note">Campo novo <span class="pill">Cliente.modo_pagamento</span> (strategy pattern) — <b>sempre banco tradicional, nunca Asaas</b></p>
+          <span class="chip"><b>CNAB_BANCARIO</b> (hospital deposita) <span class="tag have">base tem</span></span>
+          <span class="chip"><b>EXPORT_RH</b> (RH processa) <span class="tag build">novo</span></span>
+          <span class="chip"><b>REPASSE_SCP</b> (você opera, via banco) <span class="tag build">novo</span></span>
+          <span class="chip"><b>SOMENTE_GESTAO</b> (não paga)</span>
+          <p class="note" style="margin-top:10px">⚠️ O dinheiro do repasse <b>não passa pela MedPag</b>. Sai da conta do hospital, no banco dele. A MedPag <b>orquestra/gera o arquivo</b> — não custodia.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOIS FLUXOS DE DINHEIRO -->
+  <section id="s1b">
+    <div class="stitle"><span class="dot"></span><h2>💸 Dois fluxos de dinheiro (não misturar!)</h2><span class="chev">▾</span></div>
+    <div class="sbody">
+      <p class="sub">O ponto que separa a MedPag de uma fintech custodiante: <b>o dinheiro do repasse nunca passa pela gente</b>. A gente só toca no dinheiro da própria mensalidade (via Asaas).</p>
+      <div class="grid2">
+        <div class="panel" style="border-color:rgba(111,177,255,.35)">
+          <h4>① RECEITA da MedPag <span class="tag have">Asaas</span></h4>
+          <p class="note">Dinheiro que <b>entra</b> pra MedPag = mensalidade SaaS dos clientes.</p>
+          <div class="flow">
+            <div class="node"><span class="src">cliente</span><b>Hospital / Empresa de repasse</b></div>
+            <div class="arrow">→</div>
+            <div class="node"><span class="src">gateway</span><b>Asaas</b><span class="note">boleto/PIX/cartão</span></div>
+            <div class="arrow">→</div>
+            <div class="node" style="border-color:var(--green3);background:rgba(61,220,132,.08)"><span class="src">conta</span><b>MedPag</b></div>
+          </div>
+          <p class="note" style="margin-top:8px">Asaas também faz a <b>validação CPF/PIX</b> (anti-fraude) — só consulta, não move grana de repasse.</p>
+        </div>
+        <div class="panel" style="border-color:rgba(255,204,102,.35)">
+          <h4>② REPASSE ao médico <span class="tag build">banco tradicional</span></h4>
+          <p class="note">Dinheiro que <b>sai</b> pro médico = sai da conta do <b>hospital</b>, no banco dele. MedPag <b>não custodia</b>.</p>
+          <div class="flow">
+            <div class="node"><span class="src">origem</span><b>Conta do hospital</b><span class="note">banco tradicional</span></div>
+            <div class="arrow">→</div>
+            <div class="node"><span class="src">MedPag</span><b>Gera arquivo CNAB</b><span class="note">instrui, não paga</span></div>
+            <div class="arrow">→</div>
+            <div class="node" style="border-color:var(--green3);background:rgba(61,220,132,.08)"><span class="src">destino</span><b>Médico</b></div>
+          </div>
+          <p class="note" style="margin-top:8px">Exceção: no modelo <b>SCP (você opera o repasse)</b>, a origem é a sua conta — mas ainda em <b>banco tradicional</b>, não Asaas.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRESETS -->
+  <section id="s2">
+    <div class="stitle"><span class="dot"></span><h2>🎛️ Presets = seus modelos encaixados</h2><span class="chev">▾</span></div>
+    <div class="sbody">
+      <p class="sub">Cada linha é uma combinação dos 3 eixos. Note: "empresa de repasse que quer compliance" não é modelo novo — é só ligar 1 flag.</p>
+      <table>
+        <thead><tr><th>Cliente</th><th>tipo</th><th>modo_pagamento</th><th>Lucro</th><th>Presença/Compliance</th><th>Jarvis</th></tr></thead>
+        <tbody>
+          <tr><td>Hospital privado</td><td><span class="code">HOSPITAL</span></td><td><span class="code">CNAB_BANCARIO</span></td><td class="nah">✕ só gestão</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Hospital público (concursado)</td><td><span class="code">HOSPITAL</span></td><td><span class="code">EXPORT_RH</span></td><td class="nah">✕</td><td class="yes">✓</td><td class="opt">opcional</td></tr>
+          <tr><td>Você como repasse (SCP)</td><td><span class="code">MEDPAG_REPASSE</span></td><td><span class="code">REPASSE_SCP</span></td><td class="yes">✓</td><td class="opt">opcional</td><td class="yes">✓</td></tr>
+          <tr><td>Empresa de repasse (cliente)</td><td><span class="code">EMPRESA_REPASSE</span></td><td><span class="code">CNAB_BANCARIO</span></td><td class="yes">✓</td><td class="nah">✕ (add-on)</td><td class="yes">✓</td></tr>
+          <tr><td>ONG saúde</td><td><span class="code">ONG</span></td><td><span class="code">CNAB_BANCARIO / EXPORT_RH</span></td><td class="nah">✕</td><td class="opt">opcional</td><td class="opt">opcional</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SCP DEEP DIVE -->
+  <section id="s2b">
+    <div class="stitle"><span class="dot"></span><h2>🤝 Modelo SCP em detalhe (você como repasse)</h2><span class="chev">▾</span></div>
+    <div class="sbody">
+      <p class="sub">É o único modelo onde o médico <b>não é fornecedor, é sócio</b>. O repasse deixa de ser "pagamento por serviço" e vira <b>distribuição de resultado</b>. Muda fluxo de dinheiro, contabilidade e tributação.</p>
+
+      <div class="grid2">
+        <div class="panel" style="border-color:rgba(197,163,255,.35)">
+          <h4>Quem é quem na SCP</h4>
+          <ul class="clean">
+            <li><b>Sócio ostensivo = MedPag (você).</b> Opera, aparece a terceiros, responde por tudo, é dona da conta. Tenant <span class="code">MEDPAG_REPASSE</span>.</li>
+            <li><b>Sócios participantes = médicos.</b> Não aparecem a terceiros; entram com o trabalho, recebem <b>distribuição</b> do resultado.</li>
+            <li>Contrato social já ajeitado pra isso ✓ (seu ponto)</li>
+          </ul>
+          <p class="note">SCP tem CNPJ próprio (só pra Receita), mas quem contrata/paga/responde é o ostensivo.</p>
+        </div>
+        <div class="panel" style="border-color:rgba(255,204,102,.35)">
+          <h4>Por que vale (a tese)</h4>
+          <ul class="clean">
+            <li>Distribuição de lucro ≠ folha → tratamento tributário diferente do salário/serviço</li>
+            <li>Transparência total pro médico: ele vê o que entrou, custos e a parte dele</li>
+            <li>Te posiciona como <b>operador do repasse</b>, não só software</li>
+          </ul>
+          <p class="note">⚠️ Aqui o dinheiro <b>passa pela SUA conta</b> — diferente do hospital. Isso muda enquadramento (ver decisões).</p>
+        </div>
+      </div>
+
+      <h4 style="margin:18px 0 4px;font-size:14px">Fluxo de dinheiro da SCP</h4>
+      <div class="flow">
+        <div class="node"><span class="src">origem</span><b>Hospital paga</b><span class="note">contrato com a SCP</span></div>
+        <div class="arrow">→</div>
+        <div class="node" style="border-color:var(--purple)"><span class="src">ostensivo</span><b>Conta da SCP / MedPag</b><span class="note">banco tradicional</span></div>
+        <div class="arrow">→</div>
+        <div class="node"><span class="src">apuração</span><b>Resultado do período</b><span class="note">receita − custos</span></div>
+        <div class="arrow">→</div>
+        <div class="node" style="border-color:var(--green3);background:rgba(61,220,132,.08)"><span class="src">distribuição</span><b>Médicos participantes</b><span class="note">cada um sua cota</span></div>
+      </div>
+
+      <h4 style="margin:18px 0 4px;font-size:14px">Como modelar no sistema <span class="tag build">CONSTRUIR</span></h4>
+      <div class="grid2">
+        <div class="panel">
+          <h4 style="font-size:13px">Novos modelos</h4>
+          <ul class="clean">
+            <li><span class="code">ParticipanteSCP</span>: médico ↔ SCP, regra de cota, vigência (entrada/saída), aporte</li>
+            <li><span class="code">ApuracaoSCP</span>: período, receita bruta, custos, resultado, status</li>
+            <li><span class="code">DistribuicaoSCP</span>: por participante → vira o lote de repasse (CNAB)</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h4 style="font-size:13px">Reusa o que já tem</h4>
+          <ul class="clean">
+            <li>Médico = <span class="code">Beneficiário</span> (mesmo cadastro, com CPF validado)</li>
+            <li>Distribuição vira <b>lote</b> → gera <b>CNAB</b> (banco tradicional)</li>
+            <li>Flags: <span class="code">analise.lucro</span> ✓, <span class="code">scp.apuracao</span>, <span class="code">scp.distribuicao</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <h4 style="margin:18px 0 4px;font-size:14px">Cota: 3 formas de calcular a parte de cada médico <span class="tag q">DECISÃO</span></h4>
+      <div class="flow">
+        <div class="node"><b>% fixo</b><span class="note">contrato define 10%, 5%...</span></div>
+        <div class="node"><b>Proporcional ao serviço</b><span class="note">via CRM/lançamentos do período</span></div>
+        <div class="node"><b>Por aporte</b><span class="note">quanto entrou de capital</span></div>
+      </div>
+      <p class="note" style="margin-top:6px">O mais "MedPag" é o <b>proporcional ao serviço</b> — usa o CRM que já cruza CPF do médico com o que ele lançou. Aí a distribuição é automática e auditável.</p>
+
+      <div class="decision" style="margin-top:14px"><b>Pra contadora:</b> tributação da SCP (lucro presumido × real), o que é "resultado distribuível" × reembolso de custo, e retenções na distribuição.</div>
+      <div class="decision"><b>Regulatório:</b> ao operar a conta e pagar os médicos, a SCP vira a <b>pagadora</b> — confirmar se isso exige enquadramento (instituição de pagamento / Bacen) ou se a estrutura SCP resolve.</div>
+    </div>
+  </section>
+
+  <!-- MENU DERIVADO -->
+  <section id="s3">
+    <div class="stitle"><span class="dot"></span><h2>🧩 Menu &amp; dashboard = derivados das capacidades</h2><span class="chev">▾</span></div>
+    <div class="sbody">
+      <div class="grid2">
+        <div class="panel">
+          <h4>Regra de ouro</h4>
+          <p class="note">Nunca <span class="pill">if tipo == 'hospital'</span> espalhado no código. Sempre
+          <span class="pill">if tem_capacidade('analise.lucro')</span>. O menu é <b>função das flags</b>.</p>
+          <ul class="clean">
+            <li>Tem <span class="code">analise.lucro</span>? → mostra "Apuração de Lucro"</li>
+            <li>Tem <span class="code">gestao.presenca_compliance</span>? → mostra "Presença &amp; Compliance"</li>
+            <li>Tem <span class="code">modulo.whatsapp_jarvis</span>? → mostra "Jarvis"</li>
+            <li>Seu login ADMIN (cliente_id NULL) → vê tudo</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h4>O que muda na prática</h4>
+          <ul class="clean">
+            <li><b>Hospital:</b> sem lucro, foco gestão + presença/compliance</li>
+            <li><b>Empresa de repasse:</b> com lucro/margem, sem compliance (a não ser add-on)</li>
+            <li><b>Você (SCP):</b> lucro + distribuição pros médicos-participantes</li>
+          </ul>
+          <p class="note">Backend tem o resolver de features e o <b>frontend já monta o menu a partir delas</b> (<span class="code">/me</span> → <span class="code">user.cliente.features</span> → sidebar filtra). <span class="tag have">✓ CONSTRUÍDO</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- APP MOCK POR NICHO -->
+  <section id="s3b">
+    <div class="stitle"><span class="dot"></span><h2>📱 A cara do app de cada nicho</h2><span class="chev">▾</span></div>
+    <div class="sbody">
+      <p class="sub">Clique no nicho e veja como ficaria a tela de produção: o <b>menu lateral</b> e os <b>KPIs do dashboard</b> mudam sozinhos, derivados das capacidades. <span class="note">(⭐ = item que aparece por causa de uma feature específica do nicho)</span></p>
+      <div class="tabs" id="nicheTabs"></div>
+      <div class="app">
+        <div class="side">
+          <div class="brand"><span class="logo">M</span> MedPag</div>
+          <div id="menu"></div>
+        </div>
+        <div class="main">
+          <div class="top">
+            <span class="tn" id="tenantName"></span>
+            <span class="badge" id="tenantBadge"></span>
+          </div>
+          <div class="kpis" id="kpis"></div>
+          <div class="hidden-note" id="hiddenNote"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CADEIA DE CONFIANÇA -->
+  <section id="s4">
+    <div class="stitle"><span class="dot"></span><h2>🔐 Cadeia de confiança (o moat)</h2><span class="chev">▾</span></div>
+    <div class="sbody">
+      <p class="sub">CPF é a espinha dorsal: <b>quem trabalhou = quem está cadastrado = quem recebe</b>. Cada elo verificado por uma fonte diferente.</p>
+      <div class="flow">
+        <div class="node"><span class="src">sensor</span><b>Presença real</b><span class="note">Vital/Sentinela</span></div>
+        <div class="arrow">→</div>
+        <div class="node"><span class="src">CRM</span><b>Lançou o serviço</b><span class="note">médico, por CPF</span></div>
+        <div class="arrow">→</div>
+        <div class="node"><span class="src">cadastro</span><b>É quem diz ser</b><span class="note">CPF = Beneficiário</span></div>
+        <div class="arrow">→</div>
+        <div class="node"><span class="src">Asaas (só consulta)</span><b>Conta é dele</b><span class="note">PIX ↔ CPF/CNPJ</span></div>
+        <div class="arrow">→</div>
+        <div class="node"><span class="src">banco tradicional</span><b>Pago</b><span class="note">CNAB · conta do hospital</span></div>
+        <div class="arrow">→</div>
+        <div class="node" style="border-color:var(--green3);background:rgba(61,220,132,.08)"><span class="src">prova</span><b>Conciliado</b><span class="note">auditável</span></div>
+      </div>
+      <div class="decision" style="margin-top:14px"><b>DECISÃO:</b> validação PIX precisa tratar <b>PF vs PJ</b> — médico que recebe pela clínica (CNPJ) não vai casar com o CPF. Aceitar "PIX = CNPJ vinculado ao médico" também. <span class="tag q">definir</span></div>
+    </div>
+  </section>
+
+  <!-- O QUE JÁ EXISTE x CONSTRUIR -->
+  <section id="s5">
+    <div class="stitle"><span class="dot"></span><h2>🏗️ Já existe × Construir</h2><span class="chev">▾</span></div>
+    <div class="sbody">
+      <div class="grid2">
+        <div class="panel">
+          <h4><span class="tag have">JÁ EXISTE</span> — o motor</h4>
+          <ul class="clean">
+            <li>Multi-tenant via <span class="code">User.cliente_id</span></li>
+            <li>Capacidades: <span class="code">Plano.features</span> + <span class="code">features_override</span> + resolver</li>
+            <li>Sub-contas ("Filhos") nos planos → base pra hierarquia repasse→hospitais</li>
+            <li><span class="code">ContratoHospital</span>: PERCENTUAL_REPASSE / MENSALIDADE_SAAS</li>
+            <li>CNAB 240 Unicred + conciliação (.ret)</li>
+            <li>Asaas client (hoje cobrança SaaS) → reusar pra validação PIX</li>
+            <li>Roles: ADMIN, GESTOR, FINANCEIRO, COORDENADOR, MEDICO...</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h4><span class="tag build">CONSTRUIR</span> — o incremento</h4>
+          <ul class="clean">
+            <li>Enum <span class="code">Cliente.tipo</span> (HOSPITAL / EMPRESA_REPASSE / MEDPAG_REPASSE / ONG)</li>
+            <li>Enum <span class="code">Cliente.modo_pagamento</span> (CNAB / EXPORT_RH / REPASSE_DIRETO / SOMENTE_GESTAO)</li>
+            <li>Novas features: <span class="code">analise.lucro</span>, <span class="code">gestao.presenca_compliance</span></li>
+            <li>Estratégias de pagamento: <b>EXPORT_RH</b> (arquivo p/ RH) e <b>REPASSE_DIRETO</b> (PIX/Asaas)</li>
+            <li>Menu/dashboard derivado das flags (frontend)</li>
+            <li>Modelo SCP: médicos como <b>participantes</b> + apuração/distribuição</li>
+            <li>Hierarquia repasse → hospitais filhos (visão consolidada)</li>
+            <li>Validação PIX↔CPF/CNPJ no fluxo do beneficiário/ficha</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DECISÕES -->
+  <section id="s6">
+    <div class="stitle"><span class="dot"></span><h2>❓ Decisões pra fechar juntos</h2><span class="chev">▾</span></div>
+    <div class="sbody">
+      <div class="decision"><b>1. SCP:</b> a plataforma modela só o fluxo de dinheiro + transparência pro médico, ou também a apuração contábil da participação? (sua contadora entra aqui)</div>
+      <div class="decision"><b>2. Empresa de repasse:</b> ela enxerga os hospitais como filhos (consolidado) e o hospital tem login próprio também? Quem cobra quem?</div>
+      <div class="decision"><b>3. EXPORT_RH:</b> formato de saída? (planilha modelo do cliente, arquivo do banco dele, layout eSocial?)</div>
+      <div class="decision"><b>4. Validação PIX:</b> PF (CPF) e PJ (CNPJ da clínica) — como vincular CNPJ ↔ médico no cadastro?</div>
+      <div class="decision"><b>5. Cobrança da MedPag:</b> por tipo de tenant muda? (repasse paga % do volume, hospital paga mensalidade, etc.)</div>
+      <div class="decision"><b>6. Menu:</b> qual o estado atual do menu por feature no frontend? (pra saber o tamanho do ajuste)</div>
+    </div>
+  </section>
+
+  <!-- ROADMAP -->
+  <section id="s7">
+    <div class="stitle"><span class="dot"></span><h2>🛣️ Ordem sugerida (quando formos implementar)</h2><span class="chev">▾</span></div>
+    <div class="sbody">
+      <ol class="clean">
+        <li><b>Fundação:</b> <span class="code">Cliente.tipo</span> + <span class="code">modo_pagamento</span> + <span class="code">cliente_pai_id</span> + novas features no registry <span class="tag have">✓ CONSTRUÍDO</span></li>
+        <li><b>Presets:</b> templates dos modelos (Hospital, Repasse, SCP, ONG) em <span class="code">presets_negocio.py</span> <span class="tag have">✓ CONSTRUÍDO</span></li>
+        <li><b>Menu derivado:</b> <span class="code">/me</span> expõe features + sidebar filtra por capacidade <span class="tag have">✓ CONSTRUÍDO</span></li>
+        <li><b>Repasse:</b> dispatcher + estratégias EXPORT_RH (CSV pro RH) e REPASSE_SCP <span class="tag have">✓ CONSTRUÍDO</span></li>
+        <li><b>SCP + hierarquia repasse→hospitais</b> (ParticipanteSCP/ApuracaoSCP/DistribuicaoSCP + 3 regras de cota + endpoints) <span class="tag have">✓ CONSTRUÍDO</span></li>
+        <li><b>Validação PIX↔CPF/CNPJ</b> (lógica PF/PJ + endpoint prontos; liga quando Asaas liberar) <span class="tag have">✓ CONSTRUÍDO</span> <span class="tag q">aguardando Asaas live</span></li>
+        <li><b>Frontend:</b> tela <span class="code">/app/scp</span> (participantes + apuração + distribuição), botão <b>Exportar pro RH</b> no lote, item de menu <span class="code">SCP / Repasse</span> gated por feature <span class="tag have">✓ CONSTRUÍDO</span></li>
+      </ol>
+      <p class="note" style="margin-top:8px">⚙️ Pendente de você: rodar migrations 023 + 024 (precisa subir o Postgres local com Docker, ou roda automático no deploy do Render), e definir com a contadora a tributação/regra de cota da SCP. As decisões em aberto (formato exato do EXPORT_RH, vínculo CNPJ↔médico) refinam o que já está pronto.</p>
+      <p class="note">Nada disso quebra o que já roda — é incremento em cima do motor de capacidades que você já tem.</p>
+    </div>
+  </section>
+
+  <footer>
+    MedPag · rascunho de arquitetura pra discussão · feito pelo Jarvis 🤖 — recolha seções clicando no título
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.stitle').forEach(function(t){
+    t.addEventListener('click', function(){ t.parentElement.classList.toggle('collapsed'); });
+  });
+
+  // ---- App mock por nicho ----
+  // f:true => item/feature que aparece por causa do nicho (marca ⭐)
+  var NICHOS = [
+    {
+      id:'hosp', nome:'Hospital privado', tenant:'Hospital Santa Casa',
+      cor:'var(--blue)',
+      menu:[
+        {ic:'📊',l:'Dashboard (gestão)'},
+        {ic:'👨‍⚕️',l:'Médicos'},
+        {ic:'🗓️',l:'Escalas & Presença',f:1},
+        {ic:'🛡️',l:'Compliance',f:1},
+        {ic:'💳',l:'Lotes de Pagamento'},
+        {ic:'🏦',l:'CNAB & Conciliação'},
+        {ic:'📈',l:'Relatórios'},
+        {ic:'🤖',l:'Jarvis',f:1},
+        {ic:'⚙️',l:'Configurações'},
+      ],
+      kpis:[
+        {v:'128',l:'Médicos ativos'},{v:'342',l:'Plantões no mês'},
+        {v:'97,4%',l:'Presença'},{v:'R$ 1,8M',l:'Pagamentos do mês'},
+      ],
+      oculto:'Apuração de Lucro, Margem, Distribuição SCP — hospital é gestão, não vê lucro.'
+    },
+    {
+      id:'pub', nome:'Hospital público (concursado)', tenant:'HU Federal',
+      cor:'var(--blue)',
+      menu:[
+        {ic:'📊',l:'Dashboard (gestão)'},
+        {ic:'👨‍⚕️',l:'Servidores / Médicos'},
+        {ic:'🕒',l:'Frequência',f:1},
+        {ic:'🛡️',l:'Compliance',f:1},
+        {ic:'📤',l:'Exportar p/ RH',f:1},
+        {ic:'📈',l:'Relatórios'},
+        {ic:'⚙️',l:'Configurações'},
+      ],
+      kpis:[
+        {v:'415',l:'Servidores'},{v:'99,1%',l:'Frequência'},
+        {v:'1.204h',l:'Horas extras'},{v:'OK',l:'Arquivo RH gerado'},
+      ],
+      oculto:'CNAB, Lucro, Jarvis (opcional) — aqui não há pagamento direto, o RH processa via arquivo.'
+    },
+    {
+      id:'scp', nome:'MedPag SCP (você opera)', tenant:'MedPag Repasses SCP',
+      cor:'var(--purple)',
+      menu:[
+        {ic:'📊',l:'Dashboard (financeiro)'},
+        {ic:'🤝',l:'Participantes (médicos)',f:1},
+        {ic:'🧮',l:'Apuração SCP',f:1},
+        {ic:'💰',l:'Distribuição',f:1},
+        {ic:'📉',l:'Apuração de Lucro',f:1},
+        {ic:'💳',l:'Lotes / CNAB'},
+        {ic:'🏦',l:'Conciliação'},
+        {ic:'🤖',l:'Jarvis',f:1},
+        {ic:'⚙️',l:'Configurações'},
+      ],
+      kpis:[
+        {v:'R$ 920k',l:'Receita do período'},{v:'R$ 88k',l:'Resultado (lucro)'},
+        {v:'9,6%',l:'Margem'},{v:'37',l:'Médicos participantes'},
+      ],
+      oculto:'Presença/Compliance é opcional aqui — foco é apurar resultado e distribuir.'
+    },
+    {
+      id:'rep', nome:'Empresa de repasse (cliente)', tenant:'RepasseMed Ltda',
+      cor:'var(--green2)',
+      menu:[
+        {ic:'📊',l:'Dashboard (financeiro)'},
+        {ic:'🏥',l:'Hospitais (filhos)',f:1},
+        {ic:'👨‍⚕️',l:'Médicos (consolidado)'},
+        {ic:'📉',l:'Apuração de Lucro / Margem',f:1},
+        {ic:'💳',l:'Lotes / CNAB'},
+        {ic:'🏦',l:'Conciliação'},
+        {ic:'📈',l:'Relatórios por hospital'},
+        {ic:'🤖',l:'Jarvis',f:1},
+        {ic:'⚙️',l:'Configurações'},
+      ],
+      kpis:[
+        {v:'12',l:'Hospitais ativos'},{v:'R$ 6,3M',l:'Volume repassado'},
+        {v:'4,2%',l:'Margem'},{v:'1.840',l:'Médicos atendidos'},
+      ],
+      oculto:'Presença/Compliance = add-on (desligado por padrão). Quem controla presença é o hospital.'
+    },
+    {
+      id:'ong', nome:'ONG saúde', tenant:'Instituto Saúde+',
+      cor:'var(--amber)',
+      menu:[
+        {ic:'📊',l:'Dashboard (gestão)'},
+        {ic:'👥',l:'Beneficiários'},
+        {ic:'💳',l:'Lotes / Exportação'},
+        {ic:'📋',l:'Prestação de contas',f:1},
+        {ic:'📈',l:'Relatórios'},
+        {ic:'⚙️',l:'Configurações'},
+      ],
+      kpis:[
+        {v:'260',l:'Beneficiários'},{v:'R$ 240k',l:'Repasses do mês'},
+        {v:'100%',l:'Contas prestadas'},{v:'OK',l:'Conformidade'},
+      ],
+      oculto:'Lucro, Margem, Compliance trabalhista — perfil enxuto, foco em transparência.'
+    },
+  ];
+
+  var tabsEl=document.getElementById('nicheTabs');
+  var menuEl=document.getElementById('menu');
+  var kpisEl=document.getElementById('kpis');
+  var tnEl=document.getElementById('tenantName');
+  var badgeEl=document.getElementById('tenantBadge');
+  var hidEl=document.getElementById('hiddenNote');
+
+  function render(n){
+    menuEl.innerHTML = n.menu.map(function(m,i){
+      return '<div class="mi'+(i===0?' active':'')+'"><span class="ic">'+m.ic+'</span>'+m.l+
+             (m.f?'<span class="star">⭐ feature</span>':'')+'</div>';
+    }).join('');
+    kpisEl.innerHTML = n.kpis.map(function(k){
+      return '<div class="kpi"><div class="v">'+k.v+'</div><div class="l">'+k.l+'</div></div>';
+    }).join('');
+    tnEl.textContent = n.tenant;
+    badgeEl.textContent = n.nome;
+    badgeEl.style.color = n.cor; badgeEl.style.borderColor = n.cor;
+    badgeEl.style.background = 'transparent';
+    hidEl.innerHTML = '<span class="x">⊘ Ocultos neste nicho:</span> '+n.oculto;
+  }
+
+  NICHOS.forEach(function(n,idx){
+    var b=document.createElement('div');
+    b.className='tab'+(idx===0?' active':'');
+    b.textContent=n.nome;
+    b.addEventListener('click',function(){
+      document.querySelectorAll('#nicheTabs .tab').forEach(function(t){t.classList.remove('active')});
+      b.classList.add('active'); render(n);
+    });
+    tabsEl.appendChild(b);
+  });
+  render(NICHOS[0]);
+</script>
+</body>
+</html>

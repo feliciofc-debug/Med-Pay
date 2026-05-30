@@ -39,6 +39,8 @@ class CategoriaFeature(str, Enum):
 
     PAGAMENTO = "Modalidades de Pagamento"
     MODULO = "Módulos"
+    ANALISE = "Análise & Resultado"
+    GESTAO = "Gestão & Compliance"
     LIMITE = "Limites de Uso"
 
 
@@ -146,6 +148,52 @@ FEATURES_DISPONIVEIS: tuple[FeatureDef, ...] = (
         nome="Gestão de Contratos Hospitalares",
         descricao="Contratos por modo (PRESTACAO, CESSAO, INTERMEDIACAO) e cobrança por modelo.",
         categoria=CategoriaFeature.MODULO,
+        tipo="bool",
+        default=False,
+    ),
+    # ---------- Análise & Resultado (Eixo 2: o que o tenant enxerga) ----------
+    FeatureDef(
+        chave="analise.lucro",
+        nome="Apuração de Lucro / Margem",
+        descricao=(
+            "Mostra apuração de lucro e margem (receita − custos). Ligado pra "
+            "empresa de repasse e MedPag-SCP; desligado pra hospital (que é gestão)."
+        ),
+        categoria=CategoriaFeature.ANALISE,
+        tipo="bool",
+        default=False,
+    ),
+    FeatureDef(
+        chave="scp.apuracao",
+        nome="Apuração SCP",
+        descricao=(
+            "Apuração de resultado da Sociedade em Conta de Participação por "
+            "período (receita, custos, resultado distribuível)."
+        ),
+        categoria=CategoriaFeature.ANALISE,
+        tipo="bool",
+        default=False,
+    ),
+    FeatureDef(
+        chave="scp.distribuicao",
+        nome="Distribuição SCP",
+        descricao=(
+            "Distribuição do resultado aos médicos participantes da SCP "
+            "(vira lote de repasse via banco tradicional)."
+        ),
+        categoria=CategoriaFeature.ANALISE,
+        tipo="bool",
+        default=False,
+    ),
+    # ---------- Gestão & Compliance (Eixo 2) ----------
+    FeatureDef(
+        chave="gestao.presenca_compliance",
+        nome="Presença & Compliance",
+        descricao=(
+            "Gestão de presença/frequência e compliance trabalhista. Típico de "
+            "hospital; pra empresa de repasse é add-on opcional."
+        ),
+        categoria=CategoriaFeature.GESTAO,
         tipo="bool",
         default=False,
     ),

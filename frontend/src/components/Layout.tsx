@@ -12,6 +12,7 @@ import {
   ClipboardList,
   Cog,
   FileSpreadsheet,
+  HandCoins,
   HeartPulse,
   History,
   Home,
@@ -38,6 +39,11 @@ interface NavItem {
   icon: LucideIcon;
   exact?: boolean;
   roles: UserRole[];
+  // Capacidade (feature flag) exigida pra exibir o item. Quando definida,
+  // o item só aparece se o tenant tiver a feature ligada. Usuário MedPag
+  // interno (sem cliente) enxerga tudo. Ver mapa mental — menu derivado
+  // das capacidades, não de `if tipo == hospital`.
+  feature?: string;
 }
 
 interface NavSection {
@@ -111,6 +117,7 @@ const SECOES: NavSection[] = [
         label: "Executivo",
         icon: BarChart3,
         roles: ["ADMIN", "GESTOR"],
+        feature: "analise.lucro",
       },
       {
         to: "/app/fluxo",
@@ -169,6 +176,7 @@ const SECOES: NavSection[] = [
         label: "Equipes",
         icon: HeartPulse,
         roles: ["ADMIN", "APROVADOR", "OPERADOR", "GESTOR"],
+        feature: "modulo.equipe_flex",
       },
     ],
   },
@@ -195,6 +203,14 @@ const SECOES: NavSection[] = [
         label: "Contratos",
         icon: Briefcase,
         roles: ["ADMIN", "GESTOR"],
+        feature: "modulo.contratos_hospital",
+      },
+      {
+        to: "/app/scp",
+        label: "SCP / Repasse",
+        icon: HandCoins,
+        roles: ["ADMIN", "GESTOR"],
+        feature: "scp.apuracao",
       },
     ],
   },
@@ -209,6 +225,7 @@ const SECOES: NavSection[] = [
         label: "MedPag Vital",
         icon: Activity,
         roles: ["ADMIN", "APROVADOR", "OPERADOR", "GESTOR"],
+        feature: "modulo.sentinela_vital",
       },
     ],
   },
@@ -245,11 +262,23 @@ export function Layout({ children }: { children: ReactNode }) {
   const role = user?.role;
   const nomeHospital = user?.cliente?.nome ?? null;
 
-  // Filtra seções/itens visíveis para o papel atual.
+  // Capacidades resolvidas do tenant (Eixo 2). Usuário MedPag interno
+  // (sem cliente) não tem features no payload e enxerga tudo.
+  const featuresTenant = user?.cliente?.features ?? null;
+  const ehInterno = !user?.cliente;
+  const temFeature = (chave?: string): boolean => {
+    if (!chave) return true; // item sem gate de feature
+    if (ehInterno) return true; // MedPag interno vê tudo
+    return featuresTenant?.[chave] === true;
+  };
+
+  // Filtra seções/itens visíveis para o papel atual E pelas capacidades.
   const secoesVisiveis = role
     ? SECOES.map((s) => ({
         ...s,
-        items: s.items.filter((i) => i.roles.includes(role)),
+        items: s.items.filter(
+          (i) => i.roles.includes(role) && temFeature(i.feature),
+        ),
       })).filter((s) => s.items.length > 0)
     : [];
 

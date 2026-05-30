@@ -12,6 +12,7 @@ import {
 import { Link } from "react-router-dom";
 
 import { api, getErrorMessage } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 import { formatBRL, formatDateTime } from "@/lib/utils";
 import {
   StatusBadgeLote,
@@ -30,6 +31,7 @@ type FiltroStatus = "todos" | "problemas";
 
 export function LoteDetalhePage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [filtro, setFiltro] = useState<FiltroStatus>("todos");
   const [showAprovacao, setShowAprovacao] = useState(false);
@@ -146,8 +148,34 @@ export function LoteDetalhePage() {
     }
   }
 
+  async function baixarExportRH() {
+    try {
+      const resp = await api.get(`/api/repasse/lotes/${lote!.id}/export-rh`, {
+        responseType: "blob",
+      });
+      const cd =
+        (resp.headers["content-disposition"] as string | undefined) ?? "";
+      const match = cd.match(/filename="?([^";]+)"?/);
+      const filename = match?.[1] ?? `export_rh_${lote!.id.slice(0, 8)}.csv`;
+      const url = window.URL.createObjectURL(resp.data as Blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Erro ao exportar pro RH: ${getErrorMessage(err)}`);
+    }
+  }
+
   const temPagamentosPix =
     lote.pagamentos?.some((p) => p.modalidade === "PIX") ?? false;
+
+  // Export RH: visível quando o cliente usa esse modo (ou MedPag interno).
+  const mostrarExportRH =
+    user?.cliente?.modo_pagamento === "EXPORT_RH" || !user?.cliente;
 
   return (
     <div className="space-y-6">
@@ -259,6 +287,17 @@ export function LoteDetalhePage() {
               >
                 <Download size={16} />
                 Baixar lista PIX (.xlsx)
+              </button>
+            )}
+            {mostrarExportRH && (
+              <button
+                type="button"
+                className="px-3 py-2 text-sm rounded-md border border-sky-300 bg-white text-sky-800 hover:bg-sky-100 inline-flex items-center gap-2"
+                onClick={baixarExportRH}
+                title="Exporta os pagamentos em CSV pro RH do cliente processar a folha (modo EXPORT_RH)"
+              >
+                <Download size={16} />
+                Exportar pro RH (.csv)
               </button>
             )}
             <button

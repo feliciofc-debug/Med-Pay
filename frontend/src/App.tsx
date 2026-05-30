@@ -35,6 +35,7 @@ import { AnestesistaLancarPage } from "@/pages/AnestesistaLancarPage";
 import { AnestesistaMeusLancamentosPage } from "@/pages/AnestesistaMeusLancamentosPage";
 import { CrmLandingPage } from "@/pages/CrmLandingPage";
 import { VitalDashboardPage } from "@/pages/VitalDashboardPage";
+import { ScpPage } from "@/pages/ScpPage";
 import type { UserRole } from "@/types";
 
 // Pra qual rota mandar o usuário quando ele cai em alguma sem permissão.
@@ -240,6 +241,14 @@ export default function App() {
         element={
           <ProtectedRoute roles={["ADMIN", "APROVADOR", "OPERADOR"]}>
             <VitalDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/scp"
+        element={
+          <ProtectedRoute roles={["ADMIN", "GESTOR"]}>
+            <ScpPage />
           </ProtectedRoute>
         }
       />
