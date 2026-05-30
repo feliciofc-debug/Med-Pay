@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 from uuid import UUID
@@ -45,7 +46,6 @@ from app.schemas.whatsapp import (
     QRCodeOut,
     WhatsAppMensagemOut,
     WhatsAppUserOut,
-    WuzapiWebhookEvent,
 )
 from app.services.jarvis_agent import processar_mensagem_inbound
 from app.services.wuzapi_client import (
@@ -153,9 +153,51 @@ def _extrair_dados_mensagem(payload: dict[str, Any]) -> dict[str, str | None]:
     }
 
 
+async def _parse_webhook_body(request: Request) -> dict[str, Any]:
+    """Lê o corpo do webhook aceitando os formatos que o Wuzapi usa.
+
+    O fork do Wuzapi NÃO manda JSON — manda `application/x-www-form-urlencoded`
+    com um campo `jsonData` contendo o JSON como string (é por isso que o
+    endpoint dava 422 quando exigia body JSON via Pydantic). Tratamos:
+
+      1. form-urlencoded com campo `jsonData` (ou `json`/`data`) → parseia o JSON
+      2. JSON puro no corpo
+      3. fallback: dict vazio
+    """
+    content_type = (request.headers.get("content-type") or "").lower()
+
+    # Caminho 1: form-urlencoded (jeito do fork Wuzapi)
+    if "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
+        try:
+            form = await request.form()
+        except Exception:  # noqa: BLE001
+            form = {}
+        bruto = (
+            form.get("jsonData")
+            or form.get("json")
+            or form.get("data")
+            or form.get("payload")
+        )
+        if isinstance(bruto, str) and bruto.strip():
+            try:
+                return json.loads(bruto)
+            except json.JSONDecodeError:
+                log.warning("whatsapp.webhook_jsondata_invalido")
+        # form sem jsonData: devolve o form inteiro como dict
+        return {k: v for k, v in form.items()}
+
+    # Caminho 2: JSON puro
+    try:
+        body = await request.body()
+        if body:
+            return json.loads(body)
+    except json.JSONDecodeError:
+        log.warning("whatsapp.webhook_body_nao_json")
+    return {}
+
+
 @router.post("/webhook", status_code=status.HTTP_200_OK)
 async def wuzapi_webhook(
-    payload: WuzapiWebhookEvent,
     request: Request,
     db: AsyncSession = Depends(get_db),
     x_webhook_secret: str | None = Header(None, alias="X-Webhook-Secret"),
@@ -167,9 +209,13 @@ async def wuzapi_webhook(
     Sempre retorna 200 (Wuzapi reenvia em caso de erro, e a gente
     quer evitar loop). Erros são logados e gravados no audit.
 
-    Validação de secret: o fork Wuzapi do AMZ NÃO consegue enviar
-    header customizado (hmac_configured fica false). Por isso aceitamos
-    o secret de 3 formas, nesta ordem:
+    Lemos o corpo CRU (sem Pydantic) porque o fork Wuzapi manda
+    form-urlencoded com `jsonData`, não JSON — exigir JSON dava 422 e
+    descartava TODAS as mensagens reais. Ver `_parse_webhook_body`.
+
+    Validação de secret: o fork Wuzapi NÃO consegue enviar header
+    customizado (hmac_configured fica false). Por isso aceitamos o
+    secret de 3 formas, nesta ordem:
       1. Header `X-Webhook-Secret` (padrão, se o gateway suportar)
       2. Query param `?secret=...` (jeito que funciona com o fork)
       3. Query param `?token=...` (alias)
@@ -187,9 +233,18 @@ async def wuzapi_webhook(
             )
             return {"ok": False, "motivo": "secret_invalido"}
 
-    raw = payload.model_dump()
-    evento = (raw.get("event") or "").lower()
-    data = raw.get("data") or raw
+    raw = await _parse_webhook_body(request)
+
+    # O fork Wuzapi manda {"type":"Message","event":{"Info":...,"Message":...}}
+    # (event é OBJETO). Versões antigas mandam {"event":"message","data":{...}}
+    # (event é STRING). Normalizamos os dois.
+    evento_campo = raw.get("event")
+    if isinstance(evento_campo, dict):
+        evento = (raw.get("type") or "").lower()
+        data: Any = evento_campo
+    else:
+        evento = (str(evento_campo) if evento_campo else (raw.get("type") or "")).lower()
+        data = raw.get("data") or raw
 
     # Eventos que não são mensagem: ignoramos sem alarme (Connection, Receipt…)
     if evento and "message" not in evento:
