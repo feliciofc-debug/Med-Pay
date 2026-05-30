@@ -64,7 +64,7 @@ async def listar_competencias(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_aprovador),
 ) -> list[str]:
-    verificar_acesso_cliente(user, cliente_id)
+    await verificar_acesso_cliente(db, user, cliente_id)
     return await listar_competencias_disponiveis(db, cliente_id=cliente_id)
 
 
@@ -75,7 +75,7 @@ async def por_hospital_mes(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_aprovador),
 ) -> ExtratoConsolidadoOut:
-    verificar_acesso_cliente(user, cliente_id)
+    await verificar_acesso_cliente(db, user, cliente_id)
     extrato = await consolidar_por_hospital_mes(
         db, cliente_id=cliente_id, competencia=competencia
     )
@@ -89,7 +89,7 @@ async def por_dia(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_aprovador),
 ) -> ExtratoConsolidadoOut:
-    verificar_acesso_cliente(user, cliente_id)
+    await verificar_acesso_cliente(db, user, cliente_id)
     extrato = await consolidar_por_dia(db, cliente_id=cliente_id, data=data)
     return ExtratoConsolidadoOut.model_validate(extrato)
 
@@ -102,7 +102,7 @@ async def por_medico(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_aprovador),
 ) -> ExtratoConsolidadoOut:
-    verificar_acesso_cliente(user, cliente_id)
+    await verificar_acesso_cliente(db, user, cliente_id)
     extrato = await consolidar_por_medico(
         db,
         cliente_id=cliente_id,

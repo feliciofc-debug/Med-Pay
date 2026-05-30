@@ -265,7 +265,8 @@ async def detalhar_beneficiario(
         b = await service.buscar(beneficiario_id)
     except BeneficiarioNaoEncontradoError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    verificar_acesso_cliente(
+    await verificar_acesso_cliente(
+        db,
         user,
         b.cliente_id,
         mensagem="Beneficiário pertence a outro cliente.",

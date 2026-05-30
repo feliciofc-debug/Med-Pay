@@ -723,6 +723,35 @@ export interface ContaRepassePayload extends EmpresaPagadoraPayload {
   cliente_id?: string | null;
 }
 
+export const LABEL_MODO_PAGAMENTO: Record<ModoPagamento, string> = {
+  CNAB_BANCARIO: "CNAB bancário",
+  EXPORT_RH: "Exporta pro RH",
+  REPASSE_SCP: "Repasse SCP",
+  SOMENTE_GESTAO: "Só gestão",
+};
+
+/** Hospital da carteira de uma empresa de repasse (Cliente filho). */
+export interface HospitalCarteira {
+  id: string;
+  nome: string;
+  cnpj: string | null;
+  modo_pagamento: ModoPagamento;
+  conta_pagadora_id: string | null;
+  conta_apelido: string | null;
+  ativo: boolean;
+  tem_login: boolean;
+}
+
+export interface CriarHospitalPayload {
+  nome: string;
+  cnpj?: string | null;
+  modo_pagamento: ModoPagamento;
+  conta_pagadora_id?: string | null;
+  login_email?: string | null;
+  login_senha?: string | null;
+  login_nome?: string | null;
+}
+
 // =============================================================================
 // Jarvis — WhatsApp + LLM
 // =============================================================================

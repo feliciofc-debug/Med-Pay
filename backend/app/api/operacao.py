@@ -45,7 +45,7 @@ async def obter_config(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ) -> ConfigOperacaoOut:
-    verificar_acesso_cliente(admin, cliente_id)
+    await verificar_acesso_cliente(db, admin, cliente_id)
     cliente = await _carregar(db, cliente_id)
     return ConfigOperacaoOut.model_validate(cliente)
 
@@ -57,7 +57,7 @@ async def atualizar_config(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ) -> ConfigOperacaoOut:
-    verificar_acesso_cliente(admin, cliente_id)
+    await verificar_acesso_cliente(db, admin, cliente_id)
     cliente = await _carregar(db, cliente_id)
     if payload.dia_fechamento is not None:
         cliente.dia_fechamento = payload.dia_fechamento

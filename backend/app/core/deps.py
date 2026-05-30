@@ -266,15 +266,64 @@ def require_financeiro(
 # ============================================================
 
 
-def get_tenant_id(
+async def cliente_ids_acessiveis(
+    db: AsyncSession, user: User
+) -> set[UUID] | None:
+    """Conjunto de clientes que o `user` pode acessar.
+
+    - None → MedPag interno (cliente_id is None): acessa todos.
+    - set  → o próprio cliente ∪ os filhos diretos dele (carteira de
+             repasse: a Atom enxerga os hospitais que administra).
+    """
+    if user.cliente_id is None:
+        return None
+    from app.models.cliente import Cliente
+
+    ids: set[UUID] = {user.cliente_id}
+    result = await db.execute(
+        select(Cliente.id).where(Cliente.cliente_pai_id == user.cliente_id)
+    )
+    ids.update(result.scalars().all())
+    return ids
+
+
+async def get_cliente_efetivo(
+    request: Request,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UUID | None:
+    """Tenant EFETIVO da requisição — suporta "entrar no hospital".
+
+    Lê o header `X-Cliente`. Se ausente, vale o cliente do próprio user.
+    Se presente, só aceita se o user pode operar aquele cliente (ele
+    mesmo, um filho dele na carteira, ou MedPag interno) — senão 403.
+
+    É a peça que deixa a Atom escolher um hospital no topo e o app
+    inteiro passar a enxergar só os dados daquele hospital.
+    """
+    header = request.headers.get("X-Cliente")
+    if not header:
+        return current_user.cliente_id
+    try:
+        alvo = UUID(header)
+    except (ValueError, AttributeError):
+        return current_user.cliente_id
+    permitidos = await cliente_ids_acessiveis(db, current_user)
+    if permitidos is None or alvo in permitidos:
+        return alvo
+    raise PermissaoNegadaError("Você não pode operar como esse cliente.")
+
+
+async def get_tenant_id(
+    cliente_efetivo: UUID | None = Depends(get_cliente_efetivo),
 ) -> UUID | None:
     """Retorna o `cliente_id` que deve filtrar queries do usuário.
 
     Convenções:
         - None  → user é "MedPag interno" (admin/operação do BPO), vê
                   dados de todos os tenants
-        - UUID  → user pertence a esse cliente, deve ver só os dados dele
+        - UUID  → tenant efetivo (próprio cliente OU o hospital em que a
+                  empresa de repasse "entrou" via header X-Cliente)
 
     Use em endpoints assim:
 
@@ -285,16 +334,12 @@ def get_tenant_id(
             stmt = select(Lote)
             stmt = aplicar_filtro_tenant(stmt, Lote, tenant_id)
             ...
-
-    Quando todos os clientes virarem multi-tenant puro (sem MedPag
-    interno), trocar este `get_tenant_id` por `require_tenant_id`
-    abaixo.
     """
-    return current_user.cliente_id
+    return cliente_efetivo
 
 
-def require_tenant_id(
-    current_user: User = Depends(get_current_user),
+async def require_tenant_id(
+    cliente_efetivo: UUID | None = Depends(get_cliente_efetivo),
 ) -> UUID:
     """Versão estrita — bloqueia users sem cliente_id (MedPag interno).
 
@@ -302,12 +347,12 @@ def require_tenant_id(
     (ex: GET /api/operacao do MEU cliente). Em endpoints "globais"
     (Super Admin), use `get_tenant_id` (que aceita None).
     """
-    if current_user.cliente_id is None:
+    if cliente_efetivo is None:
         raise PermissaoNegadaError(
             "Este endpoint requer usuário vinculado a um cliente. "
             "Users MedPag internos devem usar os endpoints administrativos."
         )
-    return current_user.cliente_id
+    return cliente_efetivo
 
 
 def require_feature(chave: str):  # noqa: ANN201
@@ -357,36 +402,44 @@ def require_feature(chave: str):  # noqa: ANN201
     return _checar
 
 
-def verificar_acesso_cliente(
-    user: User, cliente_id_alvo: UUID, *, mensagem: str | None = None
+async def verificar_acesso_cliente(
+    db: AsyncSession,
+    user: User,
+    cliente_id_alvo: UUID,
+    *,
+    mensagem: str | None = None,
 ) -> None:
     """Garante que `user` pode acessar dados do cliente `cliente_id_alvo`.
 
-    Regra:
+    Regra (carteira de repasse):
         - MedPag interno (user.cliente_id is None) → sempre pode
-        - Caso contrário, user.cliente_id deve igualar cliente_id_alvo
+        - O próprio cliente do user → pode
+        - Um hospital FILHO do user (empresa de repasse → carteira) → pode
+        - Qualquer outro → 403
 
-    Use em endpoints onde o cliente_id vem do path/query e precisa
-    validar contra o tenant do user:
+    Use em endpoints onde o cliente_id vem do path/query:
 
         @router.get("/{cliente_id}/relatorio")
         async def relatorio(
             cliente_id: UUID,
             user: User = Depends(get_current_user),
+            db: AsyncSession = Depends(get_db),
         ):
-            verificar_acesso_cliente(user, cliente_id)
+            await verificar_acesso_cliente(db, user, cliente_id)
             ...
     """
-    if user.cliente_id is None:
+    permitidos = await cliente_ids_acessiveis(db, user)
+    if permitidos is None:
         return  # MedPag interno
-    if user.cliente_id != cliente_id_alvo:
+    if cliente_id_alvo not in permitidos:
         raise PermissaoNegadaError(
-            mensagem
-            or "Você não tem acesso a dados de outro cliente.",
+            mensagem or "Você não tem acesso a dados de outro cliente.",
         )
 
 
 __all__ = [
+    "cliente_ids_acessiveis",
+    "get_cliente_efetivo",
     "get_current_user",
     "get_db",
     "get_tenant_id",

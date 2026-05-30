@@ -452,7 +452,8 @@ async def detalhar_ficha(
     ):
         raise PermissaoNegadaError("Esta ficha não pertence a você")
     # Multi-tenancy: usuário de cliente só vê fichas do próprio cliente
-    verificar_acesso_cliente(
+    await verificar_acesso_cliente(
+        db,
         current_user,
         ficha.cliente_id,
         mensagem="Ficha pertence a outro cliente.",
@@ -529,7 +530,7 @@ async def converter_em_lote(
     ficha = await service.get(ficha_id)
     from app.core.deps import verificar_acesso_cliente
 
-    verificar_acesso_cliente(current_user, ficha.cliente_id)
+    await verificar_acesso_cliente(db, current_user, ficha.cliente_id)
 
     # Recalcula essenciais por linha (mesma regra do serializer)
     linhas_raw = ficha.linhas_extraidas or []

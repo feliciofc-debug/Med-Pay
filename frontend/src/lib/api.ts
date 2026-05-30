@@ -40,11 +40,38 @@ if (DEMO_MODE) {
   );
 }
 
+// ============================================================
+// Contexto de cliente ("entrar no hospital")
+// ------------------------------------------------------------
+// Quando uma empresa de repasse (ex.: Atom) escolhe operar um hospital
+// da carteira, guardamos o id aqui e mandamos no header X-Cliente. O
+// backend valida (só deixa entrar em filho do tenant) e escopa tudo
+// naquele hospital. Vazio = opera o próprio tenant (a matriz).
+// ============================================================
+
+const CONTEXTO_KEY = "medpag_contexto_cliente";
+
+export function getContextoCliente(): string | null {
+  return localStorage.getItem(CONTEXTO_KEY);
+}
+
+export function setContextoCliente(clienteId: string | null): void {
+  if (clienteId) {
+    localStorage.setItem(CONTEXTO_KEY, clienteId);
+  } else {
+    localStorage.removeItem(CONTEXTO_KEY);
+  }
+}
+
 // Interceptor: adiciona Bearer token (fallback pra dev quando cookie não está disponível)
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("medpag_access_token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  const contexto = localStorage.getItem(CONTEXTO_KEY);
+  if (contexto) {
+    config.headers["X-Cliente"] = contexto;
   }
   return config;
 });

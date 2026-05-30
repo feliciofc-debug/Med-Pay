@@ -1,5 +1,6 @@
-import { type ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { type ReactNode, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftRight,
   Activity,
@@ -17,6 +18,7 @@ import {
   HeartPulse,
   History,
   Home,
+  Hospital,
   Layers,
   Layers3,
   type LucideIcon,
@@ -30,9 +32,9 @@ import {
   Wallet,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { api } from "@/lib/api";
+import { api, getContextoCliente, setContextoCliente } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import type { UserRole } from "@/types";
+import type { HospitalCarteira, UserRole } from "@/types";
 
 interface NavItem {
   to: string;
@@ -225,6 +227,14 @@ const SECOES: NavSection[] = [
         feature: "scp.apuracao",
       },
       {
+        // Carteira de hospitais administrados pela empresa de repasse.
+        to: "/app/carteira",
+        label: "Carteira de hospitais",
+        icon: Hospital,
+        roles: ["ADMIN", "GESTOR"],
+        feature: "pagamento.execucao",
+      },
+      {
         // Contas bancárias (multi-banco) de onde saem os repasses. Gated por
         // pagamento.execucao: quem executa o próprio pagamento gere as contas.
         to: "/app/contas-repasse",
@@ -276,6 +286,57 @@ const ROLE_LABEL: Record<UserRole, string> = {
   MEDICO: "Prestador (Médico)",
 };
 
+/**
+ * Seletor "entrar no hospital": só aparece pra quem tem carteira (empresa
+ * de repasse com hospitais-filhos). Trocar o contexto manda o header
+ * X-Cliente em todas as requisições e re-busca os dados no novo escopo.
+ */
+function ContextoSwitcher({ matrizNome }: { matrizNome: string }) {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [atual, setAtual] = useState<string>(getContextoCliente() ?? "");
+
+  const { data: hospitais } = useQuery({
+    queryKey: ["carteira", "hospitais", "switcher"],
+    queryFn: async (): Promise<HospitalCarteira[]> => {
+      const { data } = await api.get<HospitalCarteira[]>(
+        "/api/carteira/hospitais",
+      );
+      return data;
+    },
+    retry: false,
+  });
+
+  if (!hospitais || hospitais.length === 0) return null;
+
+  function trocar(valor: string) {
+    setAtual(valor);
+    setContextoCliente(valor || null);
+    void queryClient.invalidateQueries();
+    navigate("/app");
+  }
+
+  return (
+    <div className="px-4 py-3 border-b border-brand-900 relative">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-accent-400/70 mb-1 flex items-center gap-1">
+        <ArrowLeftRight size={11} /> Operando como
+      </p>
+      <select
+        value={atual}
+        onChange={(e) => trocar(e.target.value)}
+        className="w-full bg-brand-900 text-white text-sm rounded-lg border border-brand-800 px-2 py-1.5 focus:outline-none focus:border-accent-400"
+      >
+        <option value="">{matrizNome} (matriz)</option>
+        {hospitais.map((h) => (
+          <option key={h.id} value={h.id}>
+            {h.nome}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -324,6 +385,8 @@ export function Layout({ children }: { children: ReactNode }) {
             Pagamentos sem retrabalho
           </p>
         </Link>
+
+        {nomeHospital && <ContextoSwitcher matrizNome={nomeHospital} />}
 
         <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
           {secoesVisiveis.map((secao) => (

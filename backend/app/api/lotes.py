@@ -202,7 +202,8 @@ async def detalhe_lote(
 
     service = LoteService(db)
     lote = await service.get_com_pagamentos(lote_id)
-    verificar_acesso_cliente(
+    await verificar_acesso_cliente(
+        db,
         current_user,
         lote.cliente_id,
         mensagem="Lote pertence a outro cliente.",

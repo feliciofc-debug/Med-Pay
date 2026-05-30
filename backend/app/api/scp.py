@@ -103,7 +103,7 @@ async def listar_participantes(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[ParticipanteOut]:
-    verificar_acesso_cliente(user, cliente_id)
+    await verificar_acesso_cliente(db, user, cliente_id)
     result = await db.execute(
         select(ParticipanteSCP)
         .where(ParticipanteSCP.cliente_id == cliente_id)
@@ -133,7 +133,7 @@ async def criar_participante(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ParticipanteOut:
-    verificar_acesso_cliente(user, cliente_id)
+    await verificar_acesso_cliente(db, user, cliente_id)
 
     part = ParticipanteSCP(
         cliente_id=cliente_id,
@@ -196,7 +196,7 @@ async def criar_ou_atualizar_apuracao(
     db: AsyncSession = Depends(get_db),
 ) -> ApuracaoOut:
     """Cria (ou atualiza) a apuração de uma competência. Recalcula o resultado."""
-    verificar_acesso_cliente(user, cliente_id)
+    await verificar_acesso_cliente(db, user, cliente_id)
 
     result = await db.execute(
         select(ApuracaoSCP)
@@ -239,7 +239,7 @@ async def detalhe_apuracao(
     ap = result.scalar_one_or_none()
     if ap is None:
         raise HTTPException(status_code=404, detail="Apuração não encontrada")
-    verificar_acesso_cliente(user, ap.cliente_id)
+    await verificar_acesso_cliente(db, user, ap.cliente_id)
     return _apuracao_para_out(ap)
 
 
@@ -259,7 +259,7 @@ async def distribuir_apuracao(
     ap = result.scalar_one_or_none()
     if ap is None:
         raise HTTPException(status_code=404, detail="Apuração não encontrada")
-    verificar_acesso_cliente(user, ap.cliente_id)
+    await verificar_acesso_cliente(db, user, ap.cliente_id)
 
     # Converte chaves str->UUID das bases de serviço (ignora inválidas).
     bases: dict[UUID, int] = {}

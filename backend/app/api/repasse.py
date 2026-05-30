@@ -53,7 +53,7 @@ async def exportar_rh(
     if lote is None:
         raise HTTPException(status_code=404, detail="Lote não encontrado")
 
-    verificar_acesso_cliente(user, lote.cliente_id)
+    await verificar_acesso_cliente(db, user, lote.cliente_id)
 
     pagamentos = [
         p for p in lote.pagamentos if p.status in _STATUS_EXPORTAVEIS
