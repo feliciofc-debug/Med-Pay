@@ -22,10 +22,18 @@ python -m app.scripts.create_admin || echo "    (admin já existe, prosseguindo)
 
 # 3. Popular dados de demonstração se SEED_DEMO=true
 if [ "${SEED_DEMO:-false}" = "true" ]; then
-    echo "[3/3] Populando dados de demonstração..."
+    echo "[3/4] Populando dados de demonstração..."
     python -m app.scripts.seed_demo || echo "    (seed_demo já rodou ou houve erro não-fatal, prosseguindo)"
 else
-    echo "[3/3] SEED_DEMO != true — pulando seed de demonstração"
+    echo "[3/4] SEED_DEMO != true — pulando seed de demonstração"
+fi
+
+# 3.5. Provisionar tenant da operação de repasse Atom (laboratório SCP) se SEED_ATOM=true
+if [ "${SEED_ATOM:-false}" = "true" ]; then
+    echo "[4/4] Provisionando tenant Atom Repasse (SCP)..."
+    python -m app.scripts.seed_atom_repasse || echo "    (seed_atom já rodou ou houve erro não-fatal, prosseguindo)"
+else
+    echo "[4/4] SEED_ATOM != true — pulando provisionamento do tenant Atom"
 fi
 
 # 4. Subir uvicorn
