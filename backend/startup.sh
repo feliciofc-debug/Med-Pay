@@ -28,12 +28,14 @@ else
     echo "[3/4] SEED_DEMO != true — pulando seed de demonstração"
 fi
 
-# 3.5. Provisionar tenant da operação de repasse Atom (laboratório SCP) se SEED_ATOM=true
-if [ "${SEED_ATOM:-false}" = "true" ]; then
+# 3.5. Provisionar tenant da operação de repasse Atom (laboratório SCP).
+# Liga quando SEED_ATOM=true OU quando ATOM_SENHA estiver definida — assim
+# basta o Felício colar a senha no Render pra o login nascer (1 passo só).
+if [ "${SEED_ATOM:-false}" = "true" ] || [ -n "${ATOM_SENHA:-}" ]; then
     echo "[4/4] Provisionando tenant Atom Repasse (SCP)..."
     python -m app.scripts.seed_atom_repasse || echo "    (seed_atom já rodou ou houve erro não-fatal, prosseguindo)"
 else
-    echo "[4/4] SEED_ATOM != true — pulando provisionamento do tenant Atom"
+    echo "[4/4] ATOM_SENHA/SEED_ATOM ausentes — pulando provisionamento do tenant Atom"
 fi
 
 # 4. Subir uvicorn
