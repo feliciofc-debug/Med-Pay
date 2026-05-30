@@ -1,10 +1,18 @@
-"""Configuração da empresa pagadora.
+"""Configuração da(s) conta(s) pagadora(s) — "Conta de Repasse".
 
 Armazena os dados que entram no Header do arquivo CNAB 240:
 CNPJ/CPF, agência, conta, código de convênio, etc.
 
-Esta tabela é singleton no MVP (single-tenant). Quando virar multi-tenant
-adicionamos `tenant_id` e mantemos uma config por tenant.
+Evolução (carteira de repasse): deixou de ser singleton. Agora um tenant
+pode ter VÁRIAS contas (Bradesco, Itaú, Unicred, Santander...), e cada
+hospital da carteira aponta pra uma delas (`Cliente.conta_pagadora_id`).
+A coluna `cliente_id` diz de quem é a conta:
+    - NULL  → conta "legada"/global (compat com o single-tenant antigo)
+    - UUID  → conta pertence a esse tenant (ex.: a Atom)
+
+`modo_execucao` prepara a evolução CNAB → API bancária: hoje todas geram
+CNAB; quando um banco liberar API, vira API só naquela conta, sem mexer
+no resto.
 
 REGRA: a conta pagadora é dado bancário sensível e portanto fica
 criptografada (Fernet). A agência fica em claro porque é menos sensível
@@ -17,7 +25,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, LargeBinary, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, LargeBinary, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -31,6 +39,17 @@ class TipoInscricao(str, Enum):
 
     CPF = "CPF"
     CNPJ = "CNPJ"
+
+
+class ModoExecucao(str, Enum):
+    """COMO essa conta executa o pagamento.
+
+    CNAB — gera arquivo CNAB 240 de remessa (padrão hoje).
+    API  — envia direto via API do banco (evolução futura, banco a banco).
+    """
+
+    CNAB = "CNAB"
+    API = "API"
 
 
 class BancoEmissor(str, Enum):
@@ -48,15 +67,27 @@ class BancoEmissor(str, Enum):
 
 
 class EmpresaConfig(Base):
-    """Dados da empresa pagadora (vai no Header do CNAB).
+    """Conta pagadora (vai no Header do CNAB). Uma linha por conta.
 
-    No MVP (single-tenant) só existe um registro nesta tabela.
-    Pode ser obtido com `EmpresaConfigService.get_ativa()`.
+    Um tenant pode ter N contas (uma por banco). A resolução de qual conta
+    usar num lote fica em `services.conta_pagadora.resolver_conta_pagadora`.
     """
 
     __tablename__ = "empresa_config"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+
+    # ===== Dono da conta (multi-tenant / multi-conta) =====
+    # NULL = conta legada/global (compat single-tenant). UUID = tenant dono
+    # (ex.: a Atom, que pode ter Bradesco + Itaú + Unicred...).
+    cliente_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("clientes.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    # Apelido pra distinguir as contas na UI (ex.: "Itaú Repasse").
+    apelido: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
     # ===== Identificação =====
     razao_social: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -67,7 +98,21 @@ class EmpresaConfig(Base):
         nullable=False,
         default=TipoInscricao.CNPJ,
     )
-    cnpj_cpf: Mapped[str] = mapped_column(String(14), nullable=False, unique=True)
+    # Sem unique: o mesmo CNPJ (ex.: Atom) pode ter várias contas/bancos.
+    cnpj_cpf: Mapped[str] = mapped_column(String(14), nullable=False, index=True)
+
+    # Modo de execução do pagamento desta conta (CNAB hoje, API no futuro).
+    modo_execucao: Mapped[ModoExecucao] = mapped_column(
+        SAEnum(
+            ModoExecucao,
+            name="modo_execucao_conta",
+            values_callable=lambda x: [e.value for e in x],
+            create_type=False,
+        ),
+        nullable=False,
+        default=ModoExecucao.CNAB,
+        server_default=ModoExecucao.CNAB.value,
+    )
 
     # ===== Banco emissor do CNAB =====
     # Define qual adapter (cnab_unicred / cnab_itau / cnab_bradesco) será

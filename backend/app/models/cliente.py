@@ -137,6 +137,18 @@ class Cliente(Base):
         index=True,
     )
 
+    # ---------- Conta pagadora usada por este cliente ----------
+    # Qual "Conta de Repasse" (empresa_config) executa os pagamentos deste
+    # cliente. Numa carteira de repasse, cada hospital-filho aponta pra uma
+    # conta do pai (ex.: Santa Casa → conta Itaú da Atom). Null = usa a
+    # conta legada/global (comportamento single-tenant antigo).
+    conta_pagadora_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("empresa_config.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # ---------- Plano + Assinatura ----------
     # Cada cliente assina um plano que define features padrão e limites.
     # Nullable porque clientes legados nascem sem plano e migram depois.

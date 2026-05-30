@@ -26,13 +26,13 @@ from app.core.exceptions import (
     LoteNaoEncontradoError,
 )
 from app.models.cliente import Cliente
-from app.models.empresa_config import EmpresaConfig
 from app.models.lote import Lote, StatusLote
 from app.models.pagamento import Pagamento, StatusPagamento
 from app.models.user import User
 from app.services.auditoria import AuditoriaService
 from app.services.cnab_generator import CNABResult
 from app.services.cnab_factory import criar_gerador_cnab
+from app.services.conta_pagadora import resolver_conta_pagadora_lote
 from app.services.importacao import (
     ResultadoImportacao,
     importar_planilha,
@@ -233,15 +233,13 @@ class LoteService:
         for pagamento in pagamentos_aprovaveis:
             pagamento.status = StatusPagamento.APROVADO
 
-        # Carrega EmpresaConfig ativa
-        empresa_q = await self.db.execute(
-            select(EmpresaConfig).where(EmpresaConfig.ativo.is_(True)).limit(1)
-        )
-        empresa = empresa_q.scalar_one_or_none()
+        # Resolve a conta pagadora deste lote (carteira: por hospital,
+        # com fallback pro legado single-tenant).
+        empresa = await resolver_conta_pagadora_lote(self.db, lote)
         if empresa is None:
             raise EmpresaConfigNaoEncontradaError(
-                "Configuração da empresa pagadora ainda não foi cadastrada. "
-                "Cadastre os dados Unicred antes de aprovar lotes."
+                "Nenhuma conta de repasse (empresa pagadora) cadastrada para "
+                "este cliente. Cadastre a conta antes de aprovar lotes."
             )
 
         # Gera CNAB usando o adapter do banco emissor configurado na empresa
@@ -336,13 +334,10 @@ class LoteService:
                 "Lote aprovado, mas sem pagamentos aprovados para regerar CNAB"
             )
 
-        empresa_q = await self.db.execute(
-            select(EmpresaConfig).where(EmpresaConfig.ativo.is_(True)).limit(1)
-        )
-        empresa = empresa_q.scalar_one_or_none()
+        empresa = await resolver_conta_pagadora_lote(self.db, lote)
         if empresa is None:
             raise EmpresaConfigNaoEncontradaError(
-                "Configuração da empresa pagadora não encontrada"
+                "Conta de repasse (empresa pagadora) não encontrada"
             )
 
         gerador = criar_gerador_cnab(
