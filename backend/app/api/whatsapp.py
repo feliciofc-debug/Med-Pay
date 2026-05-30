@@ -159,17 +159,31 @@ async def wuzapi_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db),
     x_webhook_secret: str | None = Header(None, alias="X-Webhook-Secret"),
+    secret: str | None = Query(None),
+    token: str | None = Query(None),
 ) -> dict[str, Any]:
     """Endpoint que o Wuzapi chama quando uma mensagem chega.
 
     Sempre retorna 200 (Wuzapi reenvia em caso de erro, e a gente
     quer evitar loop). Erros são logados e gravados no audit.
+
+    Validação de secret: o fork Wuzapi do AMZ NÃO consegue enviar
+    header customizado (hmac_configured fica false). Por isso aceitamos
+    o secret de 3 formas, nesta ordem:
+      1. Header `X-Webhook-Secret` (padrão, se o gateway suportar)
+      2. Query param `?secret=...` (jeito que funciona com o fork)
+      3. Query param `?token=...` (alias)
+    Configure a URL do webhook na VPS como
+    `.../api/whatsapp/webhook?secret=<WUZAPI_WEBHOOK_SECRET>`.
     """
     if settings.WUZAPI_WEBHOOK_SECRET:
-        if x_webhook_secret != settings.WUZAPI_WEBHOOK_SECRET:
+        recebido = x_webhook_secret or secret or token
+        if recebido != settings.WUZAPI_WEBHOOK_SECRET:
             log.warning(
                 "whatsapp.webhook_secret_invalido",
                 ip=request.client.host if request.client else None,
+                tem_header=bool(x_webhook_secret),
+                tem_query=bool(secret or token),
             )
             return {"ok": False, "motivo": "secret_invalido"}
 
