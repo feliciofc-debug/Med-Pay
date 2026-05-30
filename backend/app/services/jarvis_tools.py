@@ -31,6 +31,7 @@ from app.models.lote import Lote, StatusLote
 from app.models.pagamento import Pagamento, StatusPagamento
 from app.models.plano import Plano, StatusAssinatura
 from app.models.user import User, UserRole
+from app.services.jarvis_kb import KB_TOPICOS, consultar_kb
 
 log = structlog.get_logger()
 
@@ -44,6 +45,34 @@ log = structlog.get_logger()
 # menos a IA chuta resposta.
 
 TOOLS_SCHEMA: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "consultar_base_conhecimento",
+            "description": (
+                "Consulta a base de conhecimento DETALHADA da plataforma Med-Pay "
+                "(documentação interna). Use quando o usuário perguntar como algo "
+                "funciona ou pedir precisão sobre: arquitetura/integrações (topico "
+                "'stack'), módulos do produto ('modulos'), planos SaaS e features "
+                "('planos'), papéis/permissões de usuário ('roles'), o fluxo "
+                "operacional das 8 etapas ('fluxo') ou termos do negócio "
+                "('glossario'). Não use pra dados de operação (lotes/valores/clientes) "
+                "— pra isso há tools específicas. Pode chamar mais de uma vez com "
+                "tópicos diferentes."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topico": {
+                        "type": "string",
+                        "enum": ["stack", "modulos", "planos", "roles", "fluxo", "glossario"],
+                        "description": "Qual seção da base de conhecimento buscar.",
+                    }
+                },
+                "required": ["topico"],
+            },
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -1876,7 +1905,25 @@ async def gerar_insight_estrategico(
 # ============================================================
 
 
+async def consultar_base_conhecimento(
+    db: AsyncSession, user: User, *, topico: str
+) -> dict[str, Any]:
+    """Retorna a seção pedida da base de conhecimento (KB) do Med-Pay.
+
+    Não toca no banco — é leitura estática do `jarvis_kb`. Existe pra manter
+    o conhecimento detalhado FORA do system prompt (economia de tokens) e o
+    Jarvis buscar só quando o assunto aparece.
+    """
+    conteudo = consultar_kb(topico)
+    return {
+        "topico": (topico or "").strip().lower(),
+        "topicos_disponiveis": list(KB_TOPICOS.keys()),
+        "conteudo": conteudo,
+    }
+
+
 _DISPATCH: dict[str, Any] = {
+    "consultar_base_conhecimento": consultar_base_conhecimento,
     "resumo_operacional_hoje": resumo_operacional_hoje,
     "listar_lotes_pendentes": listar_lotes_pendentes,
     "detalhar_lote": detalhar_lote,

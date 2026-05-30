@@ -390,14 +390,80 @@ economizar token), mas você é o autor da experiência.
 
 
 # ============================================================
+# Base de conhecimento SOB DEMANDA (economia de tokens)
+# ============================================================
+#
+# As seções de referência (stack, módulos, planos, roles, fluxo, glossário)
+# são grandes (~12KB). Mandá-las no system prompt de TODA mensagem estoura
+# o limite diário de tokens do Groq. Então elas ficam aqui indexadas e o
+# Jarvis as busca via a tool `consultar_base_conhecimento` só quando o
+# assunto aparece. O conhecimento continua 100% disponível — só não pesa
+# em cada "oi".
+
+KB_TOPICOS: dict[str, str] = {
+    "stack": STACK,
+    "modulos": MODULOS,
+    "planos": PLANOS,
+    "roles": ROLES,
+    "fluxo": FLUXO,
+    "glossario": GLOSSARIO,
+}
+
+
+INDICE_KB = """\
+# Base de conhecimento (sob demanda)
+
+Você conhece a plataforma a fundo, mas os detalhes ficam numa tool pra
+economizar contexto. Quando a pergunta envolver um destes temas, chame
+`consultar_base_conhecimento` com o `topico` correspondente:
+
+- **stack** — arquitetura técnica, integrações, segurança financeira
+- **modulos** — módulos da plataforma (Lotes, Pagamento, Beneficiário, \
+Ficha/OCR, Fechamento, App médico, Equipe Flex, CNAB, Vital/Sentinela...)
+- **planos** — planos SaaS, features por plano, modo de cobrança do hospital, \
+status de assinatura
+- **roles** — papéis de usuário (ADMIN, GESTOR, MEDICO...) e permissões
+- **fluxo** — fluxo operacional das 8 etapas (contrato → conciliação)
+- **glossario** — termos do negócio (Lote, CNAB, bp, MRR, ficha...)
+
+Chame quando precisar de precisão técnica/factual. Pra conversa casual ou
+quando já souber a resposta, não precisa. Pode chamar mais de um tópico.
+"""
+
+
+def consultar_kb(topico: str) -> str:
+    """Retorna a seção de conhecimento pedida (usada pela tool homônima)."""
+    chave = (topico or "").strip().lower()
+    if chave in KB_TOPICOS:
+        return KB_TOPICOS[chave]
+    disponiveis = ", ".join(KB_TOPICOS.keys())
+    return (
+        f"Tópico '{topico}' não existe na base. "
+        f"Tópicos disponíveis: {disponiveis}."
+    )
+
+
+# ============================================================
 # Compõe o prompt completo
 # ============================================================
 
 
+def montar_system_prompt_enxuto(*extras: str) -> str:
+    """Prompt LEVE (default em produção): só IDENTIDADE + índice da KB +
+    COMO_RESPONDER + extras (contexto do usuário, memórias).
+
+    O conhecimento de referência é buscado via tool `consultar_base_conhecimento`.
+    Isso reduz ~50% dos tokens por mensagem vs o prompt completo.
+    """
+    partes = [IDENTIDADE, INDICE_KB, COMO_RESPONDER]
+    if extras:
+        partes.extend(extras)
+    return "\n\n".join(p.strip() for p in partes if p and p.strip())
+
+
 def montar_system_prompt(*extras: str) -> str:
-    """Junta IDENTIDADE + STACK + MÓDULOS + PLANOS + ROLES + FLUXO +
-    GLOSSÁRIO + COMO_RESPONDER, + qualquer extra passado (ex: contexto
-    do usuário falando agora)."""
+    """Prompt COMPLETO (todas as seções inline). Mantido para casos que
+    queiram o KB inteiro no contexto (custa muito mais token)."""
     partes = [
         IDENTIDADE,
         STACK,
@@ -418,9 +484,13 @@ __all__ = [
     "FLUXO",
     "GLOSSARIO",
     "IDENTIDADE",
+    "INDICE_KB",
+    "KB_TOPICOS",
     "MODULOS",
     "PLANOS",
     "ROLES",
     "STACK",
+    "consultar_kb",
     "montar_system_prompt",
+    "montar_system_prompt_enxuto",
 ]

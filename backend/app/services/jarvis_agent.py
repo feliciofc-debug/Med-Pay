@@ -45,7 +45,7 @@ from app.models.whatsapp import (
     WhatsAppMensagem,
     WhatsAppUser,
 )
-from app.services.jarvis_kb import montar_system_prompt
+from app.services.jarvis_kb import montar_system_prompt_enxuto
 from app.services.jarvis_tools import (
     TOOLS_RESTRITAS_APROVACAO,
     TOOLS_SCHEMA,
@@ -144,7 +144,7 @@ async def _system_prompt_para(
             )
         memorias_bloco = "\n".join(linhas)
 
-    return montar_system_prompt(contexto_usuario, memorias_bloco)
+    return montar_system_prompt_enxuto(contexto_usuario, memorias_bloco)
 
 
 # ============================================================
