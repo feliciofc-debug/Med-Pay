@@ -702,6 +702,27 @@ export interface EmpresaPagadoraPayload {
   proximo_numero_sequencial: number;
 }
 
+/** CNAB hoje; API bancária no futuro (por conta). */
+export type ModoExecucao = "CNAB" | "API";
+
+export const LABEL_MODO_EXECUCAO: Record<ModoExecucao, string> = {
+  CNAB: "Arquivo CNAB",
+  API: "API bancária",
+};
+
+/** Conta de repasse: empresa pagadora com apelido + modo de execução. */
+export interface ContaRepasse extends EmpresaPagadora {
+  apelido: string | null;
+  modo_execucao: ModoExecucao;
+  cliente_id: string | null;
+}
+
+export interface ContaRepassePayload extends EmpresaPagadoraPayload {
+  apelido?: string | null;
+  modo_execucao: ModoExecucao;
+  cliente_id?: string | null;
+}
+
 // =============================================================================
 // Jarvis — WhatsApp + LLM
 // =============================================================================

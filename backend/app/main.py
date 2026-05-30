@@ -165,6 +165,7 @@ def create_app() -> FastAPI:
         beneficiarios,
         clientes,
         consolidacao,
+        contas_repasse,
         equipes,
         executivo,
         fechamentos,
@@ -219,6 +220,7 @@ def create_app() -> FastAPI:
         prefix="/api/modelos-negocio",
         tags=["modelos-negocio"],
     )
+    app.include_router(contas_repasse.router)  # já tem prefix="/api/contas-repasse"
     app.include_router(repasse.router, prefix="/api/repasse", tags=["repasse"])
     app.include_router(scp.router, prefix="/api/scp", tags=["scp"])
     app.include_router(signup.router, prefix="/api/signup", tags=["signup"])

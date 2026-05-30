@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   Activity,
   BarChart3,
+  Banknote,
   Bot,
   Briefcase,
   Building2,
@@ -222,6 +223,15 @@ const SECOES: NavSection[] = [
         icon: HandCoins,
         roles: ["ADMIN", "GESTOR"],
         feature: "scp.apuracao",
+      },
+      {
+        // Contas bancárias (multi-banco) de onde saem os repasses. Gated por
+        // pagamento.execucao: quem executa o próprio pagamento gere as contas.
+        to: "/app/contas-repasse",
+        label: "Contas de repasse",
+        icon: Banknote,
+        roles: ["ADMIN", "GESTOR"],
+        feature: "pagamento.execucao",
       },
     ],
   },
