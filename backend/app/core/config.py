@@ -127,10 +127,12 @@ class Settings(BaseSettings):
 
     # Janela máxima de histórico que o Jarvis carrega como contexto
     # (mensagens das últimas N horas, máximo M mensagens).
-    # Aumentado pra ter memoria conversacional decente — um socio precisa
-    # lembrar do que foi falado mais cedo no dia.
-    JARVIS_HISTORICO_HORAS: int = 24
-    JARVIS_HISTORICO_MAX: int = 25
+    # Equilíbrio entre memória conversacional e consumo de tokens do Groq:
+    # cada mensagem do histórico entra no prompt, então janelas grandes
+    # estouram o limite diário de tokens (TPD) rápido. 12 msgs / 10h dão
+    # contexto bom sem desperdício.
+    JARVIS_HISTORICO_HORAS: int = 10
+    JARVIS_HISTORICO_MAX: int = 12
 
     # ===== Negócio =====
     # Range típico de valores (em centavos) — fora disso é "suspeito"
