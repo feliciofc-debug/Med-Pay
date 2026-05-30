@@ -87,6 +87,19 @@ FEATURES_DISPONIVEIS: tuple[FeatureDef, ...] = (
         default=False,
     ),
     FeatureDef(
+        chave="pagamento.execucao",
+        nome="Execução de pagamento (ciclo completo)",
+        descricao=(
+            "O próprio tenant executa o pagamento ponta a ponta: cria/lança o "
+            "lote, aprova e gera o CNAB (ou envia via API bancária). Ligado pra "
+            "empresa de repasse e MedPag-SCP (operam sozinhas); desligado pra "
+            "hospital, onde o BPO/Aprovador da MedPag fecha o ciclo."
+        ),
+        categoria=CategoriaFeature.PAGAMENTO,
+        tipo="bool",
+        default=False,
+    ),
+    FeatureDef(
         chave="pagamento.bolo_do_dia",
         nome="Bolo do Dia (rateio diário)",
         descricao="Modelo de pagamento por rateio diário entre profissionais (caso anestesistas).",

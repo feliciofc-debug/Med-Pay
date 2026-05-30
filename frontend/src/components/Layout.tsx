@@ -187,6 +187,17 @@ const SECOES: NavSection[] = [
     label: "Financeiro",
     items: [
       {
+        // Lançar pagamento (criar lote) pro tenant que executa os próprios
+        // pagamentos — empresa de repasse / MedPag-SCP. O BPO interno usa
+        // "Novo Lote" na seção Operação. Aqui o GESTOR do repasse lança,
+        // aprova e gera CNAB (ciclo completo), gated por pagamento.execucao.
+        to: "/app/upload",
+        label: "Lançar pagamento",
+        icon: Upload,
+        roles: ["GESTOR"],
+        feature: "pagamento.execucao",
+      },
+      {
         to: "/app/lotes",
         label: "Lotes",
         icon: FileSpreadsheet,

@@ -136,6 +136,42 @@ def require_admin(
     return current_user
 
 
+def _tenant_executa_pagamento(user: User) -> bool:
+    """Tenant do user tem a capacidade 'pagamento.execucao' ligada?
+
+    Checa direto no `features_override` (onde os presets gravam) pra não
+    disparar lazy-load de `cliente.plano` no contexto async — o
+    `get_current_user` já carrega `user.cliente` com selectinload.
+    """
+    cliente = user.cliente
+    if cliente is None:
+        return False
+    override = cliente.features_override or {}
+    return override.get("pagamento.execucao") is True
+
+
+def require_execucao_pagamento(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Pode executar o ciclo de pagamento (aprovar lote, gerar CNAB / enviar).
+
+    Regra (engenharia de modelos de negócio — ver mapa mental):
+        - APROVADOR / ADMIN: sempre (modelo BPO; a MedPag fecha o ciclo do hospital).
+        - GESTOR de tenant com `pagamento.execucao` ligada: empresa de repasse e
+          MedPag-SCP operam o ciclo completo sozinhas (uma pessoa lança e aprova).
+
+    Hospital comum (sem a feature) segue exigindo Aprovador — separação de poderes.
+    """
+    if current_user.pode_aprovar:  # APROVADOR ou ADMIN
+        return current_user
+    if current_user.role == UserRole.GESTOR and _tenant_executa_pagamento(current_user):
+        return current_user
+    raise PermissaoNegadaError(
+        "Seu perfil não pode executar pagamentos neste tenant. "
+        "Empresas de repasse precisam da capacidade 'Execução de pagamento' ligada."
+    )
+
+
 def require_pode_subir_ficha(
     current_user: User = Depends(get_current_user),
 ) -> User:
@@ -356,6 +392,7 @@ __all__ = [
     "get_tenant_id",
     "require_admin",
     "require_aprovador",
+    "require_execucao_pagamento",
     "require_feature",
     "require_pode_subir_ficha",
     "require_tenant_id",

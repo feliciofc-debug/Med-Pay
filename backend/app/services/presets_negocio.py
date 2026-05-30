@@ -66,6 +66,7 @@ PRESETS: dict[TipoCliente, PresetNegocio] = {
         modo_pagamento=ModoPagamento.CNAB_BANCARIO,
         features={
             "pagamento.cnab": True,
+            "pagamento.execucao": True,
             "modulo.whatsapp_jarvis": True,
             "modulo.contratos_hospital": True,
             "analise.lucro": True,
@@ -82,6 +83,7 @@ PRESETS: dict[TipoCliente, PresetNegocio] = {
         modo_pagamento=ModoPagamento.REPASSE_SCP,
         features={
             "pagamento.cnab": True,
+            "pagamento.execucao": True,
             "modulo.whatsapp_jarvis": True,
             "analise.lucro": True,
             "scp.apuracao": True,

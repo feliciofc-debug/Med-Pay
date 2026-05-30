@@ -23,7 +23,7 @@ from app.core.config import settings
 from app.core.deps import (
     get_current_user,
     get_db,
-    require_aprovador,
+    require_execucao_pagamento,
     require_feature,
 )
 from app.core.exceptions import (
@@ -224,7 +224,7 @@ async def aprovar_lote(
     payload: AprovarLoteRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    aprovador: User = Depends(require_aprovador),
+    aprovador: User = Depends(require_execucao_pagamento),
 ) -> AprovacaoResponse:
     """Aprova um lote, gera o arquivo CNAB e devolve link de download.
 
@@ -420,7 +420,7 @@ async def download_lista_pix(
 async def regerar_cnab(
     lote_id: UUID,
     db: AsyncSession = Depends(get_db),
-    aprovador: User = Depends(require_aprovador),
+    aprovador: User = Depends(require_execucao_pagamento),
 ) -> dict[str, str | int]:
     """Força a regeração do CNAB com o sequencial atual da empresa.
 
@@ -459,7 +459,7 @@ async def regerar_cnab(
 async def marcar_enviado(
     lote_id: UUID,
     db: AsyncSession = Depends(get_db),
-    aprovador: User = Depends(require_aprovador),
+    aprovador: User = Depends(require_execucao_pagamento),
 ) -> dict[str, str]:
     """Operador confirma que já subiu o CNAB no internet banking."""
     service = LoteService(db)
@@ -477,7 +477,7 @@ async def upload_retorno(
     lote_id: UUID,
     arquivo: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    aprovador: User = Depends(require_aprovador),
+    aprovador: User = Depends(require_execucao_pagamento),
 ) -> dict[str, object]:
     """Upload do arquivo .ret CNAB devolvido pelo banco.
 
