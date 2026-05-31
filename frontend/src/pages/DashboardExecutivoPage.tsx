@@ -70,70 +70,83 @@ export function DashboardExecutivoPage() {
         <SemContratosBanner />
       )}
 
-      {semDados ? (
-        <EstadoVazio />
-      ) : (
-        <>
-          <KPIHero data={data} />
+      {/* Aviso enxuto quando ainda não há movimento — mas os cards de gestão
+          continuam visíveis (zerados) pra estrutura aparecer sempre. */}
+      {semDados && <AvisoSemDados />}
 
-          {data.operacao_mes && (
-            <OperacaoMesCard operacao={data.operacao_mes} />
-          )}
+      <KPIHero data={data} />
 
-          {data.pipeline_hospitais.length > 0 && (
-            <PipelineHospitaisCard pipeline={data.pipeline_hospitais} />
-          )}
+      <OperacaoMesCard operacao={data.operacao_mes ?? OPERACAO_ZERO} />
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              {data.contratos.length > 0 && (
-                <ReceitaPorContrato contratos={data.contratos} />
-              )}
-              <Projecao12Meses dados={data.projecao_12m} />
-              <KPIsOperacionais kpis={data.kpi_operacional} />
-            </div>
-
-            <div className="space-y-6">
-              <AlertasCard alertas={data.alertas} />
-              <RenovacoesCard renovacoes={data.renovacoes_proximas} />
-            </div>
-          </div>
-        </>
+      {data.pipeline_hospitais.length > 0 && (
+        <PipelineHospitaisCard pipeline={data.pipeline_hospitais} />
       )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          {data.contratos.length > 0 && (
+            <ReceitaPorContrato contratos={data.contratos} />
+          )}
+          <Projecao12Meses dados={data.projecao_12m} />
+          <KPIsOperacionais kpis={data.kpi_operacional} />
+        </div>
+
+        <div className="space-y-6">
+          <AlertasCard alertas={data.alertas} />
+          <RenovacoesCard renovacoes={data.renovacoes_proximas} />
+        </div>
+      </div>
     </div>
   );
 }
+
+// Operação zerada — usado quando ainda não há movimento no mês, pra os
+// cards de "Programação x Realizado" aparecerem com 0 em vez de sumirem.
+const OPERACAO_ZERO: ResumoOperacaoMes = {
+  volume_total_mes_centavos: 0,
+  qtd_fichas_pendentes: 0,
+  valor_fichas_pendentes_centavos: 0,
+  qtd_lotes_programados: 0,
+  valor_lotes_programados_centavos: 0,
+  qtd_lotes_enviados: 0,
+  valor_lotes_enviados_centavos: 0,
+  qtd_lotes_conciliados: 0,
+  valor_lotes_conciliados_centavos: 0,
+  qtd_clientes_ativos: 0,
+};
 
 // =============================================================================
 // Estado vazio (nada cadastrado ainda)
 // =============================================================================
 
-function EstadoVazio() {
+function AvisoSemDados() {
   return (
-    <div className="bg-white border border-brand-100 rounded-xl p-10 text-center shadow-sm">
-      <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-brand-50 mb-4">
-        <Sparkles className="text-brand-700" size={26} />
+    <div className="rounded-xl border border-brand-200 bg-gradient-to-r from-brand-50 to-accent-50/40 p-4 flex items-start gap-3">
+      <div className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-white border border-brand-100 flex-shrink-0">
+        <Sparkles className="text-brand-700" size={18} />
       </div>
-      <h2 className="text-lg font-bold text-brand-950 mb-2">
-        Sem operação registrada neste mês
-      </h2>
-      <p className="text-sm text-brand-700 max-w-lg mx-auto mb-5">
-        Assim que o coordenador subir as primeiras fichas (ou planilhas
-        gerarem lotes), os números aparecem aqui em tempo real:
-        programação de pagamento, valores a executar e pagamentos
-        conciliados por hospital.
-      </p>
-      <div className="flex items-center gap-3 justify-center">
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-brand-950 text-sm">
+          Ainda sem operação registrada neste mês
+        </p>
+        <p className="text-xs text-brand-700 mt-0.5 max-w-2xl">
+          Os indicadores abaixo aparecem zerados até o coordenador subir as
+          primeiras fichas (ou as planilhas gerarem lotes). Assim que houver
+          movimento, programação de pagamento, valores a executar e pagamentos
+          conciliados por hospital são preenchidos automaticamente.
+        </p>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
         <Link
           to="/app/fichas"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-900 text-white text-sm font-semibold hover:bg-brand-800 transition"
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-900 text-white text-xs font-semibold hover:bg-brand-800 transition"
         >
-          <FileSpreadsheet size={16} />
-          Subir uma ficha
+          <FileSpreadsheet size={14} />
+          Subir ficha
         </Link>
         <Link
           to="/app/contratos"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-brand-200 text-sm font-semibold text-brand-800 hover:bg-brand-50 transition"
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-brand-200 text-xs font-semibold text-brand-800 hover:bg-brand-50 transition"
         >
           Configurar contratos
         </Link>
