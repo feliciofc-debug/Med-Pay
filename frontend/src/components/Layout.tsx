@@ -1,11 +1,9 @@
 import { type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-  ArrowDownToLine,
   ArrowLeftRight,
   Activity,
   BarChart3,
-  Banknote,
   Bot,
   Briefcase,
   Building2,
@@ -18,7 +16,6 @@ import {
   HeartPulse,
   History,
   Home,
-  Hospital,
   Layers,
   Layers3,
   type LucideIcon,
@@ -225,31 +222,6 @@ const SECOES: NavSection[] = [
         icon: HandCoins,
         roles: ["ADMIN", "GESTOR"],
         feature: "scp.apuracao",
-      },
-      {
-        // Carteira de hospitais administrados pela empresa de repasse.
-        to: "/app/carteira",
-        label: "Carteira de hospitais",
-        icon: Hospital,
-        roles: ["ADMIN", "GESTOR"],
-        feature: "pagamento.execucao",
-      },
-      {
-        // Aportes recebidos dos hospitais (libera a distribuição).
-        to: "/app/aportes",
-        label: "Aportes recebidos",
-        icon: ArrowDownToLine,
-        roles: ["ADMIN", "GESTOR"],
-        feature: "pagamento.execucao",
-      },
-      {
-        // Contas bancárias (multi-banco) de onde saem os repasses. Gated por
-        // pagamento.execucao: quem executa o próprio pagamento gere as contas.
-        to: "/app/contas-repasse",
-        label: "Contas de repasse",
-        icon: Banknote,
-        roles: ["ADMIN", "GESTOR"],
-        feature: "pagamento.execucao",
       },
     ],
   },
