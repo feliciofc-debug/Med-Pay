@@ -146,7 +146,7 @@ export default function App() {
       <Route
         path="/app/executivo"
         element={
-          <ProtectedRoute roles={["ADMIN"]}>
+          <ProtectedRoute roles={["ADMIN", "GESTOR"]}>
             <DashboardExecutivoPage />
           </ProtectedRoute>
         }
@@ -154,7 +154,7 @@ export default function App() {
       <Route
         path="/app/contratos"
         element={
-          <ProtectedRoute roles={["ADMIN"]}>
+          <ProtectedRoute roles={["ADMIN", "GESTOR"]}>
             <ContratosPage />
           </ProtectedRoute>
         }
@@ -202,7 +202,7 @@ export default function App() {
       <Route
         path="/app/extrato-consolidado"
         element={
-          <ProtectedRoute roles={["ADMIN", "APROVADOR"]}>
+          <ProtectedRoute roles={["ADMIN", "APROVADOR", "GESTOR"]}>
             <ExtratoConsolidadoPage />
           </ProtectedRoute>
         }
@@ -210,7 +210,7 @@ export default function App() {
       <Route
         path="/app/prestadores"
         element={
-          <ProtectedRoute roles={["ADMIN", "APROVADOR", "OPERADOR"]}>
+          <ProtectedRoute roles={["ADMIN", "APROVADOR", "OPERADOR", "GESTOR"]}>
             <PrestadoresPage />
           </ProtectedRoute>
         }
@@ -218,7 +218,7 @@ export default function App() {
       <Route
         path="/app/equipes"
         element={
-          <ProtectedRoute roles={["ADMIN", "APROVADOR", "OPERADOR"]}>
+          <ProtectedRoute roles={["ADMIN", "APROVADOR", "OPERADOR", "GESTOR"]}>
             <EquipesPage />
           </ProtectedRoute>
         }
@@ -226,7 +226,7 @@ export default function App() {
       <Route
         path="/app/equipes/:id"
         element={
-          <ProtectedRoute roles={["ADMIN", "APROVADOR", "OPERADOR"]}>
+          <ProtectedRoute roles={["ADMIN", "APROVADOR", "OPERADOR", "GESTOR"]}>
             <EquipeDetalhePage />
           </ProtectedRoute>
         }
@@ -242,7 +242,7 @@ export default function App() {
       <Route
         path="/app/vital"
         element={
-          <ProtectedRoute roles={["ADMIN", "APROVADOR", "OPERADOR"]}>
+          <ProtectedRoute roles={["ADMIN", "APROVADOR", "OPERADOR", "GESTOR"]}>
             <VitalDashboardPage />
           </ProtectedRoute>
         }
