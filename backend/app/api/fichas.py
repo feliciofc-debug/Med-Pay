@@ -31,11 +31,12 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import (
+    cliente_ids_acessiveis,
     get_current_user,
     get_db,
     require_aprovador,
@@ -43,7 +44,7 @@ from app.core.deps import (
 )
 from app.core.exceptions import PermissaoNegadaError, ValidacaoError
 from app.models.cliente import Cliente
-from app.models.ficha_plantao import StatusFicha
+from app.models.ficha_plantao import FichaPlantao, StatusFicha
 from app.models.user import User, UserRole
 from app.schemas.ficha import (
     AtualizarLinhasRequest,
@@ -454,6 +455,81 @@ async def listar_fichas(
         offset=offset,
     )
     return [_ficha_para_resumo(f) for f in fichas]
+
+
+class HospitalPendencia(BaseModel):
+    cliente_id: UUID
+    nome: str
+    qtd: int
+
+
+class PendenciasFichasOut(BaseModel):
+    """Contadores para o badge de alerta do menu de Fichas.
+
+    Conta as fichas que ainda precisam de ação (tudo que NÃO virou lote) no
+    escopo da carteira — pra empresa de repasse, isso inclui as fichas que os
+    hospitais-filhos enviaram. É o número que pisca em cima do menu.
+    """
+
+    total_pendentes: int
+    por_status: dict[str, int]
+    por_hospital: list[HospitalPendencia]
+
+
+@router.get("/pendencias", response_model=PendenciasFichasOut)
+async def pendencias_fichas(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PendenciasFichasOut:
+    """Fichas pendentes de ação na carteira (self + hospitais-filhos).
+
+    Pendente = qualquer status diferente de CONVERTIDA (ainda não virou
+    lote de pagamento). Usado pelo badge do menu.
+    """
+    base_where = [FichaPlantao.status != StatusFicha.CONVERTIDA]
+
+    # Coordenador só "vê" o que ele mesmo subiu.
+    if current_user.role == UserRole.COORDENADOR:
+        base_where.append(FichaPlantao.enviado_por_id == current_user.id)
+
+    # Escopo de carteira: self + filhos (None = MedPag interno vê tudo).
+    ids = await cliente_ids_acessiveis(db, current_user)
+    if ids is not None:
+        if not ids:
+            return PendenciasFichasOut(total_pendentes=0, por_status={}, por_hospital=[])
+        base_where.append(FichaPlantao.cliente_id.in_(ids))
+
+    # Por status
+    res_status = await db.execute(
+        select(FichaPlantao.status, func.count())
+        .where(*base_where)
+        .group_by(FichaPlantao.status)
+    )
+    por_status: dict[str, int] = {}
+    total = 0
+    for st, qtd in res_status.all():
+        chave = st.value if hasattr(st, "value") else str(st)
+        por_status[chave] = qtd
+        total += qtd
+
+    # Por hospital (com nome)
+    res_hosp = await db.execute(
+        select(FichaPlantao.cliente_id, Cliente.nome, func.count())
+        .join(Cliente, Cliente.id == FichaPlantao.cliente_id)
+        .where(*base_where)
+        .group_by(FichaPlantao.cliente_id, Cliente.nome)
+        .order_by(func.count().desc())
+    )
+    por_hospital = [
+        HospitalPendencia(cliente_id=cid, nome=nome, qtd=qtd)
+        for cid, nome, qtd in res_hosp.all()
+    ]
+
+    return PendenciasFichasOut(
+        total_pendentes=total,
+        por_status=por_status,
+        por_hospital=por_hospital,
+    )
 
 
 @router.get("/{ficha_id}", response_model=FichaDetalhe)

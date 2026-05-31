@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "react-router-dom";
 import {
   ArrowLeftRight,
@@ -294,6 +295,27 @@ export function Layout({ children }: { children: ReactNode }) {
     return featuresTenant?.[chave] === true;
   };
 
+  // Badge de alerta: fichas pendentes (self + hospitais-filhos). Pisca em
+  // cima do menu de Fichas quando o hospital sobe fichas novas. Poll a cada
+  // 30s pra dar sensação de tempo-real sem socket.
+  const { data: pendenciasFichas } = useQuery({
+    queryKey: ["fichas-pendencias"],
+    queryFn: async () => {
+      const { data } = await api.get<{ total_pendentes: number }>(
+        "/api/fichas/pendencias",
+      );
+      return data;
+    },
+    enabled: !!role && role !== "MEDICO",
+    refetchInterval: 30000,
+    staleTime: 15000,
+    retry: false,
+  });
+  const badgePorRota: Record<string, number> = {};
+  if (pendenciasFichas?.total_pendentes) {
+    badgePorRota["/app/fichas"] = pendenciasFichas.total_pendentes;
+  }
+
   // Filtra seções/itens visíveis para o papel atual E pelas capacidades.
   const secoesVisiveis = role
     ? SECOES.map((s) => ({
@@ -337,6 +359,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 const active = item.exact
                   ? location.pathname === item.to
                   : location.pathname.startsWith(item.to);
+                const badge = badgePorRota[item.to];
                 return (
                   <Link
                     key={item.to}
@@ -353,6 +376,14 @@ export function Layout({ children }: { children: ReactNode }) {
                       className={active ? "text-accent-300" : ""}
                     />
                     {item.label}
+                    {badge ? (
+                      <span
+                        className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-accent-400 text-brand-950 text-[11px] font-bold flex items-center justify-center shadow-sm"
+                        title={`${badge} ficha(s) pendente(s) de ação`}
+                      >
+                        {badge > 99 ? "99+" : badge}
+                      </span>
+                    ) : null}
                   </Link>
                 );
               })}
