@@ -8,9 +8,10 @@ Operações:
 Permissão:
     - Operações de leitura: qualquer usuário com visão executiva
       (admin, aprovador, operador). Coordenador NÃO acessa.
-    - Operações de escrita: ADMIN ou APROVADOR (no fluxo do MedPag,
-      cadastrar prestador é decisão de negócio que requer responsabilidade
-      pela qualidade dos dados bancários).
+    - Operações de escrita: quem executa o pagamento — ADMIN/APROVADOR (BPO
+      da MedPag, responsável pela qualidade dos dados bancários do hospital)
+      OU o GESTOR de tenant com `pagamento.execucao` (empresa de repasse/SCP,
+      que opera o próprio cadastro de médicos).
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import (
     get_db,
-    require_aprovador,
+    require_execucao_pagamento,
     require_visao_executiva,
 )
 from app.core.exceptions import ValidacaoError
@@ -287,7 +288,7 @@ async def detalhar_beneficiario(
 async def criar_beneficiario(
     payload: BeneficiarioCreateRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_aprovador),
+    user: User = Depends(require_execucao_pagamento),
 ) -> BeneficiarioOut:
     service = BeneficiarioService(db)
     try:
@@ -310,7 +311,7 @@ async def atualizar_beneficiario(
     beneficiario_id: UUID,
     payload: BeneficiarioUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_aprovador),
+    user: User = Depends(require_execucao_pagamento),
 ) -> BeneficiarioOut:
     service = BeneficiarioService(db)
     try:
@@ -331,7 +332,7 @@ async def atualizar_beneficiario(
 async def aprovar_beneficiario(
     beneficiario_id: UUID,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_aprovador),
+    user: User = Depends(require_execucao_pagamento),
 ) -> BeneficiarioOut:
     service = BeneficiarioService(db)
     try:
@@ -350,7 +351,7 @@ async def aprovar_beneficiario(
 async def desativar_beneficiario(
     beneficiario_id: UUID,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_aprovador),
+    user: User = Depends(require_execucao_pagamento),
 ) -> BeneficiarioOut:
     service = BeneficiarioService(db)
     try:
@@ -378,7 +379,7 @@ async def preview_importacao(
     cliente_id: UUID = Form(...),
     arquivo: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_aprovador),
+    _: User = Depends(require_execucao_pagamento),
 ) -> ImportPreviewResponse:
     """Recebe a planilha e devolve um relatório linha-a-linha com erros e
     avisos. Nada é gravado ainda — usuário revisa e chama /import/confirm.
@@ -409,7 +410,7 @@ async def preview_importacao(
 async def confirmar_importacao(
     payload: ImportConfirmRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_aprovador),
+    user: User = Depends(require_execucao_pagamento),
 ) -> ImportConfirmResponse:
     """Confirma e efetiva a importação previamente analisada via /preview."""
     service = BeneficiarioService(db)
