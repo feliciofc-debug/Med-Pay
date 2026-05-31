@@ -64,13 +64,19 @@ export function FichaDetalhePage() {
     return bancos?.get(c) ?? null;
   };
 
-  const { data: ficha, isLoading } = useQuery({
+  const {
+    data: ficha,
+    isLoading,
+    isError,
+    error: queryError,
+  } = useQuery({
     queryKey: ["ficha", id],
     queryFn: async () => {
       const { data } = await api.get<FichaDetalhe>(`/api/fichas/${id}`);
       return data;
     },
     enabled: !!id,
+    retry: false,
     refetchInterval: (q) => {
       const data = q.state.data as FichaDetalhe | undefined;
       return data?.status === "PROCESSANDO" ? 2500 : false;
@@ -168,6 +174,29 @@ export function FichaDetalhePage() {
 
   function adicionarLinha() {
     setLinhas((prev) => [...prev, { ...LINHA_VAZIA }]);
+  }
+
+  if (isError) {
+    return (
+      <div className="space-y-4">
+        <Link
+          to="/app/fichas"
+          className="text-xs text-slate-500 hover:text-brand-700 inline-flex items-center gap-1"
+        >
+          <ArrowLeft size={12} />
+          Voltar para fichas
+        </Link>
+        <div className="card border-red-200 bg-red-50/60 text-sm text-red-800">
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+            <div>
+              <p className="font-medium mb-1">Não foi possível abrir esta ficha</p>
+              <p>{getErrorMessage(queryError)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (isLoading || !ficha) {

@@ -6,7 +6,12 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, get_db, require_admin
+from app.core.deps import (
+    cliente_ids_acessiveis,
+    get_current_user,
+    get_db,
+    require_admin,
+)
 from app.models.cliente import Cliente
 from app.models.user import User
 
@@ -18,10 +23,20 @@ async def listar_clientes(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, list[dict[str, object]]]:
-    """Lista todos os clientes ativos."""
-    result = await db.execute(
-        select(Cliente).where(Cliente.deleted_at.is_(None)).order_by(Cliente.nome)
-    )
+    """Lista os clientes que o usuário pode operar.
+
+    Isolamento de tenant/carteira: MedPag interno (cliente_id None) vê todos;
+    uma empresa de repasse vê só ela mesma + os hospitais da sua carteira
+    (filhos). Antes essa rota devolvia TODOS os clientes da base — o que
+    deixava o dropdown de upload oferecer hospitais de outro tenant e gerar
+    "Ficha pertence a outro cliente" depois.
+    """
+    query = select(Cliente).where(Cliente.deleted_at.is_(None))
+    ids = await cliente_ids_acessiveis(db, current_user)
+    if ids is not None:
+        query = query.where(Cliente.id.in_(ids))
+    query = query.order_by(Cliente.nome)
+    result = await db.execute(query)
     clientes = result.scalars().all()
     return {
         "clientes": [

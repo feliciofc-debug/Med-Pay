@@ -168,6 +168,18 @@ async def upload_ficha(
     if cliente is None:
         raise ValidacaoError("Cliente não encontrado")
 
+    # Só deixa subir ficha para um cliente que o usuário realmente opera
+    # (ele mesmo ou um hospital da sua carteira). Evita criar ficha que
+    # depois não pode ser lida ("Ficha pertence a outro cliente").
+    from app.core.deps import verificar_acesso_cliente
+
+    await verificar_acesso_cliente(
+        db,
+        current_user,
+        cliente_id,
+        mensagem="Você não pode enviar fichas para este cliente.",
+    )
+
     mime = arquivo.content_type or "application/octet-stream"
 
     service = FichaService(db)
@@ -272,6 +284,15 @@ async def upload_ficha_lote(
     cliente = cliente_q.scalar_one_or_none()
     if cliente is None:
         raise ValidacaoError("Cliente não encontrado")
+
+    from app.core.deps import verificar_acesso_cliente
+
+    await verificar_acesso_cliente(
+        db,
+        current_user,
+        cliente_id,
+        mensagem="Você não pode enviar fichas para este cliente.",
+    )
 
     try:
         zf = zipfile.ZipFile(io.BytesIO(conteudo_zip))
