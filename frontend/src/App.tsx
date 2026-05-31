@@ -281,9 +281,9 @@ export default function App() {
       <Route
         path="/app/admin/empresa-pagadora"
         element={
-          <AdminRoute>
+          <ProtectedRoute roles={["ADMIN", "GESTOR"]}>
             <AdminEmpresaPagadoraPage />
-          </AdminRoute>
+          </ProtectedRoute>
         }
       />
       <Route

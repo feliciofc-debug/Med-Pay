@@ -19,7 +19,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import get_db, require_admin
+from app.core.deps import get_db, require_admin, require_execucao_pagamento
 from app.core.exceptions import (
     LoteNaoEncontradoError,
     UsuarioJaExisteError,
@@ -833,19 +833,36 @@ def _so_digitos(valor: str) -> str:
     return "".join(c for c in valor if c.isdigit())
 
 
+def _scope_empresa_por_tenant(query, tenant_id: UUID | None):
+    """Filtra EmpresaConfig pelo tenant do usuário.
+
+    - MedPag interno (cliente_id None) → conta legada/global (cliente_id NULL),
+      preservando a operação Auris que já roda hoje.
+    - Empresa de repasse (ex.: Atom) → a conta do próprio tenant.
+
+    É o que isola a empresa pagadora de cada operação: a Atom configura a
+    conta dela sem mexer (nem enxergar) a da Auris.
+    """
+    if tenant_id is None:
+        return query.where(EmpresaConfig.cliente_id.is_(None))
+    return query.where(EmpresaConfig.cliente_id == tenant_id)
+
+
 @router.get("/empresa-pagadora", response_model=EmpresaPagadoraOut)
 async def obter_empresa_pagadora(
     db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(require_admin),
+    user: User = Depends(require_execucao_pagamento),
 ) -> EmpresaConfig:
-    """Retorna a empresa pagadora ativa.
+    """Retorna a empresa pagadora ativa DO TENANT do usuário.
 
     Se ainda não foi cadastrada, retorna 404 — o frontend deve mostrar
     a tela de cadastro vazia nesse caso.
     """
-    result = await db.execute(
-        select(EmpresaConfig).where(EmpresaConfig.ativo.is_(True)).limit(1)
+    query = _scope_empresa_por_tenant(
+        select(EmpresaConfig).where(EmpresaConfig.ativo.is_(True)),
+        user.cliente_id,
     )
+    result = await db.execute(query.limit(1))
     empresa = result.scalar_one_or_none()
     if empresa is None:
         raise LoteNaoEncontradoError(
@@ -859,7 +876,7 @@ async def obter_empresa_pagadora(
 async def salvar_empresa_pagadora(
     payload: EmpresaPagadoraRequest,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_execucao_pagamento),
 ) -> EmpresaConfig:
     """Cria ou atualiza a empresa pagadora ativa (idempotente).
 
@@ -894,9 +911,12 @@ async def salvar_empresa_pagadora(
     if not conta_limpa:
         raise ValidacaoError("Conta não pode ser vazia")
 
-    # Busca registro ativo existente (se houver)
+    # Busca registro ativo existente DO TENANT (se houver)
     result = await db.execute(
-        select(EmpresaConfig).where(EmpresaConfig.ativo.is_(True)).limit(1)
+        _scope_empresa_por_tenant(
+            select(EmpresaConfig).where(EmpresaConfig.ativo.is_(True)),
+            admin.cliente_id,
+        ).limit(1)
     )
     empresa = result.scalar_one_or_none()
 
@@ -905,6 +925,7 @@ async def salvar_empresa_pagadora(
 
     if empresa is None:
         empresa = EmpresaConfig(
+            cliente_id=admin.cliente_id,
             razao_social=payload.razao_social.strip(),
             nome_fantasia=(payload.nome_fantasia or None),
             tipo_inscricao=payload.tipo_inscricao,

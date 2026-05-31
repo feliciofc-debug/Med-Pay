@@ -223,6 +223,17 @@ const SECOES: NavSection[] = [
         roles: ["ADMIN", "GESTOR"],
         feature: "scp.apuracao",
       },
+      {
+        // Empresa pagadora: a conta (CNAB) de onde saem os pagamentos. Mesmo
+        // módulo que o MedPag interno usa em Administração — aqui exposto pro
+        // GESTOR que executa o próprio pagamento (repasse / SCP). É o coração
+        // da operação de pagamento.
+        to: "/app/admin/empresa-pagadora",
+        label: "Empresa pagadora",
+        icon: Building2,
+        roles: ["GESTOR"],
+        feature: "pagamento.execucao",
+      },
     ],
   },
 
