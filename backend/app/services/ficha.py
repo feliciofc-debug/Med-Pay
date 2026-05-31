@@ -102,14 +102,22 @@ class FichaService:
 
         hash_arquivo = hashlib.sha256(conteudo).hexdigest()
 
-        # Idempotência: mesmo hash → reusa a ficha já criada
+        # Idempotência ESCOPADA POR CLIENTE/HOSPITAL: o mesmo arquivo só é
+        # considerado duplicata dentro do mesmo cliente. Logins/tenants
+        # diferentes (e hospitais diferentes) são isolados — o mesmo PDF pode
+        # ser enviado em cada um sem bloquear. Reenviar o MESMO arquivo para o
+        # MESMO hospital ainda é barrado pra evitar plantões/pagamento em
+        # duplicidade.
         existente_q = await self.db.execute(
-            select(FichaPlantao).where(FichaPlantao.hash_arquivo == hash_arquivo)
+            select(FichaPlantao).where(
+                FichaPlantao.hash_arquivo == hash_arquivo,
+                FichaPlantao.cliente_id == cliente.id,
+            )
         )
         existente = existente_q.scalar_one_or_none()
         if existente is not None:
             raise FichaJaProcessadaError(
-                f"Esta ficha já foi enviada em "
+                f"Esta ficha já foi enviada para {cliente.nome} em "
                 f"{existente.created_at.strftime('%d/%m/%Y %H:%M')}",
                 details={"ficha_id": str(existente.id)},
             )

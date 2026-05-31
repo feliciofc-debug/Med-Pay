@@ -32,6 +32,7 @@ from sqlalchemy import (
     LargeBinary,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -69,6 +70,12 @@ class FichaPlantao(Base):
 
     __tablename__ = "fichas_plantao"
 
+    # Duplicata é por (cliente, arquivo): o mesmo PDF/foto só é único DENTRO do
+    # mesmo hospital. Tenants/logins diferentes podem enviar o mesmo arquivo.
+    __table_args__ = (
+        UniqueConstraint("cliente_id", "hash_arquivo", name="uq_ficha_cliente_hash"),
+    )
+
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # ===== Cliente / hospital de origem =====
@@ -82,7 +89,7 @@ class FichaPlantao(Base):
     tamanho_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     arquivo_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     hash_arquivo: Mapped[str] = mapped_column(
-        String(64), nullable=False, unique=True, index=True
+        String(64), nullable=False, index=True
     )
 
     # ===== Status =====
