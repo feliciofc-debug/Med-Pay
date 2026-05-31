@@ -30,6 +30,7 @@ from sqlalchemy.orm import selectinload
 from app.core.deps import (
     get_current_user,
     get_db,
+    get_tenant_id,
     require_admin,
     require_visao_executiva,
 )
@@ -41,6 +42,7 @@ from app.models.cliente import Cliente
 from app.models.contrato_hospital import ContratoHospital, ModoCobranca
 from app.models.ficha_plantao import FichaPlantao, StatusFicha
 from app.models.lote import Lote, StatusLote
+from app.models.scp import ApuracaoSCP
 from app.models.user import User, UserRole
 from app.schemas.executivo import (
     AlertaExecutivo,
@@ -308,28 +310,37 @@ async def listar_clientes_sem_contrato(
 async def dashboard_executivo(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_visao_executiva),
+    tenant_id: UUID | None = Depends(get_tenant_id),
 ) -> DashboardExecutivo:
-    """Agrega receita, custo e margem por hospital usando dados REAIS.
+    """Agrega receita, custo e margem usando dados REAIS, escopado por tenant.
 
-    Pra cada cliente com contrato ativo:
+    - MedPag interno (tenant_id None): vê todos os tenants (visão BPO).
+    - Tenant (hospital/repasse): vê só os próprios dados.
+
+    Modelo hospital/BPO (tem contrato):
         receita_mes = mensalidade + qtd_pgto×taxa + volume×pct_bp
         custo_mes   = custo_fixo + receita×custo_var_pct
-        margem_pct  = (receita - custo) / receita
 
-    Fichas EXTRAÍDAS / REVISADAS contam como "receita prevista" (pipeline).
-    Lotes APROVADO+ contam como receita realizada.
+    Modelo repasse/SCP (tem apuração SCP no mês): o KPI Hero passa a refletir
+    a apuração da SCP — receita bruta, custos e resultado (margem) reais do
+    período — em vez de ficar zerado por não ter contrato de hospital.
     """
     hoje = datetime.now(tz=UTC).date()
     inicio = _inicio_mes(hoje)
     fim = _proximo_mes(inicio)
     mes_anterior_inicio = _inicio_mes(inicio - timedelta(days=1))
 
-    # 1) Carrega contratos ativos com cliente
-    contratos_q = await db.execute(
+    # 1) Carrega contratos ativos com cliente (escopado por tenant)
+    contratos_stmt = (
         select(ContratoHospital)
         .where(ContratoHospital.ativo.is_(True))
         .options(selectinload(ContratoHospital.cliente))
     )
+    if tenant_id is not None:
+        contratos_stmt = contratos_stmt.where(
+            ContratoHospital.cliente_id == tenant_id
+        )
+    contratos_q = await db.execute(contratos_stmt)
     contratos = list(contratos_q.scalars().all())
 
     # 2) Agrega lotes do mês corrente (status que conta como volume)
@@ -342,7 +353,7 @@ async def dashboard_executivo(
     )
 
     def _query_volume_por_cliente(inicio_periodo: date, fim_periodo: date):  # type: ignore[no-untyped-def]
-        return (
+        stmt = (
             select(
                 Lote.cliente_id.label("cid"),
                 func.count(Lote.id).label("qtd_lotes"),
@@ -363,6 +374,9 @@ async def dashboard_executivo(
             )
             .group_by(Lote.cliente_id)
         )
+        if tenant_id is not None:
+            stmt = stmt.where(Lote.cliente_id == tenant_id)
+        return stmt
 
     mes_q = await db.execute(_query_volume_por_cliente(inicio, fim))
     mes_data: dict[UUID, dict[str, Any]] = {
@@ -473,15 +487,22 @@ async def dashboard_executivo(
     )
 
     # 6) KPIs operacionais (inteiro mês)
-    kpi_op = await _kpi_operacional(db, inicio, fim)
+    kpi_op = await _kpi_operacional(db, inicio, fim, tenant_id)
 
     # 7) Receita prevista de fichas em pipeline
-    receita_prevista, margem_prevista = await _pipeline_fichas(db, inicio, fim)
+    receita_prevista, margem_prevista = await _pipeline_fichas(
+        db, inicio, fim, tenant_id
+    )
 
     # 7b) Resumo "programação vs realizado" — sempre populado, mesmo sem contratos
     operacao_mes, pipeline_hospitais = await _pipeline_completo(
-        db, inicio, fim, contratos
+        db, inicio, fim, contratos, tenant_id
     )
+
+    # 4b) Repasse/SCP: se o tenant tem apuração da SCP no mês, o KPI Hero passa
+    # a refletir a apuração (receita bruta, custos, resultado) em vez de zero.
+    if tenant_id is not None:
+        kpi_hero = await _kpi_hero_scp(db, tenant_id, inicio, fallback=kpi_hero)
 
     # 8) Alertas (margem crítica + renovações vencendo)
     alertas: list[AlertaExecutivo] = []
@@ -641,8 +662,53 @@ def _montar_projecao_12m(
     return proj
 
 
+def _scope_lote(stmt, tenant_id: UUID | None):  # type: ignore[no-untyped-def]
+    """Aplica filtro de tenant numa query de Lote, quando houver tenant."""
+    if tenant_id is not None:
+        stmt = stmt.where(Lote.cliente_id == tenant_id)
+    return stmt
+
+
+async def _kpi_hero_scp(
+    db: AsyncSession,
+    tenant_id: UUID,
+    inicio: date,
+    *,
+    fallback: KPIHero,
+) -> KPIHero:
+    """KPI Hero a partir da apuração SCP do mês (modelo repasse/SCP).
+
+    Se não houver apuração na competência, devolve o `fallback` (que veio
+    dos contratos — normalmente zerado pra repasse, e tudo bem).
+    """
+    competencia = f"{inicio.year:04d}-{inicio.month:02d}"
+    ap = await db.scalar(
+        select(ApuracaoSCP).where(
+            ApuracaoSCP.cliente_id == tenant_id,
+            ApuracaoSCP.competencia == competencia,
+        )
+    )
+    if ap is None:
+        return fallback
+
+    receita = ap.receita_bruta_centavos or 0
+    custo = ap.custos_centavos or 0
+    lucro = ap.resultado_centavos if ap.resultado_centavos is not None else (receita - custo)
+    margem = (lucro / receita * 100) if receita > 0 else 0.0
+    meta = fallback.meta_total_centavos
+    return KPIHero(
+        lucro_liquido_centavos=lucro,
+        receita_total_centavos=receita,
+        custo_total_centavos=custo,
+        margem_media_pct=round(margem, 2),
+        delta_lucro_pct=0.0,
+        meta_total_centavos=meta,
+        meta_atingida_pct=round((receita / meta * 100), 2) if meta > 0 else 0.0,
+    )
+
+
 async def _kpi_operacional(
-    db: AsyncSession, inicio: date, fim: date
+    db: AsyncSession, inicio: date, fim: date, tenant_id: UUID | None = None
 ) -> KPIOperacional:
     """KPIs operacionais do mês (lotes, tempo médio, taxa erro, conciliação)."""
     inicio_dt = datetime.combine(inicio, datetime.min.time(), UTC)
@@ -651,44 +717,59 @@ async def _kpi_operacional(
     # Lotes processados (qualquer status do mês)
     qtd_processados = (
         await db.scalar(
-            select(func.count(Lote.id)).where(
-                Lote.created_at >= inicio_dt, Lote.created_at < fim_dt
+            _scope_lote(
+                select(func.count(Lote.id)).where(
+                    Lote.created_at >= inicio_dt, Lote.created_at < fim_dt
+                ),
+                tenant_id,
             )
         )
     ) or 0
     qtd_aguardando = (
         await db.scalar(
-            select(func.count(Lote.id)).where(
-                Lote.status == StatusLote.AGUARDANDO_REVISAO
+            _scope_lote(
+                select(func.count(Lote.id)).where(
+                    Lote.status == StatusLote.AGUARDANDO_REVISAO
+                ),
+                tenant_id,
             )
         )
     ) or 0
     pgto_mes = (
         await db.scalar(
-            select(func.coalesce(func.sum(Lote.total_pagamentos), 0)).where(
-                Lote.created_at >= inicio_dt,
-                Lote.created_at < fim_dt,
-                Lote.status.in_(
-                    [
-                        StatusLote.APROVADO,
-                        StatusLote.ENVIADO_BANCO,
-                        StatusLote.CONCILIADO,
-                    ]
+            _scope_lote(
+                select(func.coalesce(func.sum(Lote.total_pagamentos), 0)).where(
+                    Lote.created_at >= inicio_dt,
+                    Lote.created_at < fim_dt,
+                    Lote.status.in_(
+                        [
+                            StatusLote.APROVADO,
+                            StatusLote.ENVIADO_BANCO,
+                            StatusLote.CONCILIADO,
+                        ]
+                    ),
                 ),
+                tenant_id,
             )
         )
     ) or 0
     bloqueados = (
         await db.scalar(
-            select(func.coalesce(func.sum(Lote.total_bloqueados), 0)).where(
-                Lote.created_at >= inicio_dt, Lote.created_at < fim_dt
+            _scope_lote(
+                select(func.coalesce(func.sum(Lote.total_bloqueados), 0)).where(
+                    Lote.created_at >= inicio_dt, Lote.created_at < fim_dt
+                ),
+                tenant_id,
             )
         )
     ) or 0
     total_pgto = (
         await db.scalar(
-            select(func.coalesce(func.sum(Lote.total_pagamentos), 0)).where(
-                Lote.created_at >= inicio_dt, Lote.created_at < fim_dt
+            _scope_lote(
+                select(func.coalesce(func.sum(Lote.total_pagamentos), 0)).where(
+                    Lote.created_at >= inicio_dt, Lote.created_at < fim_dt
+                ),
+                tenant_id,
             )
         )
     ) or 0
@@ -696,21 +777,27 @@ async def _kpi_operacional(
 
     conciliados = (
         await db.scalar(
-            select(func.count(Lote.id)).where(
-                Lote.created_at >= inicio_dt,
-                Lote.created_at < fim_dt,
-                Lote.status == StatusLote.CONCILIADO,
+            _scope_lote(
+                select(func.count(Lote.id)).where(
+                    Lote.created_at >= inicio_dt,
+                    Lote.created_at < fim_dt,
+                    Lote.status == StatusLote.CONCILIADO,
+                ),
+                tenant_id,
             )
         )
     ) or 0
     enviados = (
         await db.scalar(
-            select(func.count(Lote.id)).where(
-                Lote.created_at >= inicio_dt,
-                Lote.created_at < fim_dt,
-                Lote.status.in_(
-                    [StatusLote.ENVIADO_BANCO, StatusLote.CONCILIADO]
+            _scope_lote(
+                select(func.count(Lote.id)).where(
+                    Lote.created_at >= inicio_dt,
+                    Lote.created_at < fim_dt,
+                    Lote.status.in_(
+                        [StatusLote.ENVIADO_BANCO, StatusLote.CONCILIADO]
+                    ),
                 ),
+                tenant_id,
             )
         )
     ) or 0
@@ -731,6 +818,7 @@ async def _pipeline_completo(
     inicio: date,
     fim: date,
     contratos: list[ContratoHospital],
+    tenant_id: UUID | None = None,
 ) -> tuple[ResumoOperacaoMes, list[ResumoPipelineHospital]]:
     """Agrega "programação de pagamento" vs "pagamentos realizados" do mês.
 
@@ -747,15 +835,16 @@ async def _pipeline_completo(
 
     contratos_por_cliente = {c.cliente_id: c for c in contratos}
 
-    # Carrega clientes com qualquer atividade no mês
-    clientes_q = await db.execute(
-        select(Cliente).order_by(Cliente.nome)
-    )
+    # Carrega clientes (escopado por tenant quando houver)
+    clientes_stmt = select(Cliente).order_by(Cliente.nome)
+    if tenant_id is not None:
+        clientes_stmt = clientes_stmt.where(Cliente.id == tenant_id)
+    clientes_q = await db.execute(clientes_stmt)
     clientes = list(clientes_q.scalars().all())
     clientes_por_id = {c.id: c for c in clientes}
 
     # Lotes do mês agrupados por status + cliente
-    lotes_q = await db.execute(
+    lotes_stmt = (
         select(
             Lote.cliente_id,
             Lote.status,
@@ -769,6 +858,9 @@ async def _pipeline_completo(
         )
         .group_by(Lote.cliente_id, Lote.status)
     )
+    if tenant_id is not None:
+        lotes_stmt = lotes_stmt.where(Lote.cliente_id == tenant_id)
+    lotes_q = await db.execute(lotes_stmt)
 
     # estrutura: agregador[cliente_id][bucket] = (qtd, valor)
     agregador: dict[UUID, dict[str, tuple[int, int]]] = defaultdict(dict)
@@ -801,16 +893,19 @@ async def _pipeline_completo(
     # Fichas pendentes (extraídas/revisadas que ainda NÃO viraram lote)
     # Carregamos as fichas pra somar valor em Python — `valor_total_centavos`
     # é uma @property derivada de `linhas_extraidas` (JSON), não coluna SQL.
-    fichas_pend_q = await db.execute(
-        select(FichaPlantao).where(
-            FichaPlantao.created_at >= inicio_dt,
-            FichaPlantao.created_at < fim_dt,
-            FichaPlantao.status.in_(
-                [StatusFicha.EXTRAIDA, StatusFicha.REVISADA]
-            ),
-            FichaPlantao.lote_gerado_id.is_(None),
-        )
+    fichas_pend_stmt = select(FichaPlantao).where(
+        FichaPlantao.created_at >= inicio_dt,
+        FichaPlantao.created_at < fim_dt,
+        FichaPlantao.status.in_(
+            [StatusFicha.EXTRAIDA, StatusFicha.REVISADA]
+        ),
+        FichaPlantao.lote_gerado_id.is_(None),
     )
+    if tenant_id is not None:
+        fichas_pend_stmt = fichas_pend_stmt.where(
+            FichaPlantao.cliente_id == tenant_id
+        )
+    fichas_pend_q = await db.execute(fichas_pend_stmt)
     fichas_pend = list(fichas_pend_q.scalars().all())
     fichas_por_cliente: dict[UUID, tuple[int, int]] = defaultdict(lambda: (0, 0))
     for f in fichas_pend:
@@ -909,7 +1004,7 @@ async def _pipeline_completo(
 
 
 async def _pipeline_fichas(
-    db: AsyncSession, inicio: date, fim: date
+    db: AsyncSession, inicio: date, fim: date, tenant_id: UUID | None = None
 ) -> tuple[int, int]:
     """Receita prevista vinda das fichas em pipeline (não viraram lote ainda).
 
@@ -922,16 +1017,17 @@ async def _pipeline_fichas(
 
     # `valor_total_centavos` é @property derivada de `linhas_extraidas` (JSON),
     # então precisamos somar em Python.
-    fichas_q = await db.execute(
-        select(FichaPlantao).where(
-            FichaPlantao.created_at >= inicio_dt,
-            FichaPlantao.created_at < fim_dt,
-            FichaPlantao.status.in_(
-                [StatusFicha.EXTRAIDA, StatusFicha.REVISADA]
-            ),
-            FichaPlantao.lote_gerado_id.is_(None),
-        )
+    fichas_stmt = select(FichaPlantao).where(
+        FichaPlantao.created_at >= inicio_dt,
+        FichaPlantao.created_at < fim_dt,
+        FichaPlantao.status.in_(
+            [StatusFicha.EXTRAIDA, StatusFicha.REVISADA]
+        ),
+        FichaPlantao.lote_gerado_id.is_(None),
     )
+    if tenant_id is not None:
+        fichas_stmt = fichas_stmt.where(FichaPlantao.cliente_id == tenant_id)
+    fichas_q = await db.execute(fichas_stmt)
     fichas = list(fichas_q.scalars().all())
     valor = sum(f.valor_total_centavos or 0 for f in fichas)
     margem_estimada = round(valor * 0.6)
