@@ -175,17 +175,22 @@ def require_execucao_pagamento(
 def require_pode_subir_ficha(
     current_user: User = Depends(get_current_user),
 ) -> User:
-    """Pode subir ficha/planilha: ADMIN, OPERADOR, APROVADOR e COORDENADOR.
+    """Pode subir ficha/planilha: ADMIN, OPERADOR, APROVADOR, COORDENADOR e GESTOR.
 
     O COORDENADOR é o ponto de entrada da operação — ele leva as fichas
     do hospital pra plataforma. Demais roles também podem porque cada
     um pode revisar/corrigir o que está em andamento.
+
+    O GESTOR entra aqui porque nos modelos de repasse/SCP (e nos hospitais
+    da carteira) é ele quem opera o ciclo: sobe planilha/ficha, revisa e
+    — quando o tenant tem `pagamento.execucao` — também aprova e executa.
     """
     permitidos = {
         UserRole.ADMIN,
         UserRole.APROVADOR,
         UserRole.OPERADOR,
         UserRole.COORDENADOR,
+        UserRole.GESTOR,
     }
     if current_user.role not in permitidos:
         raise PermissaoNegadaError(
