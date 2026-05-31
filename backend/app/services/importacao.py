@@ -224,13 +224,42 @@ def _ler_planilha(
 
     try:
         if engine == "csv":
-            return pd.read_csv(buffer, dtype=str, keep_default_na=False)
+            return _ler_csv(conteudo)
         # XLSX/XLS — força leitura como string pra preservar zeros à esquerda
         return pd.read_excel(buffer, engine=engine, dtype=str, keep_default_na=False)
+    except LoteFormatoNaoReconhecidoError:
+        raise
     except Exception as exc:  # pragma: no cover (depende de arquivos corrompidos)
         raise LoteFormatoNaoReconhecidoError(
             f"Não foi possível ler o arquivo {nome_arquivo}: {exc}"
         ) from exc
+
+
+def _ler_csv(conteudo: bytes) -> pd.DataFrame:
+    """Lê CSV tolerando o que vem do mundo real:
+
+    - separador `,` OU `;` (planilha BR quase sempre usa `;` porque a vírgula
+      é separador decimal) — detectado pelo sniffer do pandas;
+    - encoding UTF-8 (com/sem BOM) ou Latin-1/CP1252 (Excel BR).
+    """
+    ultimo_erro: Exception | None = None
+    for encoding in ("utf-8-sig", "latin-1"):
+        for sep in (None, ";", ","):
+            try:
+                return pd.read_csv(
+                    io.BytesIO(conteudo),
+                    dtype=str,
+                    keep_default_na=False,
+                    sep=sep,
+                    engine="python",  # necessário pra sep=None (sniffer)
+                    encoding=encoding,
+                )
+            except Exception as exc:  # noqa: BLE001
+                ultimo_erro = exc
+                continue
+    raise LoteFormatoNaoReconhecidoError(
+        f"Não foi possível ler o CSV (separador/encoding): {ultimo_erro}"
+    )
 
 
 # ============================================================
