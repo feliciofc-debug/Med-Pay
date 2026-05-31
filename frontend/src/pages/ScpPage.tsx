@@ -14,9 +14,20 @@
  * Nada passa pela MedPag.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calculator, HandCoins, Loader2, Plus, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  Calculator,
+  CheckCircle2,
+  FileSpreadsheet,
+  HandCoins,
+  Loader2,
+  Plus,
+  Upload,
+  Users,
+  X,
+} from "lucide-react";
 
 import { api, getErrorMessage } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
@@ -284,6 +295,7 @@ function ParticipantesCard({
   onChanged: () => void;
 }) {
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   const { data: participantes = [], isLoading } = useQuery({
     queryKey: ["scp-participantes", clienteId],
@@ -303,15 +315,42 @@ function ParticipantesCard({
           <Users size={18} className="text-brand-700" />
           Participantes ({participantes.length})
         </h2>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => setShowForm((v) => !v)}
-        >
-          <Plus size={16} />
-          Novo participante
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => {
+              setShowImport((v) => !v);
+              setShowForm(false);
+            }}
+          >
+            <FileSpreadsheet size={16} />
+            Importar planilha
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => {
+              setShowForm((v) => !v);
+              setShowImport(false);
+            }}
+          >
+            <Plus size={16} />
+            Novo participante
+          </button>
+        </div>
       </div>
+
+      {showImport && (
+        <ImportarParticipantesPanel
+          clienteId={clienteId}
+          onClose={() => setShowImport(false)}
+          onImported={() => {
+            setShowImport(false);
+            onChanged();
+          }}
+        />
+      )}
 
       {showForm && (
         <NovoParticipanteForm
@@ -500,6 +539,310 @@ function NovoParticipanteForm({
         )}
         Adicionar participante
       </button>
+    </div>
+  );
+}
+
+// ============================================================
+// Importação em massa via planilha (preview → conferir → confirmar)
+// ============================================================
+
+interface ScpImportLinha {
+  linha_planilha: number;
+  nome: string | null;
+  cpf_mascarado: string | null;
+  percentual_original: string | null;
+  percentual_pct: number | null;
+  percentual_bp: number;
+  status: string;
+  ja_participante: boolean;
+  erros: string[];
+  avisos: string[];
+}
+
+interface ScpImportPreview {
+  cliente_id: string;
+  coluna_cpf: string | null;
+  coluna_nome: string | null;
+  coluna_percentual: string | null;
+  modo_percentual: "PERCENTUAL" | "FRACAO";
+  soma_percentual_bp: number;
+  soma_fecha_100: boolean;
+  total_linhas: number;
+  qtd_ok: number;
+  qtd_erro: number;
+  linhas: ScpImportLinha[];
+  token: string;
+}
+
+function ImportarParticipantesPanel({
+  clienteId,
+  onClose,
+  onImported,
+}: {
+  clienteId: string;
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [preview, setPreview] = useState<ScpImportPreview | null>(null);
+
+  const previewMutation = useMutation({
+    mutationFn: async (vars: { file: File; modo?: string }) => {
+      const form = new FormData();
+      form.append("arquivo", vars.file);
+      if (vars.modo) form.append("modo", vars.modo);
+      const { data } = await api.post<ScpImportPreview>(
+        `/api/scp/${clienteId}/participantes/import/preview`,
+        form,
+      );
+      return data;
+    },
+    onSuccess: (data) => setPreview(data),
+    onError: (err) => alert(getErrorMessage(err)),
+  });
+
+  const confirmMutation = useMutation({
+    mutationFn: async (token: string) => {
+      const { data } = await api.post<{
+        qtd_criados: number;
+        qtd_atualizados: number;
+        qtd_ignorados: number;
+      }>(`/api/scp/${clienteId}/participantes/import/confirm`, { token });
+      return data;
+    },
+    onSuccess: (data) => {
+      alert(
+        `Importação concluída.\nCriados: ${data.qtd_criados}\n` +
+          `Atualizados: ${data.qtd_atualizados}\nIgnorados: ${data.qtd_ignorados}`,
+      );
+      onImported();
+    },
+    onError: (err) => alert(getErrorMessage(err)),
+  });
+
+  function handleFile(f: File | null) {
+    setArquivo(f);
+    setPreview(null);
+    if (f) previewMutation.mutate({ file: f });
+  }
+
+  function trocarModo() {
+    if (!arquivo || !preview) return;
+    const novo = preview.modo_percentual === "FRACAO" ? "PERCENTUAL" : "FRACAO";
+    previewMutation.mutate({ file: arquivo, modo: novo });
+  }
+
+  const somaPct = preview ? (preview.soma_percentual_bp / 100).toFixed(2) : "0";
+
+  return (
+    <div className="border border-brand-200 rounded-lg p-4 mb-4 bg-brand-50/40 space-y-4">
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+            <FileSpreadsheet size={18} className="text-brand-700" />
+            Importar médicos + percentuais
+          </h3>
+          <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+            Envie a planilha (XLSX/CSV) com <strong>CPF</strong>,{" "}
+            <strong>nome</strong> e <strong>percentual</strong>. O sistema
+            interpreta os valores e mostra um preview — confira contra a planilha
+            original antes de confirmar. Nada é gravado até você confirmar.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="text-slate-400 hover:text-slate-700"
+          onClick={onClose}
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+        />
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={() => inputRef.current?.click()}
+          disabled={previewMutation.isPending}
+        >
+          {previewMutation.isPending ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <Upload size={16} />
+          )}
+          {arquivo ? "Trocar planilha" : "Escolher planilha"}
+        </button>
+        {arquivo && (
+          <span className="text-sm text-slate-600 truncate max-w-xs">
+            {arquivo.name}
+          </span>
+        )}
+      </div>
+
+      {preview && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Stat label="Linhas" valor={String(preview.total_linhas)} />
+            <Stat label="Prontas" valor={String(preview.qtd_ok)} tom="ok" />
+            <Stat
+              label="Com erro"
+              valor={String(preview.qtd_erro)}
+              tom={preview.qtd_erro > 0 ? "erro" : undefined}
+            />
+            <Stat
+              label="Soma dos %"
+              valor={`${somaPct}%`}
+              tom={preview.soma_fecha_100 ? "ok" : "alerta"}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <span className="text-slate-600">
+              Coluna % detectada:{" "}
+              <strong>{preview.coluna_percentual ?? "—"}</strong> · Interpretando
+              como{" "}
+              <strong>
+                {preview.modo_percentual === "FRACAO"
+                  ? "FRAÇÃO (0,08 = 8%)"
+                  : "PERCENTUAL (8 = 8%)"}
+              </strong>
+            </span>
+            <button
+              type="button"
+              className="text-brand-700 underline hover:text-brand-900"
+              onClick={trocarModo}
+              disabled={previewMutation.isPending}
+            >
+              interpretar como{" "}
+              {preview.modo_percentual === "FRACAO" ? "PERCENTUAL" : "FRAÇÃO"}
+            </button>
+          </div>
+
+          {!preview.soma_fecha_100 && (
+            <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>
+                A soma dos percentuais é {somaPct}% (não fecha 100%). Isso pode
+                ser normal se você está importando só uma parte dos médicos —
+                confira com a planilha original.
+              </span>
+            </div>
+          )}
+
+          <div className="overflow-x-auto max-h-96 overflow-y-auto border border-slate-200 rounded-lg">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-slate-50">
+                <tr className="text-left text-xs uppercase text-slate-500 border-b">
+                  <th className="py-2 px-2">#</th>
+                  <th className="py-2 px-2">Médico</th>
+                  <th className="py-2 px-2">CPF</th>
+                  <th className="py-2 px-2 text-right">Planilha</th>
+                  <th className="py-2 px-2 text-right">Interpretado</th>
+                  <th className="py-2 px-2">Situação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview.linhas.map((l) => (
+                  <tr
+                    key={l.linha_planilha}
+                    className={`border-b last:border-0 ${
+                      l.status === "ERRO" ? "bg-red-50/60" : ""
+                    }`}
+                  >
+                    <td className="py-1.5 px-2 text-slate-400">
+                      {l.linha_planilha}
+                    </td>
+                    <td className="py-1.5 px-2">{l.nome ?? "—"}</td>
+                    <td className="py-1.5 px-2 font-mono text-xs">
+                      {l.cpf_mascarado ?? "—"}
+                    </td>
+                    <td className="py-1.5 px-2 text-right text-slate-500">
+                      {l.percentual_original ?? "—"}
+                    </td>
+                    <td className="py-1.5 px-2 text-right font-semibold">
+                      {l.percentual_pct != null
+                        ? `${l.percentual_pct.toFixed(2)}%`
+                        : "—"}
+                    </td>
+                    <td className="py-1.5 px-2">
+                      {l.status === "ERRO" ? (
+                        <span
+                          className="text-red-700 text-xs"
+                          title={l.erros.join(" · ")}
+                        >
+                          {l.erros[0] ?? "Erro"}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-emerald-700 text-xs">
+                          <CheckCircle2 size={13} />
+                          {l.ja_participante
+                            ? "Atualiza %"
+                            : l.avisos.length > 0
+                              ? "Cria médico"
+                              : "OK"}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={preview.qtd_ok === 0 || confirmMutation.isPending}
+              onClick={() => confirmMutation.mutate(preview.token)}
+            >
+              {confirmMutation.isPending ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <CheckCircle2 size={16} />
+              )}
+              Confirmar importação ({preview.qtd_ok})
+            </button>
+            <button type="button" className="btn-secondary" onClick={onClose}>
+              Cancelar
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  valor,
+  tom,
+}: {
+  label: string;
+  valor: string;
+  tom?: "ok" | "erro" | "alerta";
+}) {
+  const cor =
+    tom === "ok"
+      ? "text-emerald-700"
+      : tom === "erro"
+        ? "text-red-700"
+        : tom === "alerta"
+          ? "text-amber-700"
+          : "text-slate-900";
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg px-3 py-2">
+      <div className="text-[11px] uppercase text-slate-400">{label}</div>
+      <div className={`text-lg font-bold ${cor}`}>{valor}</div>
     </div>
   );
 }

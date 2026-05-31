@@ -16,13 +16,14 @@ from datetime import date
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.deps import get_current_user, get_db, verificar_acesso_cliente
+from app.core.exceptions import ValidacaoError
 from app.models.scp import (
     ApuracaoSCP,
     ParticipanteSCP,
@@ -30,6 +31,7 @@ from app.models.scp import (
     StatusApuracaoSCP,
 )
 from app.models.user import User
+from app.services.scp_import_service import ScpImportError, ScpImportService
 from app.services.scp_service import gerar_distribuicao
 
 log = structlog.get_logger()
@@ -158,6 +160,104 @@ async def criar_participante(
         vigencia_fim=part.vigencia_fim,
         ativo=part.ativo,
     )
+
+
+# ============================================================
+# Importação em massa de participantes (planilha)
+# ============================================================
+
+
+class ScpImportLinha(BaseModel):
+    linha_planilha: int
+    nome: str | None = None
+    cpf_mascarado: str | None = None
+    percentual_original: str | None = None
+    percentual_pct: float | None = None
+    percentual_bp: int = 0
+    status: str
+    ja_participante: bool = False
+    erros: list[str] = []
+    avisos: list[str] = []
+
+
+class ScpImportPreviewOut(BaseModel):
+    cliente_id: UUID
+    coluna_cpf: str | None = None
+    coluna_nome: str | None = None
+    coluna_percentual: str | None = None
+    modo_percentual: str
+    soma_percentual_bp: int
+    soma_fecha_100: bool
+    total_linhas: int
+    qtd_ok: int
+    qtd_erro: int
+    linhas: list[ScpImportLinha]
+    token: str
+
+
+class ScpImportConfirmIn(BaseModel):
+    token: str
+
+
+class ScpImportConfirmOut(BaseModel):
+    qtd_criados: int
+    qtd_atualizados: int
+    qtd_ignorados: int
+
+
+@router.post(
+    "/{cliente_id}/participantes/import/preview",
+    response_model=ScpImportPreviewOut,
+)
+async def preview_import_participantes(
+    cliente_id: UUID,
+    arquivo: UploadFile = File(...),
+    modo: str | None = Form(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ScpImportPreviewOut:
+    """Lê a planilha de médicos + percentuais e devolve um preview pra
+    conferência. Nada é gravado — o operador compara com a planilha
+    original e só então chama /confirm.
+    """
+    await verificar_acesso_cliente(db, user, cliente_id)
+    if not arquivo.filename:
+        raise ValidacaoError("Nome do arquivo é obrigatório.")
+    conteudo = await arquivo.read()
+    if not conteudo:
+        raise ValidacaoError("Arquivo vazio.")
+    service = ScpImportService(db)
+    try:
+        data = await service.preview(
+            cliente_id=cliente_id,
+            conteudo=conteudo,
+            nome_arquivo=arquivo.filename,
+            modo_forcado=(modo or None),
+        )
+    except ScpImportError as e:
+        raise ValidacaoError(str(e)) from e
+    return ScpImportPreviewOut(**data)
+
+
+@router.post(
+    "/{cliente_id}/participantes/import/confirm",
+    response_model=ScpImportConfirmOut,
+)
+async def confirmar_import_participantes(
+    cliente_id: UUID,
+    body: ScpImportConfirmIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ScpImportConfirmOut:
+    """Efetiva a importação previamente conferida no /preview."""
+    await verificar_acesso_cliente(db, user, cliente_id)
+    service = ScpImportService(db)
+    try:
+        resultado = await service.confirmar(token=body.token)
+    except ScpImportError as e:
+        raise ValidacaoError(str(e)) from e
+    await db.commit()
+    return ScpImportConfirmOut(**resultado)
 
 
 # ============================================================
