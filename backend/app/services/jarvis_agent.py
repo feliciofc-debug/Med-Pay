@@ -379,16 +379,42 @@ async def _gerar_resposta(
 # ============================================================
 
 
+def _variantes_numero_br(numero: str) -> list[str]:
+    """Gera variações do número pra casar a whitelist apesar do 9º dígito.
+
+    O WhatsApp/Wuzapi às vezes entrega o número de celular brasileiro SEM
+    o 9 depois do DDD (ex: 552199998888) e o admin cadastrou COM o 9
+    (5521999998888) — ou vice-versa. Aqui devolvemos as duas formas pra
+    consulta não falhar por causa disso.
+
+    Mantém o número original sempre na lista. Só mexe em celular BR
+    (DDI 55 + DDD com 2 dígitos + número de 8 ou 9 dígitos).
+    """
+    candidatos = {numero}
+    if numero.startswith("55") and len(numero) in (12, 13):
+        ddd = numero[2:4]
+        local = numero[4:]
+        if len(local) == 9 and local.startswith("9"):
+            # com 9 → versão sem o 9
+            candidatos.add(f"55{ddd}{local[1:]}")
+        elif len(local) == 8:
+            # sem 9 → versão com o 9
+            candidatos.add(f"55{ddd}9{local}")
+    return list(candidatos)
+
+
 async def _resolver_usuario(
     db: AsyncSession, numero_e164: str
 ) -> WhatsAppUser | None:
+    candidatos = _variantes_numero_br(numero_e164)
     result = await db.execute(
         select(WhatsAppUser)
         .where(
-            WhatsAppUser.numero_e164 == numero_e164,
+            WhatsAppUser.numero_e164.in_(candidatos),
             WhatsAppUser.ativo.is_(True),
         )
         .options(selectinload(WhatsAppUser.user).selectinload(User.cliente))
+        .limit(1)
     )
     return result.scalar_one_or_none()
 
