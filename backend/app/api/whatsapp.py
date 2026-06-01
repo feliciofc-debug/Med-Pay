@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -56,6 +57,12 @@ from app.services.wuzapi_client import (
 
 log = structlog.get_logger()
 router = APIRouter()
+
+# Buffer em memória dos últimos webhooks recebidos — só pra diagnóstico.
+# Não persiste (some no restart). Exposto em GET /webhook/debug (admin).
+from collections import deque  # noqa: E402
+
+_ULTIMOS_WEBHOOKS: deque[dict[str, Any]] = deque(maxlen=30)
 
 
 # ============================================================
@@ -100,22 +107,43 @@ def _wpp_user_para_out(wpp: WhatsAppUser) -> WhatsAppUserOut:
 # ============================================================
 
 
-def _extrair_dados_mensagem(payload: dict[str, Any]) -> dict[str, str | None]:
-    """Tenta extrair (numero, texto, message_id) do payload do Wuzapi.
+def _num_do_jid(jid: Any) -> str | None:
+    """Extrai só os dígitos do número de um JID (ignora :device e @servidor)."""
+    if not isinstance(jid, str):
+        return None
+    bruto = jid.split("@")[0].split(":")[0]
+    return re.sub(r"\D", "", bruto) or None
 
-    Wuzapi tem variações de schema entre versões. Testamos os caminhos
-    mais comuns. Se nenhum bater, retorna campos None e o webhook
-    devolve 200 (ack) sem processar.
+
+def _mesmo_numero_br(a: str | None, b: str | None) -> bool:
+    """Compara dois números tolerando o 9º dígito (celular BR)."""
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+
+    def _variantes(n: str) -> set[str]:
+        out = {n}
+        if n.startswith("55") and len(n) in (12, 13):
+            ddd, local = n[2:4], n[4:]
+            if len(local) == 9 and local.startswith("9"):
+                out.add(f"55{ddd}{local[1:]}")
+            elif len(local) == 8:
+                out.add(f"55{ddd}9{local}")
+        return out
+
+    return bool(_variantes(a) & _variantes(b))
+
+
+def _extrair_dados_mensagem(payload: dict[str, Any]) -> dict[str, Any]:
+    """Extrai (numero, sender, texto, message_id, is_from_me) do payload Wuzapi.
+
+    NÃO decide aqui se ignora FromMe — quem decide é o handler, que tem o
+    número do bot pra reconhecer self-chat ("Mensagens para mim"). Aqui só
+    normalizamos os campos (schema varia entre versões/forks do Wuzapi).
     """
     info = payload.get("Info") or payload.get("info") or {}
     msg = payload.get("Message") or payload.get("message") or {}
-
-    def _num_do_jid(jid: Any) -> str | None:
-        """Extrai só os dígitos do número de um JID (ignora :device e @servidor)."""
-        if not isinstance(jid, str):
-            return None
-        bruto = jid.split("@")[0].split(":")[0]
-        return re.sub(r"\D", "", bruto) or None
 
     # Chat = a CONVERSA (com quem é o papo); Sender = quem ENVIOU a mensagem.
     chat_jid = (
@@ -150,23 +178,12 @@ def _extrair_dados_mensagem(payload: dict[str, Any]) -> dict[str, str | None]:
         info.get("IsFromMe") or info.get("FromMe") or msg.get("FromMe")
     )
 
-    # Conversa consigo mesmo ("Mensagens para mim"): Chat == Sender == próprio
-    # número. Esse é o canal em que o dono fala com o Jarvis pelo próprio
-    # WhatsApp. Aí processamos mesmo sendo FromMe.
-    eh_self_chat = bool(
-        is_from_me and chat_num and sender_num and chat_num == sender_num
-    )
-
-    # Ignoramos mensagens FromMe que NÃO são self-chat: são mensagens que o
-    # dono mandou pra OUTROS contatos (ou respostas do bot pra terceiros) —
-    # o Jarvis não deve reagir a elas.
-    if is_from_me and not eh_self_chat:
-        return {"numero": None, "texto": None, "message_id": None}
-
     return {
         "numero": chat_num,
+        "sender": sender_num,
         "texto": str(texto).strip() if texto else None,
         "message_id": str(message_id) if message_id else None,
+        "is_from_me": is_from_me,
     }
 
 
@@ -263,14 +280,61 @@ async def wuzapi_webhook(
         evento = (str(evento_campo) if evento_campo else (raw.get("type") or "")).lower()
         data = raw.get("data") or raw
 
-    # Eventos que não são mensagem: ignoramos sem alarme (Connection, Receipt…)
-    if evento and "message" not in evento:
-        return {"ok": True, "motivo": "evento_ignorado", "evento": evento}
-
     extraido = _extrair_dados_mensagem(data if isinstance(data, dict) else raw)
     numero = extraido["numero"]
     texto = extraido["texto"]
     msg_id = extraido["message_id"]
+    sender = extraido["sender"]
+    is_from_me = extraido["is_from_me"]
+
+    # Self-chat ("Mensagens para mim"): a conversa é com o próprio número do
+    # bot. Só importa quando é FromMe — aí buscamos o número do bot pra
+    # reconhecer por 2 sinais (qualquer um basta, tolerando 9º dígito):
+    #   - Chat == Sender (o remetente é o próprio dono), ou
+    #   - Chat == número do bot
+    numero_bot: str | None = None
+    eh_self_chat = False
+    if is_from_me:
+        inst = await _instancia_ativa(db)
+        numero_bot = inst.numero_bot if inst else None
+        eh_self_chat = bool(
+            (sender and numero and _mesmo_numero_br(numero, sender))
+            or (numero_bot and _mesmo_numero_br(numero, numero_bot))
+        )
+
+    # Registro de diagnóstico (em memória) — sempre, antes de qualquer corte.
+    decisao = "ok"
+    if evento and "message" not in evento:
+        decisao = f"evento_ignorado:{evento}"
+    elif is_from_me and not eh_self_chat:
+        decisao = "ignorado:fromme_outro_contato"
+    elif not numero or not texto:
+        decisao = "ignorado:payload_sem_dados"
+    elif eh_self_chat:
+        decisao = "self_chat"
+    _ULTIMOS_WEBHOOKS.append(
+        {
+            "recebido_em": datetime.now(UTC).isoformat(),
+            "evento": evento or None,
+            "numero": numero,
+            "sender": sender,
+            "is_from_me": is_from_me,
+            "numero_bot": numero_bot,
+            "eh_self_chat": eh_self_chat,
+            "texto_preview": (texto[:80] if texto else None),
+            "decisao": decisao,
+            "raw_keys": list(raw.keys()) if isinstance(raw, dict) else None,
+        }
+    )
+
+    # Eventos que não são mensagem: ignoramos sem alarme (Connection, Receipt…)
+    if evento and "message" not in evento:
+        return {"ok": True, "motivo": "evento_ignorado", "evento": evento}
+
+    # FromMe que NÃO é self-chat = mensagem que o dono mandou pra OUTRO contato
+    # (ou resposta do bot pra terceiros). O Jarvis não reage.
+    if is_from_me and not eh_self_chat:
+        return {"ok": True, "motivo": "fromme_ignorado"}
 
     if not numero or not texto:
         return {"ok": True, "motivo": "payload_sem_dados"}
@@ -334,6 +398,33 @@ async def _enviar_resposta_via_wuzapi(
     await wuzapi_client.enviar_texto(
         token, numero_e164=numero, texto=texto
     )
+
+
+@router.get("/webhook/debug")
+async def webhook_debug(
+    secret: str | None = Query(None),
+    token: str | None = Query(None),
+    x_webhook_secret: str | None = Header(None, alias="X-Webhook-Secret"),
+) -> dict[str, Any]:
+    """Últimos webhooks recebidos (em memória) — diagnóstico do Jarvis.
+
+    Acesso pelo MESMO secret do webhook (`?secret=<WUZAPI_WEBHOOK_SECRET>`),
+    pra você abrir direto no navegador e me mandar o JSON. Some no restart.
+    """
+    esperado = settings.WUZAPI_WEBHOOK_SECRET
+    fornecido = secret or token or x_webhook_secret
+    if not esperado:
+        return {
+            "ok": False,
+            "motivo": "WUZAPI_WEBHOOK_SECRET não configurado — defina no Render.",
+        }
+    if fornecido != esperado:
+        return {"ok": False, "motivo": "secret_invalido"}
+    return {
+        "ok": True,
+        "total": len(_ULTIMOS_WEBHOOKS),
+        "webhooks": list(_ULTIMOS_WEBHOOKS),
+    }
 
 
 # ============================================================
