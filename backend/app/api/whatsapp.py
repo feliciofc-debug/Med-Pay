@@ -136,46 +136,71 @@ def _mesmo_numero_br(a: str | None, b: str | None) -> bool:
 
 
 def _extrair_dados_mensagem(payload: dict[str, Any]) -> dict[str, Any]:
-    """Extrai (numero, sender, texto, message_id, is_from_me) do payload Wuzapi.
+    """Extrai dados do payload Wuzapi (alinhado com a receita comprovada).
 
-    NÃO decide aqui se ignora FromMe — quem decide é o handler, que tem o
-    número do bot pra reconhecer self-chat ("Mensagens para mim"). Aqui só
-    normalizamos os campos (schema varia entre versões/forks do Wuzapi).
+    Pontos críticos (do agente que já funciona):
+      - `@lid`: o WhatsApp moderno manda o Chat como `...@lid` (ID interno).
+        Nesse caso o NÚMERO REAL vem em `RecipientAlt` (se IsFromMe) ou
+        `SenderAlt`. Sem tratar isso, pegamos o número errado e o self-chat
+        e a whitelist falham.
+      - texto também pode vir em `extendedTextMessage.text` / caption.
+
+    NÃO decide aqui se ignora FromMe — quem decide é o handler.
     """
     info = payload.get("Info") or payload.get("info") or {}
     msg = payload.get("Message") or payload.get("message") or {}
 
-    # Chat = a CONVERSA (com quem é o papo); Sender = quem ENVIOU a mensagem.
-    chat_jid = (
+    is_from_me = bool(
+        info.get("IsFromMe") or info.get("FromMe") or msg.get("FromMe")
+    )
+    chat_raw = (
         info.get("Chat")
         or info.get("RemoteJid")
         or info.get("From")
         or payload.get("From")
         or payload.get("from")
+        or ""
     )
-    sender_jid = info.get("Sender") or info.get("Participant")
-    chat_num = _num_do_jid(chat_jid)
-    sender_num = _num_do_jid(sender_jid)
+    is_group = bool(
+        info.get("IsGroup")
+        or (isinstance(chat_raw, str) and chat_raw.endswith("@g.us"))
+    )
 
-    # texto
+    # Chat = a CONVERSA. Se for @lid, o número real está em Recipient/SenderAlt.
+    if isinstance(chat_raw, str) and chat_raw.endswith("@lid"):
+        alt = info.get("RecipientAlt") if is_from_me else info.get("SenderAlt")
+        chat_para_numero = alt or chat_raw
+    else:
+        chat_para_numero = chat_raw
+    chat_num = _num_do_jid(chat_para_numero)
+
+    # Sender = quem ENVIOU (também pode vir como @lid → SenderAlt).
+    sender_raw = info.get("Sender") or info.get("Participant") or ""
+    if isinstance(sender_raw, str) and sender_raw.endswith("@lid"):
+        sender_para_numero = info.get("SenderAlt") or sender_raw
+    else:
+        sender_para_numero = sender_raw
+    sender_num = _num_do_jid(sender_para_numero)
+
+    # texto (cobre conversation, extendedTextMessage e caption)
+    ext = msg.get("extendedTextMessage") or msg.get("ExtendedTextMessage") or {}
+    img = msg.get("imageMessage") or msg.get("ImageMessage") or {}
     texto = (
         msg.get("conversation")
         or msg.get("Conversation")
+        or (ext.get("text") if isinstance(ext, dict) else None)
+        or (ext.get("Text") if isinstance(ext, dict) else None)
         or msg.get("text")
         or msg.get("Text")
+        or (img.get("caption") if isinstance(img, dict) else None)
         or payload.get("body")
         or payload.get("Body")
     )
     if isinstance(texto, dict):
         texto = texto.get("text") or texto.get("Text")
 
-    # message_id
     message_id = (
         info.get("Id") or info.get("ID") or info.get("MessageId") or payload.get("id")
-    )
-
-    is_from_me = bool(
-        info.get("IsFromMe") or info.get("FromMe") or msg.get("FromMe")
     )
 
     return {
@@ -184,6 +209,8 @@ def _extrair_dados_mensagem(payload: dict[str, Any]) -> dict[str, Any]:
         "texto": str(texto).strip() if texto else None,
         "message_id": str(message_id) if message_id else None,
         "is_from_me": is_from_me,
+        "is_group": is_group,
+        "chat_raw": chat_raw if isinstance(chat_raw, str) else None,
     }
 
 
@@ -296,6 +323,8 @@ async def wuzapi_webhook(
     msg_id = extraido["message_id"]
     sender = extraido["sender"]
     is_from_me = extraido["is_from_me"]
+    is_group = extraido["is_group"]
+    chat_raw = extraido["chat_raw"]
 
     # Self-chat ("Mensagens para mim"): a conversa é com o próprio número do
     # bot. Só importa quando é FromMe — aí buscamos o número do bot pra
@@ -304,7 +333,7 @@ async def wuzapi_webhook(
     #   - Chat == número do bot
     numero_bot: str | None = None
     eh_self_chat = False
-    if is_from_me:
+    if is_from_me and not is_group:
         inst = await _instancia_ativa(db)
         numero_bot = inst.numero_bot if inst else None
         eh_self_chat = bool(
@@ -316,6 +345,8 @@ async def wuzapi_webhook(
     decisao = "ok"
     if evento and "message" not in evento:
         decisao = f"evento_ignorado:{evento}"
+    elif is_group:
+        decisao = "ignorado:grupo"
     elif is_from_me and not eh_self_chat:
         decisao = "ignorado:fromme_outro_contato"
     elif not numero or not texto:
@@ -328,7 +359,10 @@ async def wuzapi_webhook(
             "evento": evento or None,
             "numero": numero,
             "sender": sender,
+            "chat_raw": chat_raw,
+            "is_lid": bool(chat_raw and chat_raw.endswith("@lid")),
             "is_from_me": is_from_me,
+            "is_group": is_group,
             "numero_bot": numero_bot,
             "eh_self_chat": eh_self_chat,
             "texto_preview": (texto[:80] if texto else None),
@@ -340,6 +374,10 @@ async def wuzapi_webhook(
     # Eventos que não são mensagem: ignoramos sem alarme (Connection, Receipt…)
     if evento and "message" not in evento:
         return {"ok": True, "motivo": "evento_ignorado", "evento": evento}
+
+    # Grupos: o Jarvis não reage.
+    if is_group:
+        return {"ok": True, "motivo": "grupo_ignorado"}
 
     # FromMe que NÃO é self-chat = mensagem que o dono mandou pra OUTRO contato
     # (ou resposta do bot pra terceiros). O Jarvis não reage.
