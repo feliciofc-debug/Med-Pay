@@ -122,17 +122,46 @@ def _cpf_hash(linha: dict[str, Any]) -> str | None:
     return hash_for_lookup(cpf)
 
 
+# Mapa de meses por extenso/abreviados (PT-BR). O OCR às vezes devolve
+# "Junho/2026" em vez de "06/2026"; sem normalizar, o filtro de competência
+# nunca casa e o Extrato Consolidado fica vazio mesmo com ficha pendente.
+_MESES_PT = {
+    "jan": 1, "janeiro": 1,
+    "fev": 2, "fevereiro": 2,
+    "mar": 3, "marco": 3, "março": 3,
+    "abr": 4, "abril": 4,
+    "mai": 5, "maio": 5,
+    "jun": 6, "junho": 6,
+    "jul": 7, "julho": 7,
+    "ago": 8, "agosto": 8,
+    "set": 9, "sete": 9, "setembro": 9,
+    "out": 10, "outubro": 10,
+    "nov": 11, "novembro": 11,
+    "dez": 12, "dezembro": 12,
+}
+
+
 def _competencia_da_ficha(ficha: FichaPlantao) -> str | None:
-    """Extrai 'MM/YYYY' do campo metadados.competencia, normalizado."""
+    """Extrai 'MM/YYYY' do campo metadados.competencia, normalizado.
+
+    Aceita formato numérico ("06/2026", "06-2026", "06.2026") e também mês
+    por extenso em português ("junho/2026", "Junho de 2026", "Junho 2026").
+    """
     meta = ficha.metadados or {}
     comp = meta.get("competencia")
     if not comp:
         return None
-    # Aceita "06/2026", "06-2026", "06.2026", "junho/2026"
     s = str(comp).strip()
+    # 1) Formato numérico: 06/2026, 06-2026, 06.2026
     m = re.search(r"(\d{1,2})[\/\-\.\s](\d{4})", s)
-    if m:
+    if m and 1 <= int(m.group(1)) <= 12:
         return f"{int(m.group(1)):02d}/{m.group(2)}"
+    # 2) Mês por extenso: junho/2026, "junho de 2026", "Junho 2026"
+    m2 = re.search(r"([a-zà-ÿç]+)\s*(?:de\s*)?[\/\-\.\s]?\s*(\d{4})", s.lower())
+    if m2:
+        mes = _MESES_PT.get(m2.group(1))
+        if mes:
+            return f"{mes:02d}/{m2.group(2)}"
     return s
 
 
