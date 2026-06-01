@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import (
+    cliente_ids_acessiveis,
     get_db,
     require_execucao_pagamento,
     require_visao_executiva,
@@ -57,9 +58,12 @@ async def listar_clientes(
     user: User = Depends(require_visao_executiva),
 ) -> list[ClienteComFichasOut]:
     items = await listar_clientes_com_fichas_pendentes(db)
-    # Multi-tenancy: filtra resultado pra mostrar só o próprio cliente
-    if user.cliente_id is not None:
-        items = [t for t in items if t[0] == user.cliente_id]
+    # Multi-tenancy: a empresa de repasse vê a CARTEIRA inteira (ela + os
+    # hospitais-filhos). Assim a ficha que o hospital subiu aparece aqui pra
+    # a Atom consolidar e pagar. (None = MedPag interno vê todos.)
+    ids = await cliente_ids_acessiveis(db, user)
+    if ids is not None:
+        items = [t for t in items if t[0] in ids]
     return [
         ClienteComFichasOut(
             cliente_id=cid, nome=nome, qtd_fichas_pendentes=qtd

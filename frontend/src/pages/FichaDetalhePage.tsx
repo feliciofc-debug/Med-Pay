@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { api, getErrorMessage } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 import { cn, formatBRL, formatDateTime } from "@/lib/utils";
 import type { FichaDetalhe, LinhaExtraida } from "@/types";
 
@@ -39,6 +40,17 @@ export function FichaDetalhePage() {
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  // Quem fecha lote direto da ficha = APROVADOR/ADMIN (modelo hospital
+  // standalone / MedPag interno). No modelo de repasse, o hospital só sobe a
+  // ficha e a empresa de repasse consolida/paga no Extrato Consolidado — por
+  // isso GESTOR (hospital ou Atom) não vê o botão "Gerar lote" aqui.
+  const podeConverterFicha =
+    user?.role === "APROVADOR" || user?.role === "ADMIN";
+  const tenantExecutaPagamento = Boolean(
+    user?.cliente?.features?.["pagamento.execucao"],
+  );
 
   const [linhas, setLinhas] = useState<LinhaExtraida[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -647,7 +659,7 @@ export function FichaDetalhePage() {
                   <Save size={14} />
                   {salvar.isPending ? "Salvando..." : "Salvar"}
                 </button>
-                {totaisLocal.incompletas > 0 && (
+                {podeConverterFicha && totaisLocal.incompletas > 0 && (
                   <button
                     type="button"
                     onClick={() => {
@@ -671,27 +683,43 @@ export function FichaDetalhePage() {
                     Forçar com {totaisLocal.prontas} válida(s)
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => converter.mutate(false)}
-                  disabled={
-                    converter.isPending ||
-                    totaisLocal.prontas === 0 ||
-                    totaisLocal.incompletas > 0 ||
-                    ficha.status === "CONVERTIDA"
-                  }
-                  className="btn-primary"
-                  title={
-                    totaisLocal.incompletas > 0
-                      ? "Resolva as linhas incompletas primeiro"
-                      : "Gerar lote com todos os pagamentos"
-                  }
-                >
-                  <Wand2 size={14} />
-                  {converter.isPending
-                    ? "Gerando lote..."
-                    : `Gerar lote (${totaisLocal.prontas} pagamento${totaisLocal.prontas === 1 ? "" : "s"})`}
-                </button>
+                {podeConverterFicha ? (
+                  <button
+                    type="button"
+                    onClick={() => converter.mutate(false)}
+                    disabled={
+                      converter.isPending ||
+                      totaisLocal.prontas === 0 ||
+                      totaisLocal.incompletas > 0 ||
+                      ficha.status === "CONVERTIDA"
+                    }
+                    className="btn-primary"
+                    title={
+                      totaisLocal.incompletas > 0
+                        ? "Resolva as linhas incompletas primeiro"
+                        : "Gerar lote com todos os pagamentos"
+                    }
+                  >
+                    <Wand2 size={14} />
+                    {converter.isPending
+                      ? "Gerando lote..."
+                      : `Gerar lote (${totaisLocal.prontas} pagamento${totaisLocal.prontas === 1 ? "" : "s"})`}
+                  </button>
+                ) : tenantExecutaPagamento ? (
+                  <Link
+                    to="/app/extrato-consolidado"
+                    className="btn-primary"
+                    title="Selecione as fichas pendentes e gere o lote consolidado"
+                  >
+                    <Wand2 size={14} />
+                    Gerar lote no Extrato Consolidado
+                  </Link>
+                ) : (
+                  <span className="text-xs text-brand-300 max-w-[280px] text-right leading-snug">
+                    Salve as alterações. A empresa de repasse consolida estas
+                    fichas e executa o pagamento — acompanhe o status por aqui.
+                  </span>
+                )}
               </div>
             </div>
           </div>
