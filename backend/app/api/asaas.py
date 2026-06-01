@@ -18,10 +18,11 @@ from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, Header, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.deps import get_db, require_admin
+from app.core.deps import get_current_user, get_db, require_admin
 from app.models.user import User
 from app.services.asaas_client import asaas_client
 from app.services.asaas_service import (
@@ -31,6 +32,7 @@ from app.services.asaas_service import (
     rodar_job_trial_inadimplencia,
     sincronizar_customer,
 )
+from app.services.pix_validacao import ResultadoPix, validar_titularidade_pix
 
 log = structlog.get_logger()
 router = APIRouter()
@@ -52,6 +54,65 @@ async def status_integracao(
         "billing_type_padrao": settings.ASAAS_DEFAULT_BILLING_TYPE,
         "webhook_token_configurado": bool(settings.ASAAS_WEBHOOK_TOKEN),
     }
+
+
+# ============================================================
+# Validação de conta/chave PIX (antifraude do repasse)
+# ============================================================
+
+
+class ValidarContaRequest(BaseModel):
+    """Pede pra confirmar que a chave PIX pertence ao CPF do médico."""
+
+    chave_pix: str = Field(
+        ...,
+        min_length=3,
+        description="Chave PIX (CPF/CNPJ/e-mail/telefone/aleatória) ou copia-e-cola.",
+    )
+    cpf_esperado: str = Field(
+        ..., description="CPF do médico que deveria ser o dono da chave."
+    )
+    cnpjs_vinculados: list[str] = Field(
+        default_factory=list,
+        description="CNPJs de clínicas/PJ vinculadas ao médico (libera recebimento por PJ).",
+    )
+
+
+class ValidarContaResponse(BaseModel):
+    resultado: ResultadoPix
+    mensagem: str
+    nome_titular: str | None = None
+    doc_titular: str | None = None
+    asaas_configurado: bool
+
+
+@router.post("/validar-conta", response_model=ValidarContaResponse)
+async def validar_conta(
+    payload: ValidarContaRequest,
+    _user: User = Depends(get_current_user),
+) -> ValidarContaResponse:
+    """Consulta a titularidade da chave PIX no Asaas e cruza com o CPF do médico.
+
+    Vereditos:
+        - CONFERE     → a chave é do CPF do médico (ou de PJ vinculada)
+        - DIVERGENTE  → a chave é de outra pessoa (risco de fraude)
+        - PENDENTE    → não deu pra verificar agora (Asaas sem chave/indisponível)
+
+    Não move dinheiro: é só consulta. Enquanto a chave do Asaas não estiver
+    configurada, devolve PENDENTE (operador revisa manual).
+    """
+    veredicto = await validar_titularidade_pix(
+        chave_pix=payload.chave_pix,
+        cpf_esperado=payload.cpf_esperado,
+        cnpjs_vinculados=payload.cnpjs_vinculados,
+    )
+    return ValidarContaResponse(
+        resultado=veredicto.resultado,
+        mensagem=veredicto.mensagem,
+        nome_titular=veredicto.nome_titular,
+        doc_titular=veredicto.doc_titular,
+        asaas_configurado=asaas_client.is_configured(),
+    )
 
 
 # ============================================================
