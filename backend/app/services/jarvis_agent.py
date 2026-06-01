@@ -403,6 +403,28 @@ def _variantes_numero_br(numero: str) -> list[str]:
     return list(candidatos)
 
 
+async def _eh_eco_da_propria_resposta(
+    db: AsyncSession, *, numero_e164: str, texto: str
+) -> bool:
+    """True se `texto` é igual a uma resposta OUTBOUND enviada há pouco.
+
+    Usado pra cortar o loop do auto-chat: a resposta do Jarvis volta como
+    mensagem FromMe no mesmo chat; reconhecemos pelo texto + janela curta.
+    """
+    desde = datetime.now(UTC) - timedelta(minutes=3)
+    result = await db.execute(
+        select(WhatsAppMensagem.id)
+        .where(
+            WhatsAppMensagem.numero_e164 == numero_e164,
+            WhatsAppMensagem.direcao == DirecaoMensagem.OUTBOUND,
+            WhatsAppMensagem.texto == texto,
+            WhatsAppMensagem.created_at >= desde,
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def _resolver_usuario(
     db: AsyncSession, numero_e164: str
 ) -> WhatsAppUser | None:
@@ -486,6 +508,15 @@ async def processar_mensagem_inbound(
             return ProcessamentoResultado(
                 deve_responder=False, texto_resposta=None, motivo="duplicada"
             )
+
+    # Proteção anti-loop do modo auto-chat ("Mensagens para mim"): a resposta
+    # que o Jarvis envia volta pelo webhook como uma mensagem FromMe nesse
+    # mesmo chat. Se o texto bate com uma resposta que ACABAMOS de enviar pra
+    # esse número, é eco da própria resposta — não reprocessa (senão loopa).
+    if await _eh_eco_da_propria_resposta(db, numero_e164=numero_e164, texto=texto):
+        return ProcessamentoResultado(
+            deve_responder=False, texto_resposta=None, motivo="eco_proprio"
+        )
 
     wpp_user = await _resolver_usuario(db, numero_e164)
 

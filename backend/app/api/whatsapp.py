@@ -110,20 +110,24 @@ def _extrair_dados_mensagem(payload: dict[str, Any]) -> dict[str, str | None]:
     info = payload.get("Info") or payload.get("info") or {}
     msg = payload.get("Message") or payload.get("message") or {}
 
-    # numero (Chat = JID do remetente; Sender = quem mandou)
-    chat = (
+    def _num_do_jid(jid: Any) -> str | None:
+        """Extrai só os dígitos do número de um JID (ignora :device e @servidor)."""
+        if not isinstance(jid, str):
+            return None
+        bruto = jid.split("@")[0].split(":")[0]
+        return re.sub(r"\D", "", bruto) or None
+
+    # Chat = a CONVERSA (com quem é o papo); Sender = quem ENVIOU a mensagem.
+    chat_jid = (
         info.get("Chat")
-        or info.get("Sender")
         or info.get("RemoteJid")
         or info.get("From")
         or payload.get("From")
         or payload.get("from")
     )
-    numero = None
-    if isinstance(chat, str):
-        # JID vem tipo "5521999998888@s.whatsapp.net"
-        numero = chat.split("@")[0]
-        numero = re.sub(r"\D", "", numero) or None
+    sender_jid = info.get("Sender") or info.get("Participant")
+    chat_num = _num_do_jid(chat_jid)
+    sender_num = _num_do_jid(sender_jid)
 
     # texto
     texto = (
@@ -142,12 +146,25 @@ def _extrair_dados_mensagem(payload: dict[str, Any]) -> dict[str, str | None]:
         info.get("Id") or info.get("ID") or info.get("MessageId") or payload.get("id")
     )
 
-    # ignora mensagens que partiram do bot (FromMe=True)
-    if info.get("IsFromMe") or info.get("FromMe") or msg.get("FromMe"):
+    is_from_me = bool(
+        info.get("IsFromMe") or info.get("FromMe") or msg.get("FromMe")
+    )
+
+    # Conversa consigo mesmo ("Mensagens para mim"): Chat == Sender == próprio
+    # número. Esse é o canal em que o dono fala com o Jarvis pelo próprio
+    # WhatsApp. Aí processamos mesmo sendo FromMe.
+    eh_self_chat = bool(
+        is_from_me and chat_num and sender_num and chat_num == sender_num
+    )
+
+    # Ignoramos mensagens FromMe que NÃO são self-chat: são mensagens que o
+    # dono mandou pra OUTROS contatos (ou respostas do bot pra terceiros) —
+    # o Jarvis não deve reagir a elas.
+    if is_from_me and not eh_self_chat:
         return {"numero": None, "texto": None, "message_id": None}
 
     return {
-        "numero": numero if isinstance(numero, str) and numero else None,
+        "numero": chat_num,
         "texto": str(texto).strip() if texto else None,
         "message_id": str(message_id) if message_id else None,
     }
