@@ -44,12 +44,19 @@ def upgrade() -> None:
     )
 
     # 3) Unicidade composta por cliente + arquivo.
+    #    Postgres não tem "ADD CONSTRAINT IF NOT EXISTS"; em vez de DO/EXCEPTION
+    #    (que tinha sintaxe inválida e derrubava o deploy), checamos o catálogo
+    #    e só criamos se ainda não existir. Idempotente e sem pegadinha de
+    #    PL/pgSQL.
     op.execute(
         "DO $$ BEGIN "
+        "IF NOT EXISTS ("
+        "SELECT 1 FROM pg_constraint WHERE conname = 'uq_ficha_cliente_hash'"
+        ") THEN "
         "ALTER TABLE fichas_plantao "
         "ADD CONSTRAINT uq_ficha_cliente_hash UNIQUE (cliente_id, hash_arquivo); "
-        "EXCEPTION WHEN duplicate_table THEN NULL "
-        "WHEN duplicate_object THEN NULL; END $$"
+        "END IF; "
+        "END $$;"
     )
 
 
