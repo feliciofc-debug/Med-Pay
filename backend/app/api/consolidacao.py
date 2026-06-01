@@ -21,6 +21,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import (
