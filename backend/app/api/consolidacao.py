@@ -31,11 +31,14 @@ from app.core.deps import (
     verificar_acesso_cliente,
 )
 from app.models.user import User
+from app.models.lote import Lote, StatusLote
 from app.schemas.consolidacao import (
     ClienteComFichasOut,
     ExtratoConsolidadoOut,
+    ExtratoProcessadosOut,
     GerarLoteConsolidadoRequest,
     GerarLoteConsolidadoResposta,
+    LoteProcessadoOut,
 )
 from app.services.consolidacao_service import (
     consolidar_por_dia,
@@ -147,4 +150,97 @@ async def gerar_lote(
         status=lote.status.value,
         total_pagamentos=lote.total_pagamentos or 0,
         valor_total_centavos=lote.valor_total_centavos or 0,
+    )
+
+
+# Status que contam como "processado" (saiu dos recebidos e virou CNAB/API).
+# Bate com o que o Dashboard mostra em "Aprovados".
+_STATUS_PROCESSADO = (
+    StatusLote.APROVADO,
+    StatusLote.ENVIADO_BANCO,
+    StatusLote.CONCILIADO,
+)
+
+
+def _competencia_do_lote(lote: Lote) -> str | None:
+    """Extrai MM/YYYY da referência do lote (ex.: 'Hospital X · 06/2026'),
+    com fallback pro mês de criação."""
+    import re
+
+    ref = lote.referencia or ""
+    m = re.search(r"(\d{1,2})[\/\-\.](\d{4})", ref)
+    if m and 1 <= int(m.group(1)) <= 12:
+        return f"{int(m.group(1)):02d}/{m.group(2)}"
+    if lote.created_at:
+        return lote.created_at.strftime("%m/%Y")
+    return None
+
+
+@router.get("/processados", response_model=ExtratoProcessadosOut)
+async def lotes_processados(
+    competencia: str | None = Query(None, description="Filtra por MM/YYYY"),
+    cliente_id: UUID | None = Query(None, description="Filtra por hospital"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_visao_executiva),
+) -> ExtratoProcessadosOut:
+    """Lotes JÁ processados (CNAB/API) da carteira — o que foi aprovado/pago.
+
+    Escopo de carteira (empresa de repasse + hospitais-filhos). O total aqui
+    bate com a seção 'Aprovados' do Dashboard. É a aba 'Processados' do
+    Extrato Consolidado.
+    """
+    from sqlalchemy.orm import selectinload
+
+    stmt = (
+        select(Lote)
+        .where(Lote.status.in_(_STATUS_PROCESSADO))
+        .options(selectinload(Lote.cliente))
+        .order_by(Lote.created_at.desc())
+    )
+
+    ids = await cliente_ids_acessiveis(db, user)
+    if ids is not None:
+        if not ids:
+            return ExtratoProcessadosOut(
+                lotes=[], total_lotes=0, total_pagamentos=0, valor_total_centavos=0
+            )
+        if cliente_id is not None and cliente_id in ids:
+            stmt = stmt.where(Lote.cliente_id == cliente_id)
+        else:
+            stmt = stmt.where(Lote.cliente_id.in_(list(ids)))
+    elif cliente_id is not None:
+        stmt = stmt.where(Lote.cliente_id == cliente_id)
+
+    result = await db.execute(stmt)
+    lotes = list(result.scalars().all())
+
+    out: list[LoteProcessadoOut] = []
+    total_pgtos = 0
+    total_valor = 0
+    for lote in lotes:
+        comp = _competencia_do_lote(lote)
+        if competencia and comp != competencia:
+            continue
+        out.append(
+            LoteProcessadoOut(
+                lote_id=lote.id,
+                cliente_id=lote.cliente_id,
+                cliente_nome=lote.cliente.nome if lote.cliente else "—",
+                referencia=lote.referencia,
+                competencia=comp,
+                status=lote.status.value,
+                total_pagamentos=lote.total_pagamentos or 0,
+                valor_total_centavos=lote.valor_total_centavos or 0,
+                created_at=lote.created_at,
+                aprovado_at=lote.aprovado_at,
+            )
+        )
+        total_pgtos += lote.total_pagamentos or 0
+        total_valor += lote.valor_total_centavos or 0
+
+    return ExtratoProcessadosOut(
+        lotes=out,
+        total_lotes=len(out),
+        total_pagamentos=total_pgtos,
+        valor_total_centavos=total_valor,
     )

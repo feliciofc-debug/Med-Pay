@@ -24,6 +24,7 @@ import {
   CalendarDays,
   CheckCircle2,
   FileText,
+  Inbox,
   Layers3,
   Loader2,
   Search,
@@ -89,6 +90,7 @@ export function ExtratoConsolidadoPage() {
   const queryClient = useQueryClient();
 
   const [aba, setAba] = useState<Aba>("hospital-mes");
+  const [modo, setModo] = useState<"recebidos" | "processados">("recebidos");
   const [clienteId, setClienteId] = useState<string>("");
 
   // Hospital/Mês
@@ -244,7 +246,30 @@ export function ExtratoConsolidadoPage() {
         </p>
       </header>
 
-      {clientes.length === 0 ? (
+      {/* Tabs de nível: o que o hospital ENVIOU (a processar) x o que JÁ foi
+          processado (CNAB/API, bate com o Dashboard). */}
+      <div className="flex gap-1 border-b border-slate-200">
+        <ModoTab
+          ativo={modo === "recebidos"}
+          onClick={() => setModo("recebidos")}
+          icon={<Inbox size={15} />}
+          badge={clientes.reduce((s, c) => s + c.qtd_fichas_pendentes, 0)}
+        >
+          Recebidos (a processar)
+        </ModoTab>
+        <ModoTab
+          ativo={modo === "processados"}
+          onClick={() => setModo("processados")}
+          icon={<CheckCircle2 size={15} />}
+        >
+          Processados (CNAB/API)
+        </ModoTab>
+      </div>
+
+      {modo === "processados" && <ProcessadosView />}
+
+      {modo === "recebidos" &&
+        (clientes.length === 0 ? (
         <div className="card p-8 text-center text-slate-500">
           Nenhum cliente tem fichas pendentes (EXTRAIDA ou REVISADA).
           <br />
@@ -596,8 +621,185 @@ export function ExtratoConsolidadoPage() {
             </>
           )}
         </>
-      )}
+      ))}
     </div>
+  );
+}
+
+function ModoTab({
+  ativo,
+  onClick,
+  icon,
+  badge,
+  children,
+}: {
+  ativo: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  badge?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 transition ${
+        ativo
+          ? "border-brand-600 text-brand-700"
+          : "border-transparent text-slate-500 hover:text-slate-800"
+      }`}
+    >
+      {icon}
+      {children}
+      {badge && badge > 0 ? (
+        <span className="ml-1 min-w-[20px] h-5 px-1.5 rounded-full bg-accent-400 text-brand-950 text-[11px] font-bold inline-flex items-center justify-center">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+interface LoteProcessado {
+  lote_id: string;
+  cliente_id: string;
+  cliente_nome: string;
+  referencia: string | null;
+  competencia: string | null;
+  status: string;
+  total_pagamentos: number;
+  valor_total_centavos: number;
+  created_at: string;
+  aprovado_at: string | null;
+}
+
+interface ExtratoProcessados {
+  lotes: LoteProcessado[];
+  total_lotes: number;
+  total_pagamentos: number;
+  valor_total_centavos: number;
+}
+
+const LABEL_STATUS_LOTE: Record<string, { label: string; cls: string }> = {
+  APROVADO: { label: "Aprovado (CNAB pronto)", cls: "bg-emerald-50 text-emerald-700" },
+  ENVIADO_BANCO: { label: "Enviado ao banco", cls: "bg-blue-50 text-blue-700" },
+  CONCILIADO: { label: "Conciliado (pago)", cls: "bg-brand-50 text-brand-700" },
+};
+
+function ProcessadosView() {
+  const navigate = useNavigate();
+  const { data, isLoading } = useQuery({
+    queryKey: ["consolidacao", "processados"],
+    queryFn: async () => {
+      const { data } = await api.get<ExtratoProcessados>(
+        "/api/consolidacao/processados",
+      );
+      return data;
+    },
+    refetchInterval: 30000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="card p-8 text-center text-slate-500">
+        <Loader2 className="inline animate-spin mr-2" size={16} />
+        Carregando processados...
+      </div>
+    );
+  }
+
+  if (!data || data.total_lotes === 0) {
+    return (
+      <div className="card p-8 text-center text-slate-400 text-sm">
+        Nada processado ainda. Quando você gerar e aprovar um lote (CNAB/API),
+        ele aparece aqui — e o total bate com o "Aprovados" do Dashboard.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <section className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <KPI
+          icon={<CheckCircle2 size={16} />}
+          label="Lotes processados"
+          valor={data.total_lotes.toString()}
+        />
+        <KPI
+          icon={<Users size={16} />}
+          label="Pagamentos"
+          valor={data.total_pagamentos.toString()}
+        />
+        <KPI
+          icon={<CheckCircle2 size={16} />}
+          label="Valor processado"
+          valor={formatBRL(data.valor_total_centavos)}
+          destacado
+        />
+      </section>
+
+      <section className="card p-0 overflow-hidden">
+        <header className="px-5 py-3 border-b border-slate-200">
+          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+            <CheckCircle2 size={16} />
+            Extrato processado · CNAB/API
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Lotes que saíram dos recebidos e foram processados/pagos. Clique
+            pra abrir o lote e baixar o CNAB.
+          </p>
+        </header>
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+            <tr>
+              <th className="px-5 py-2 text-left">Hospital</th>
+              <th className="px-5 py-2 text-left">Competência</th>
+              <th className="px-5 py-2 text-left">Status</th>
+              <th className="px-5 py-2 text-right">Pagamentos</th>
+              <th className="px-5 py-2 text-right">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.lotes.map((l) => {
+              const st = LABEL_STATUS_LOTE[l.status] ?? {
+                label: l.status,
+                cls: "bg-slate-100 text-slate-600",
+              };
+              return (
+                <tr
+                  key={l.lote_id}
+                  onClick={() => navigate(`/app/lotes/${l.lote_id}`)}
+                  className="border-b border-slate-100 last:border-0 hover:bg-slate-50 cursor-pointer"
+                >
+                  <td className="px-5 py-2 font-medium text-slate-800">
+                    {l.cliente_nome}
+                    <p className="text-xs text-slate-400">
+                      {new Date(l.created_at).toLocaleDateString("pt-BR")}
+                    </p>
+                  </td>
+                  <td className="px-5 py-2 text-slate-600">
+                    {l.competencia ?? "—"}
+                  </td>
+                  <td className="px-5 py-2">
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${st.cls}`}
+                    >
+                      {st.label}
+                    </span>
+                  </td>
+                  <td className="px-5 py-2 text-right tabular-nums">
+                    {l.total_pagamentos}
+                  </td>
+                  <td className="px-5 py-2 text-right tabular-nums font-semibold">
+                    {formatBRL(l.valor_total_centavos)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+    </>
   );
 }
 

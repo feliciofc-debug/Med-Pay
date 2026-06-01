@@ -314,6 +314,9 @@ export function Layout({ children }: { children: ReactNode }) {
   const badgePorRota: Record<string, number> = {};
   if (pendenciasFichas?.total_pendentes) {
     badgePorRota["/app/fichas"] = pendenciasFichas.total_pendentes;
+    // Mesma notificação aparece no Extrato Consolidado: cada ficha que o
+    // hospital envia fica pendente lá pra ser processada.
+    badgePorRota["/app/extrato-consolidado"] = pendenciasFichas.total_pendentes;
   }
 
   // Filtra seções/itens visíveis para o papel atual E pelas capacidades.

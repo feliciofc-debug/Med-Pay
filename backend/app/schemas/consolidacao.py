@@ -67,11 +67,38 @@ class GerarLoteConsolidadoResposta(BaseModel):
     valor_total_centavos: int
 
 
+class LoteProcessadoOut(BaseModel):
+    """Um lote já processado (CNAB/API) — o que saiu dos 'recebidos' e foi
+    aprovado/enviado/pago. Alimenta a aba 'Processados' do Extrato."""
+
+    lote_id: UUID
+    cliente_id: UUID
+    cliente_nome: str
+    referencia: str | None
+    competencia: str | None
+    status: str
+    total_pagamentos: int
+    valor_total_centavos: int
+    created_at: datetime
+    aprovado_at: datetime | None
+
+
+class ExtratoProcessadosOut(BaseModel):
+    """Visão consolidada do que já foi processado, batendo com o Dashboard."""
+
+    lotes: list[LoteProcessadoOut]
+    total_lotes: int
+    total_pagamentos: int
+    valor_total_centavos: int
+
+
 __all__ = [
     "ClienteComFichasOut",
     "ExtratoConsolidadoOut",
+    "ExtratoProcessadosOut",
     "FichaResumoOut",
     "GerarLoteConsolidadoRequest",
     "GerarLoteConsolidadoResposta",
+    "LoteProcessadoOut",
     "MedicoNoExtratoOut",
 ]
