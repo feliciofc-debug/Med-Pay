@@ -449,13 +449,25 @@ async def _enviar_resposta_via_wuzapi(
 
 
 @router.get("/webhook/debug")
-async def webhook_debug() -> dict[str, Any]:
+async def webhook_debug(
+    secret: str | None = Query(None),
+    token: str | None = Query(None),
+    x_webhook_secret: str | None = Header(None, alias="X-Webhook-Secret"),
+) -> dict[str, Any]:
     """Últimos webhooks recebidos (em memória) — diagnóstico do Jarvis.
 
-    Aberto de propósito (temporário) pra você abrir no navegador e me mandar
-    o JSON sem precisar de senha. Mostra só prévia (80 chars) de cada
-    mensagem. Some no restart do servidor. Removo depois do diagnóstico.
+    Protegido pelo MESMO secret do webhook (`?secret=<WUZAPI_WEBHOOK_SECRET>`).
+    Some no restart do servidor.
     """
+    esperado = settings.WUZAPI_WEBHOOK_SECRET
+    fornecido = secret or token or x_webhook_secret
+    if not esperado:
+        return {
+            "ok": False,
+            "motivo": "WUZAPI_WEBHOOK_SECRET não configurado — defina no Render.",
+        }
+    if fornecido != esperado:
+        return {"ok": False, "motivo": "secret_invalido"}
     return {
         "ok": True,
         "total": len(_ULTIMOS_WEBHOOKS),
