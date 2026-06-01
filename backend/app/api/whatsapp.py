@@ -265,6 +265,16 @@ async def wuzapi_webhook(
                 tem_header=bool(x_webhook_secret),
                 tem_query=bool(secret or token),
             )
+            # Registra a rejeição no diagnóstico: se aparecer aqui, o webhook
+            # ESTÁ chegando, mas o secret configurado no Wuzapi != Render.
+            _ULTIMOS_WEBHOOKS.append(
+                {
+                    "recebido_em": datetime.now(UTC).isoformat(),
+                    "decisao": "rejeitado:secret_invalido",
+                    "tem_header": bool(x_webhook_secret),
+                    "tem_query": bool(secret or token),
+                }
+            )
             return {"ok": False, "motivo": "secret_invalido"}
 
     raw = await _parse_webhook_body(request)
