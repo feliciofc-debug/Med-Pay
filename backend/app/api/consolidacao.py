@@ -33,6 +33,7 @@ from app.core.deps import (
 )
 from app.models.user import User
 from app.models.lote import Lote, StatusLote
+from app.schemas.lote import PagamentoOut
 from app.schemas.consolidacao import (
     ClienteComFichasOut,
     ExtratoConsolidadoOut,
@@ -195,7 +196,10 @@ async def lotes_processados(
     stmt = (
         select(Lote)
         .where(Lote.status.in_(_STATUS_PROCESSADO))
-        .options(selectinload(Lote.cliente))
+        .options(
+            selectinload(Lote.cliente),
+            selectinload(Lote.pagamentos),
+        )
         .order_by(Lote.created_at.desc())
     )
 
@@ -234,6 +238,9 @@ async def lotes_processados(
                 valor_total_centavos=lote.valor_total_centavos or 0,
                 created_at=lote.created_at,
                 aprovado_at=lote.aprovado_at,
+                pagamentos=[
+                    PagamentoOut.model_validate(p) for p in (lote.pagamentos or [])
+                ],
             )
         )
         total_pgtos += lote.total_pagamentos or 0

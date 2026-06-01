@@ -23,10 +23,15 @@ import {
   Calendar,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
   FileText,
   Inbox,
   Layers3,
+  List,
   Loader2,
+  Printer,
   Search,
   Send,
   UserCheck,
@@ -660,6 +665,18 @@ function ModoTab({
   );
 }
 
+interface PagamentoProcessado {
+  id: string;
+  nome: string;
+  cpf_mascarado: string;
+  banco_codigo: string | null;
+  conta_mascarada: string | null;
+  valor_centavos: number;
+  modalidade: string;
+  chave_pix: string | null;
+  status: string;
+}
+
 interface LoteProcessado {
   lote_id: string;
   cliente_id: string;
@@ -671,6 +688,7 @@ interface LoteProcessado {
   valor_total_centavos: number;
   created_at: string;
   aprovado_at: string | null;
+  pagamentos: PagamentoProcessado[];
 }
 
 interface ExtratoProcessados {
@@ -686,8 +704,141 @@ const LABEL_STATUS_LOTE: Record<string, { label: string; cls: string }> = {
   CONCILIADO: { label: "Conciliado (pago)", cls: "bg-brand-50 text-brand-700" },
 };
 
+function formaPagamento(p: PagamentoProcessado): string {
+  if (p.chave_pix) return `PIX · ${p.chave_pix}`;
+  const banco = p.banco_codigo ?? "—";
+  const conta = p.conta_mascarada ?? "—";
+  return `${banco} · ${conta}`;
+}
+
+function esc(s: string | null | undefined): string {
+  return String(s ?? "").replace(
+    /[&<>"]/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string,
+  );
+}
+
+const _ESTILO_RELATORIO = `
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #0f172a; margin: 32px; }
+  .marca { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+  .sub { color: #64748b; font-size: 12px; margin-top: 2px; }
+  h1 { font-size: 16px; margin: 24px 0 4px; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 20px; font-size: 12px; }
+  th { text-align: left; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; color: #64748b; border-bottom: 1px solid #cbd5e1; padding: 6px 8px; }
+  td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .lote-head { background: #f1f5f9; font-weight: 700; }
+  .total-row td { font-weight: 700; border-top: 2px solid #334155; }
+  .meta { display: flex; gap: 24px; flex-wrap: wrap; margin: 12px 0; font-size: 12px; }
+  .meta b { display: block; color: #64748b; font-weight: 500; font-size: 10px; text-transform: uppercase; }
+  .assinatura { margin-top: 56px; display: flex; gap: 48px; }
+  .assinatura div { flex: 1; border-top: 1px solid #334155; padding-top: 6px; font-size: 11px; text-align: center; color: #475569; }
+  @media print { body { margin: 12mm; } .noprint { display: none; } }
+`;
+
+function abrirImpressao(titulo: string, corpoHtml: string) {
+  const w = window.open("", "_blank", "width=900,height=700");
+  if (!w) {
+    alert("Libere o pop-up para gerar o relatório (PDF).");
+    return;
+  }
+  w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+    <title>${esc(titulo)}</title><style>${_ESTILO_RELATORIO}</style></head>
+    <body>${corpoHtml}
+    <script>window.onload=function(){setTimeout(function(){window.print();},250);};<\/script>
+    </body></html>`);
+  w.document.close();
+}
+
+function linhasPagamentosHtml(pagamentos: PagamentoProcessado[]): string {
+  return pagamentos
+    .map(
+      (p) => `<tr>
+        <td>${esc(p.nome)}</td>
+        <td>${esc(p.cpf_mascarado)}</td>
+        <td>${esc(formaPagamento(p))}</td>
+        <td class="num">${formatBRL(p.valor_centavos)}</td>
+      </tr>`,
+    )
+    .join("");
+}
+
+function gerarComprovante(l: LoteProcessado) {
+  const st = LABEL_STATUS_LOTE[l.status]?.label ?? l.status;
+  const corpo = `
+    <div class="marca">MEDPAG</div>
+    <div class="sub">Comprovante de repasse · pagamentos sem retrabalho</div>
+    <h1>Comprovante de pagamento · ${esc(l.cliente_nome)}</h1>
+    <div class="meta">
+      <div><b>Competência</b>${esc(l.competencia ?? "—")}</div>
+      <div><b>Status</b>${esc(st)}</div>
+      <div><b>Pagamentos</b>${l.total_pagamentos}</div>
+      <div><b>Gerado em</b>${new Date().toLocaleString("pt-BR")}</div>
+      <div><b>Lote</b>${esc(l.lote_id.slice(0, 8))}</div>
+    </div>
+    <table>
+      <thead><tr><th>Médico</th><th>CPF</th><th>Forma</th><th class="num">Valor</th></tr></thead>
+      <tbody>
+        ${linhasPagamentosHtml(l.pagamentos)}
+        <tr class="total-row"><td colspan="3">Total do lote</td><td class="num">${formatBRL(
+          l.valor_total_centavos,
+        )}</td></tr>
+      </tbody>
+    </table>
+    <div class="assinatura">
+      <div>Responsável pelo repasse</div>
+      <div>Conferência / hospital</div>
+    </div>`;
+  abrirImpressao(`Comprovante · ${l.cliente_nome} · ${l.competencia ?? ""}`, corpo);
+}
+
+function gerarRelatorioGeral(data: ExtratoProcessados) {
+  const secoes = data.lotes
+    .map((l) => {
+      const st = LABEL_STATUS_LOTE[l.status]?.label ?? l.status;
+      return `
+        <table>
+          <thead>
+            <tr class="lote-head"><th colspan="4">
+              ${esc(l.cliente_nome)} · ${esc(l.competencia ?? "—")} · ${esc(st)} · ${l.total_pagamentos} pgto(s)
+            </th></tr>
+            <tr><th>Médico</th><th>CPF</th><th>Forma</th><th class="num">Valor</th></tr>
+          </thead>
+          <tbody>
+            ${linhasPagamentosHtml(l.pagamentos)}
+            <tr class="total-row"><td colspan="3">Subtotal</td><td class="num">${formatBRL(
+              l.valor_total_centavos,
+            )}</td></tr>
+          </tbody>
+        </table>`;
+    })
+    .join("");
+  const corpo = `
+    <div class="marca">MEDPAG</div>
+    <div class="sub">Relatório de repasses processados · pagamentos sem retrabalho</div>
+    <h1>Extrato processado (CNAB/API)</h1>
+    <div class="meta">
+      <div><b>Lotes</b>${data.total_lotes}</div>
+      <div><b>Pagamentos</b>${data.total_pagamentos}</div>
+      <div><b>Valor total</b>${formatBRL(data.valor_total_centavos)}</div>
+      <div><b>Gerado em</b>${new Date().toLocaleString("pt-BR")}</div>
+    </div>
+    ${secoes}
+    <table><tbody>
+      <tr class="total-row"><td>TOTAL GERAL · ${data.total_pagamentos} pagamento(s)</td>
+      <td class="num">${formatBRL(data.valor_total_centavos)}</td></tr>
+    </tbody></table>`;
+  abrirImpressao("Relatório de repasses processados", corpo);
+}
+
 function ProcessadosView() {
   const navigate = useNavigate();
+  const [vista, setVista] = useState<"lotes" | "lista">("lotes");
+  const [expandido, setExpandido] = useState<Record<string, boolean>>({});
+  const [filtroComp, setFiltroComp] = useState<string>("");
+
   const { data, isLoading } = useQuery({
     queryKey: ["consolidacao", "processados"],
     queryFn: async () => {
@@ -698,6 +849,32 @@ function ProcessadosView() {
     },
     refetchInterval: 30000,
   });
+
+  const competencias = useMemo(() => {
+    const set = new Set<string>();
+    (data?.lotes ?? []).forEach((l) => l.competencia && set.add(l.competencia));
+    return Array.from(set).sort().reverse();
+  }, [data]);
+
+  const lotesFiltrados = useMemo(
+    () =>
+      (data?.lotes ?? []).filter(
+        (l) => !filtroComp || l.competencia === filtroComp,
+      ),
+    [data, filtroComp],
+  );
+
+  const todosPagamentos = useMemo(
+    () =>
+      lotesFiltrados.flatMap((l) =>
+        l.pagamentos.map((p) => ({
+          ...p,
+          hospital: l.cliente_nome,
+          competencia: l.competencia,
+        })),
+      ),
+    [lotesFiltrados],
+  );
 
   if (isLoading) {
     return (
@@ -717,88 +894,296 @@ function ProcessadosView() {
     );
   }
 
+  const valorFiltrado = lotesFiltrados.reduce(
+    (s, l) => s + l.valor_total_centavos,
+    0,
+  );
+  const pgtosFiltrados = lotesFiltrados.reduce(
+    (s, l) => s + l.total_pagamentos,
+    0,
+  );
+
   return (
     <>
       <section className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <KPI
           icon={<CheckCircle2 size={16} />}
           label="Lotes processados"
-          valor={data.total_lotes.toString()}
+          valor={lotesFiltrados.length.toString()}
         />
         <KPI
           icon={<Users size={16} />}
           label="Pagamentos"
-          valor={data.total_pagamentos.toString()}
+          valor={pgtosFiltrados.toString()}
         />
         <KPI
           icon={<CheckCircle2 size={16} />}
           label="Valor processado"
-          valor={formatBRL(data.valor_total_centavos)}
+          valor={formatBRL(valorFiltrado)}
           destacado
         />
       </section>
 
       <section className="card p-0 overflow-hidden">
-        <header className="px-5 py-3 border-b border-slate-200">
-          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
-            <CheckCircle2 size={16} />
-            Extrato processado · CNAB/API
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Lotes que saíram dos recebidos e foram processados/pagos. Clique
-            pra abrir o lote e baixar o CNAB.
-          </p>
+        <header className="px-5 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <CheckCircle2 size={16} />
+              Extrato processado · CNAB/API
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Lotes aprovados/pagos. Abra o lote pra ver os médicos ou gere o
+              relatório/comprovante em PDF.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {competencias.length > 0 && (
+              <select
+                value={filtroComp}
+                onChange={(e) => setFiltroComp(e.target.value)}
+                className="text-xs border border-slate-300 rounded-lg px-2 py-1.5 bg-white"
+              >
+                <option value="">Todas competências</option>
+                {competencias.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            )}
+            <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setVista("lotes")}
+                className={`px-2.5 py-1.5 text-xs font-medium inline-flex items-center gap-1 ${
+                  vista === "lotes"
+                    ? "bg-brand-600 text-white"
+                    : "bg-white text-slate-600"
+                }`}
+              >
+                <Layers3 size={13} /> Por lote
+              </button>
+              <button
+                type="button"
+                onClick={() => setVista("lista")}
+                className={`px-2.5 py-1.5 text-xs font-medium inline-flex items-center gap-1 ${
+                  vista === "lista"
+                    ? "bg-brand-600 text-white"
+                    : "bg-white text-slate-600"
+                }`}
+              >
+                <List size={13} /> Lista única
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                gerarRelatorioGeral({
+                  lotes: lotesFiltrados,
+                  total_lotes: lotesFiltrados.length,
+                  total_pagamentos: pgtosFiltrados,
+                  valor_total_centavos: valorFiltrado,
+                })
+              }
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white inline-flex items-center gap-1.5 hover:bg-brand-700"
+            >
+              <Printer size={14} /> Gerar relatório (PDF)
+            </button>
+          </div>
         </header>
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-            <tr>
-              <th className="px-5 py-2 text-left">Hospital</th>
-              <th className="px-5 py-2 text-left">Competência</th>
-              <th className="px-5 py-2 text-left">Status</th>
-              <th className="px-5 py-2 text-right">Pagamentos</th>
-              <th className="px-5 py-2 text-right">Valor</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.lotes.map((l) => {
-              const st = LABEL_STATUS_LOTE[l.status] ?? {
-                label: l.status,
-                cls: "bg-slate-100 text-slate-600",
-              };
-              return (
+
+        {vista === "lotes" ? (
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="px-5 py-2 text-left w-8"></th>
+                <th className="px-5 py-2 text-left">Hospital</th>
+                <th className="px-5 py-2 text-left">Competência</th>
+                <th className="px-5 py-2 text-left">Status</th>
+                <th className="px-5 py-2 text-right">Pagamentos</th>
+                <th className="px-5 py-2 text-right">Valor</th>
+                <th className="px-5 py-2 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lotesFiltrados.map((l) => {
+                const st = LABEL_STATUS_LOTE[l.status] ?? {
+                  label: l.status,
+                  cls: "bg-slate-100 text-slate-600",
+                };
+                const aberto = !!expandido[l.lote_id];
+                return (
+                  <ProcessadoRow
+                    key={l.lote_id}
+                    lote={l}
+                    status={st}
+                    aberto={aberto}
+                    onToggle={() =>
+                      setExpandido((s) => ({
+                        ...s,
+                        [l.lote_id]: !s[l.lote_id],
+                      }))
+                    }
+                    onAbrir={() => navigate(`/app/lotes/${l.lote_id}`)}
+                    onComprovante={() => gerarComprovante(l)}
+                  />
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="px-5 py-2 text-left">Médico</th>
+                <th className="px-5 py-2 text-left">CPF</th>
+                <th className="px-5 py-2 text-left">Hospital</th>
+                <th className="px-5 py-2 text-left">Comp.</th>
+                <th className="px-5 py-2 text-left">Forma</th>
+                <th className="px-5 py-2 text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {todosPagamentos.map((p) => (
                 <tr
-                  key={l.lote_id}
-                  onClick={() => navigate(`/app/lotes/${l.lote_id}`)}
-                  className="border-b border-slate-100 last:border-0 hover:bg-slate-50 cursor-pointer"
+                  key={p.id}
+                  className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
                 >
                   <td className="px-5 py-2 font-medium text-slate-800">
-                    {l.cliente_nome}
-                    <p className="text-xs text-slate-400">
-                      {new Date(l.created_at).toLocaleDateString("pt-BR")}
-                    </p>
+                    {p.nome}
                   </td>
+                  <td className="px-5 py-2 text-slate-500 tabular-nums">
+                    {p.cpf_mascarado}
+                  </td>
+                  <td className="px-5 py-2 text-slate-600">{p.hospital}</td>
                   <td className="px-5 py-2 text-slate-600">
-                    {l.competencia ?? "—"}
+                    {p.competencia ?? "—"}
                   </td>
-                  <td className="px-5 py-2">
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${st.cls}`}
-                    >
-                      {st.label}
-                    </span>
-                  </td>
-                  <td className="px-5 py-2 text-right tabular-nums">
-                    {l.total_pagamentos}
+                  <td className="px-5 py-2 text-slate-500 text-xs">
+                    {formaPagamento(p)}
                   </td>
                   <td className="px-5 py-2 text-right tabular-nums font-semibold">
-                    {formatBRL(l.valor_total_centavos)}
+                    {formatBRL(p.valor_centavos)}
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
+    </>
+  );
+}
+
+function ProcessadoRow({
+  lote,
+  status,
+  aberto,
+  onToggle,
+  onAbrir,
+  onComprovante,
+}: {
+  lote: LoteProcessado;
+  status: { label: string; cls: string };
+  aberto: boolean;
+  onToggle: () => void;
+  onAbrir: () => void;
+  onComprovante: () => void;
+}) {
+  return (
+    <>
+      <tr
+        onClick={onToggle}
+        className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
+      >
+        <td className="px-5 py-2 text-slate-400">
+          {aberto ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </td>
+        <td className="px-5 py-2 font-medium text-slate-800">
+          {lote.cliente_nome}
+          <p className="text-xs text-slate-400">
+            {new Date(lote.created_at).toLocaleDateString("pt-BR")}
+          </p>
+        </td>
+        <td className="px-5 py-2 text-slate-600">{lote.competencia ?? "—"}</td>
+        <td className="px-5 py-2">
+          <span
+            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${status.cls}`}
+          >
+            {status.label}
+          </span>
+        </td>
+        <td className="px-5 py-2 text-right tabular-nums">
+          {lote.total_pagamentos}
+        </td>
+        <td className="px-5 py-2 text-right tabular-nums font-semibold">
+          {formatBRL(lote.valor_total_centavos)}
+        </td>
+        <td className="px-5 py-2 text-right whitespace-nowrap">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onComprovante();
+            }}
+            title="Comprovante em PDF"
+            className="text-slate-400 hover:text-brand-600 p-1"
+          >
+            <Printer size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAbrir();
+            }}
+            title="Abrir lote / baixar CNAB"
+            className="text-slate-400 hover:text-brand-600 p-1"
+          >
+            <ExternalLink size={15} />
+          </button>
+        </td>
+      </tr>
+      {aberto && (
+        <tr className="bg-slate-50/60">
+          <td colSpan={7} className="px-5 py-3">
+            {lote.pagamentos.length === 0 ? (
+              <p className="text-xs text-slate-400">
+                Sem pagamentos detalhados neste lote.
+              </p>
+            ) : (
+              <table className="w-full text-xs">
+                <thead className="text-[10px] uppercase tracking-wider text-slate-400">
+                  <tr>
+                    <th className="px-2 py-1 text-left">Médico</th>
+                    <th className="px-2 py-1 text-left">CPF</th>
+                    <th className="px-2 py-1 text-left">Forma</th>
+                    <th className="px-2 py-1 text-right">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lote.pagamentos.map((p) => (
+                    <tr key={p.id} className="border-t border-slate-200">
+                      <td className="px-2 py-1 font-medium text-slate-700">
+                        {p.nome}
+                      </td>
+                      <td className="px-2 py-1 text-slate-500 tabular-nums">
+                        {p.cpf_mascarado}
+                      </td>
+                      <td className="px-2 py-1 text-slate-500">
+                        {formaPagamento(p)}
+                      </td>
+                      <td className="px-2 py-1 text-right tabular-nums font-semibold text-slate-700">
+                        {formatBRL(p.valor_centavos)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </td>
+        </tr>
+      )}
     </>
   );
 }

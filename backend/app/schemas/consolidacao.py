@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.lote import PagamentoOut
+
 
 class FichaResumoOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -81,6 +83,7 @@ class LoteProcessadoOut(BaseModel):
     valor_total_centavos: int
     created_at: datetime
     aprovado_at: datetime | None
+    pagamentos: list[PagamentoOut] = []
 
 
 class ExtratoProcessadosOut(BaseModel):
