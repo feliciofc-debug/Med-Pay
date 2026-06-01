@@ -153,11 +153,16 @@ class LoteService:
         *,
         status: StatusLote | None = None,
         cliente_id: UUID | None = None,
+        cliente_ids: list[UUID] | None = None,
         enviado_por_id: UUID | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Lote]:
-        """Lista lotes com filtros opcionais."""
+        """Lista lotes com filtros opcionais.
+
+        `cliente_ids` (escopo de carteira: empresa de repasse + hospitais
+        filhos) tem precedência sobre `cliente_id` quando informado.
+        """
         query = (
             select(Lote)
             .options(selectinload(Lote.cliente))
@@ -167,7 +172,9 @@ class LoteService:
         )
         if status is not None:
             query = query.where(Lote.status == status)
-        if cliente_id is not None:
+        if cliente_ids is not None:
+            query = query.where(Lote.cliente_id.in_(cliente_ids))
+        elif cliente_id is not None:
             query = query.where(Lote.cliente_id == cliente_id)
         if enviado_por_id is not None:
             query = query.where(Lote.enviado_por_id == enviado_por_id)

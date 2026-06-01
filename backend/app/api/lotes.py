@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import (
+    cliente_ids_acessiveis,
     get_current_user,
     get_db,
     require_execucao_pagamento,
@@ -174,16 +175,29 @@ async def listar_lotes(
 ) -> list[LoteResumo]:
     """Lista lotes (dashboard do operador).
 
-    Multi-tenancy: se o user tem `cliente_id`, força o filtro pra
-    esse cliente (ignora o query param `cliente_id` mesmo se vier).
-    MedPag interno (sem cliente_id) pode filtrar livre.
+    Multi-tenancy por CARTEIRA: a empresa de repasse vê os próprios lotes
+    + os lotes dos hospitais-filhos (cliente_ids_acessiveis). Assim o lote
+    consolidado gerado pra um hospital aparece aqui pra ela aprovar/executar
+    o CNAB. MedPag interno (sem cliente_id) filtra livre pelo query param.
     """
-    if current_user.cliente_id is not None:
-        cliente_id = current_user.cliente_id
+    ids = await cliente_ids_acessiveis(db, current_user)
+    cliente_ids_filtro: list[UUID] | None = None
+    if ids is None:
+        # MedPag interno: respeita o query param livre
+        pass
+    else:
+        carteira = list(ids)
+        if cliente_id is not None and cliente_id in ids:
+            cliente_ids_filtro = [cliente_id]
+        else:
+            cliente_ids_filtro = carteira
+        cliente_id = None  # usa o escopo de carteira
+
     service = LoteService(db)
     lotes = await service.listar(
         status=status_filtro,
         cliente_id=cliente_id,
+        cliente_ids=cliente_ids_filtro,
         enviado_por_id=enviado_por_id,
         limit=limit,
         offset=offset,
