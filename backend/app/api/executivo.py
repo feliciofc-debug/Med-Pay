@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.deps import (
+    cliente_ids_acessiveis,
     get_current_user,
     get_db,
     get_tenant_id,
@@ -309,7 +310,7 @@ async def listar_clientes_sem_contrato(
 @router.get("/dashboard/executivo", response_model=DashboardExecutivo)
 async def dashboard_executivo(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_visao_executiva),
+    user: User = Depends(require_visao_executiva),
     tenant_id: UUID | None = Depends(get_tenant_id),
 ) -> DashboardExecutivo:
     """Agrega receita, custo e margem usando dados REAIS, escopado por tenant.
@@ -330,15 +331,27 @@ async def dashboard_executivo(
     fim = _proximo_mes(inicio)
     mes_anterior_inicio = _inicio_mes(inicio - timedelta(days=1))
 
-    # 1) Carrega contratos ativos com cliente (escopado por tenant)
+    # Escopo de CARTEIRA: a empresa de repasse vê ela + os hospitais-filhos,
+    # então o Executivo reflete tudo (recebido/processado/pendente) ao mesmo
+    # tempo. Se entrou num hospital específico (X-Cliente), restringe a ele.
+    # MedPag interno (None) vê todos.
+    _ids = await cliente_ids_acessiveis(db, user)
+    if _ids is None:
+        cliente_ids: list[UUID] | None = None
+    elif tenant_id is not None and tenant_id in _ids and tenant_id != user.cliente_id:
+        cliente_ids = [tenant_id]
+    else:
+        cliente_ids = list(_ids)
+
+    # 1) Carrega contratos ativos com cliente (escopado por carteira)
     contratos_stmt = (
         select(ContratoHospital)
         .where(ContratoHospital.ativo.is_(True))
         .options(selectinload(ContratoHospital.cliente))
     )
-    if tenant_id is not None:
+    if cliente_ids is not None:
         contratos_stmt = contratos_stmt.where(
-            ContratoHospital.cliente_id == tenant_id
+            ContratoHospital.cliente_id.in_(cliente_ids)
         )
     contratos_q = await db.execute(contratos_stmt)
     contratos = list(contratos_q.scalars().all())
@@ -374,8 +387,8 @@ async def dashboard_executivo(
             )
             .group_by(Lote.cliente_id)
         )
-        if tenant_id is not None:
-            stmt = stmt.where(Lote.cliente_id == tenant_id)
+        if cliente_ids is not None:
+            stmt = stmt.where(Lote.cliente_id.in_(cliente_ids))
         return stmt
 
     mes_q = await db.execute(_query_volume_por_cliente(inicio, fim))
@@ -487,22 +500,25 @@ async def dashboard_executivo(
     )
 
     # 6) KPIs operacionais (inteiro mês)
-    kpi_op = await _kpi_operacional(db, inicio, fim, tenant_id)
+    kpi_op = await _kpi_operacional(db, inicio, fim, cliente_ids)
 
     # 7) Receita prevista de fichas em pipeline
     receita_prevista, margem_prevista = await _pipeline_fichas(
-        db, inicio, fim, tenant_id
+        db, inicio, fim, cliente_ids
     )
 
     # 7b) Resumo "programação vs realizado" — sempre populado, mesmo sem contratos
     operacao_mes, pipeline_hospitais = await _pipeline_completo(
-        db, inicio, fim, contratos, tenant_id
+        db, inicio, fim, contratos, cliente_ids
     )
 
-    # 4b) Repasse/SCP: se o tenant tem apuração da SCP no mês, o KPI Hero passa
-    # a refletir a apuração (receita bruta, custos, resultado) em vez de zero.
-    if tenant_id is not None:
-        kpi_hero = await _kpi_hero_scp(db, tenant_id, inicio, fallback=kpi_hero)
+    # 4b) Repasse/SCP: se o tenant (a própria empresa de repasse) tem apuração
+    # da SCP no mês, o KPI Hero passa a refletir a apuração (receita bruta,
+    # custos, resultado) em vez de zero.
+    if user.cliente_id is not None:
+        kpi_hero = await _kpi_hero_scp(
+            db, user.cliente_id, inicio, fallback=kpi_hero
+        )
 
     # 8) Alertas (margem crítica + renovações vencendo)
     alertas: list[AlertaExecutivo] = []
@@ -662,10 +678,10 @@ def _montar_projecao_12m(
     return proj
 
 
-def _scope_lote(stmt, tenant_id: UUID | None):  # type: ignore[no-untyped-def]
-    """Aplica filtro de tenant numa query de Lote, quando houver tenant."""
-    if tenant_id is not None:
-        stmt = stmt.where(Lote.cliente_id == tenant_id)
+def _scope_lote(stmt, cliente_ids: list[UUID] | None):  # type: ignore[no-untyped-def]
+    """Aplica filtro de carteira numa query de Lote (None = todos)."""
+    if cliente_ids is not None:
+        stmt = stmt.where(Lote.cliente_id.in_(cliente_ids))
     return stmt
 
 
@@ -708,7 +724,7 @@ async def _kpi_hero_scp(
 
 
 async def _kpi_operacional(
-    db: AsyncSession, inicio: date, fim: date, tenant_id: UUID | None = None
+    db: AsyncSession, inicio: date, fim: date, cliente_ids: list[UUID] | None = None
 ) -> KPIOperacional:
     """KPIs operacionais do mês (lotes, tempo médio, taxa erro, conciliação)."""
     inicio_dt = datetime.combine(inicio, datetime.min.time(), UTC)
@@ -721,7 +737,7 @@ async def _kpi_operacional(
                 select(func.count(Lote.id)).where(
                     Lote.created_at >= inicio_dt, Lote.created_at < fim_dt
                 ),
-                tenant_id,
+                cliente_ids,
             )
         )
     ) or 0
@@ -731,7 +747,7 @@ async def _kpi_operacional(
                 select(func.count(Lote.id)).where(
                     Lote.status == StatusLote.AGUARDANDO_REVISAO
                 ),
-                tenant_id,
+                cliente_ids,
             )
         )
     ) or 0
@@ -749,7 +765,7 @@ async def _kpi_operacional(
                         ]
                     ),
                 ),
-                tenant_id,
+                cliente_ids,
             )
         )
     ) or 0
@@ -759,7 +775,7 @@ async def _kpi_operacional(
                 select(func.coalesce(func.sum(Lote.total_bloqueados), 0)).where(
                     Lote.created_at >= inicio_dt, Lote.created_at < fim_dt
                 ),
-                tenant_id,
+                cliente_ids,
             )
         )
     ) or 0
@@ -769,7 +785,7 @@ async def _kpi_operacional(
                 select(func.coalesce(func.sum(Lote.total_pagamentos), 0)).where(
                     Lote.created_at >= inicio_dt, Lote.created_at < fim_dt
                 ),
-                tenant_id,
+                cliente_ids,
             )
         )
     ) or 0
@@ -783,7 +799,7 @@ async def _kpi_operacional(
                     Lote.created_at < fim_dt,
                     Lote.status == StatusLote.CONCILIADO,
                 ),
-                tenant_id,
+                cliente_ids,
             )
         )
     ) or 0
@@ -797,7 +813,7 @@ async def _kpi_operacional(
                         [StatusLote.ENVIADO_BANCO, StatusLote.CONCILIADO]
                     ),
                 ),
-                tenant_id,
+                cliente_ids,
             )
         )
     ) or 0
@@ -818,7 +834,7 @@ async def _pipeline_completo(
     inicio: date,
     fim: date,
     contratos: list[ContratoHospital],
-    tenant_id: UUID | None = None,
+    cliente_ids: list[UUID] | None = None,
 ) -> tuple[ResumoOperacaoMes, list[ResumoPipelineHospital]]:
     """Agrega "programação de pagamento" vs "pagamentos realizados" do mês.
 
@@ -835,10 +851,10 @@ async def _pipeline_completo(
 
     contratos_por_cliente = {c.cliente_id: c for c in contratos}
 
-    # Carrega clientes (escopado por tenant quando houver)
+    # Carrega clientes (escopado por carteira quando houver)
     clientes_stmt = select(Cliente).order_by(Cliente.nome)
-    if tenant_id is not None:
-        clientes_stmt = clientes_stmt.where(Cliente.id == tenant_id)
+    if cliente_ids is not None:
+        clientes_stmt = clientes_stmt.where(Cliente.id.in_(cliente_ids))
     clientes_q = await db.execute(clientes_stmt)
     clientes = list(clientes_q.scalars().all())
     clientes_por_id = {c.id: c for c in clientes}
@@ -858,8 +874,8 @@ async def _pipeline_completo(
         )
         .group_by(Lote.cliente_id, Lote.status)
     )
-    if tenant_id is not None:
-        lotes_stmt = lotes_stmt.where(Lote.cliente_id == tenant_id)
+    if cliente_ids is not None:
+        lotes_stmt = lotes_stmt.where(Lote.cliente_id.in_(cliente_ids))
     lotes_q = await db.execute(lotes_stmt)
 
     # estrutura: agregador[cliente_id][bucket] = (qtd, valor)
@@ -901,9 +917,9 @@ async def _pipeline_completo(
         ),
         FichaPlantao.lote_gerado_id.is_(None),
     )
-    if tenant_id is not None:
+    if cliente_ids is not None:
         fichas_pend_stmt = fichas_pend_stmt.where(
-            FichaPlantao.cliente_id == tenant_id
+            FichaPlantao.cliente_id.in_(cliente_ids)
         )
     fichas_pend_q = await db.execute(fichas_pend_stmt)
     fichas_pend = list(fichas_pend_q.scalars().all())
@@ -1004,7 +1020,7 @@ async def _pipeline_completo(
 
 
 async def _pipeline_fichas(
-    db: AsyncSession, inicio: date, fim: date, tenant_id: UUID | None = None
+    db: AsyncSession, inicio: date, fim: date, cliente_ids: list[UUID] | None = None
 ) -> tuple[int, int]:
     """Receita prevista vinda das fichas em pipeline (não viraram lote ainda).
 
@@ -1025,8 +1041,8 @@ async def _pipeline_fichas(
         ),
         FichaPlantao.lote_gerado_id.is_(None),
     )
-    if tenant_id is not None:
-        fichas_stmt = fichas_stmt.where(FichaPlantao.cliente_id == tenant_id)
+    if cliente_ids is not None:
+        fichas_stmt = fichas_stmt.where(FichaPlantao.cliente_id.in_(cliente_ids))
     fichas_q = await db.execute(fichas_stmt)
     fichas = list(fichas_q.scalars().all())
     valor = sum(f.valor_total_centavos or 0 for f in fichas)
